@@ -1,0 +1,2 @@
+# The launcher verifies this resource byte for byte.
+compat/hd-preview.json -text whitespace=cr-at-eol

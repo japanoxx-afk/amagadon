@@ -1,10 +1,26 @@
-param([int]$LauncherPid, [string]$Package, [string]$Target)
+param([int]$LauncherPid, [string]$Package, [string]$Target, [switch]$NoRestart)
 $ErrorActionPreference = 'Stop'
-Wait-Process -Id $LauncherPid -ErrorAction SilentlyContinue
-$stage = Join-Path ([IO.Path]::GetDirectoryName($Package)) 'expanded'
+if ($LauncherPid -gt 0) { Wait-Process -Id $LauncherPid -ErrorAction SilentlyContinue }
+$stage = Join-Path ([IO.Path]::GetDirectoryName($Package)) ('expanded-' + [Guid]::NewGuid().ToString('N'))
+Add-Type -AssemblyName System.IO.Compression.FileSystem
+$archive = [IO.Compression.ZipFile]::OpenRead($Package)
+try {
+    foreach ($entry in $archive.Entries) {
+        $name = $entry.FullName.Replace('\','/')
+        if ($name.StartsWith('/') -or $name.Contains(':') -or @($name.Split('/') | Where-Object { $_ -eq '..' }).Count -gt 0) { throw 'Unsafe archive path' }
+    }
+} finally { $archive.Dispose() }
 Expand-Archive -LiteralPath $Package -DestinationPath $stage -Force
-$allowed = @('AmagadonLauncher.exe','PATCHNOTES.md','apply-update.ps1','compat\ddraw.dll','compat\LICENSE.cnc-ddraw')
-$backup = Join-Path $Target ('update-backup-' + (Get-Date -Format 'yyyyMMddHHmmss'))
+$manifest = Get-Content (Join-Path $stage 'package.json') -Raw | ConvertFrom-Json
+if ($manifest.Entrypoint -notmatch '^AmagadonLauncher-\d+\.\d+\.\d+(-preview)?\.exe$' -or $manifest.Entrypoint -ne "AmagadonLauncher-$($manifest.Version).exe") { throw 'Invalid versioned entrypoint' }
+$allowed = @('AmagadonLauncher.exe',$manifest.Entrypoint,'PATCHNOTES.md','apply-update.ps1','compat\ddraw.dll','compat\LICENSE.cnc-ddraw','compat\hd-preview.json','package.json')
+foreach ($file in $manifest.Files) {
+    if ($file.Path -notin $allowed -or $file.Path -eq 'package.json') { throw 'Unexpected update file' }
+    if ((Get-FileHash -LiteralPath (Join-Path $stage $file.Path)).Hash -ne $file.SHA256) { throw "Update file hash mismatch: $($file.Path)" }
+}
+if (@($manifest.Files).Count -ne 7 -or @($manifest.Files.Path | Select-Object -Unique).Count -ne 7) { throw 'Incomplete update manifest' }
+if ((Get-FileHash -LiteralPath (Join-Path $stage 'AmagadonLauncher.exe')).Hash -ne (Get-FileHash -LiteralPath (Join-Path $stage $manifest.Entrypoint)).Hash) { throw 'Launcher alias mismatch' }
+$backup = Join-Path $Target ('update-backup-' + (Get-Date -Format 'yyyyMMddHHmmssfff'))
 New-Item -ItemType Directory -Path $backup | Out-Null
 $changed = @()
 try {
@@ -21,11 +37,17 @@ try {
         Copy-Item -LiteralPath (Join-Path $stage $name) -Destination $dest -Force
     }
 } catch {
+    $failure = $_
     foreach ($name in $changed) {
         $old = Join-Path $backup $name
-        if (Test-Path -LiteralPath $old) { Copy-Item -LiteralPath $old -Destination (Join-Path $Target $name) -Force }
+        $dest = Join-Path $Target $name
+        try {
+            if (Test-Path -LiteralPath $old) {
+                if (!(Test-Path -LiteralPath $dest) -or (Get-FileHash -LiteralPath $old).Hash -ne (Get-FileHash -LiteralPath $dest).Hash) { Copy-Item -LiteralPath $old -Destination $dest -Force }
+            } elseif (Test-Path -LiteralPath $dest) { Remove-Item -LiteralPath $dest }
+        } catch { $_ | Out-File (Join-Path $Target 'update-rollback-error.log') -Append }
     }
-    $_ | Out-File (Join-Path $Target 'update-error.log')
-    throw
+    $failure | Out-File (Join-Path $Target 'update-error.log')
+    throw $failure
 }
-Start-Process -FilePath (Join-Path $Target 'AmagadonLauncher.exe') -WorkingDirectory $Target -WindowStyle Normal
+if (!$NoRestart) { Start-Process -FilePath (Join-Path $Target $manifest.Entrypoint) -WorkingDirectory $Target -WindowStyle Normal }

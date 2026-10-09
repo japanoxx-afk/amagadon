@@ -1,0 +1,588 @@
+{
+  "Version": "0.2.0-preview",
+  "ReleaseCandidate": false,
+  "InputHash": "34f0bf9ed99fbf3ab88c410a3a52a2f6904e7bc7f5b88fb4ebadc935c2e9b466",
+  "InputLength": 1032192,
+  "OutputHash": "2e5d6c572858167e1190d1948375f25d8a90abbb3bded3a585fa8fc88904f579",
+  "OutputLength": 1167360,
+  "Edits": [
+    {
+      "Offset": 294,
+      "Before": "04",
+      "After": "05"
+    },
+    {
+      "Offset": 369,
+      "Before": "40f1",
+      "After": "50f3"
+    },
+    {
+      "Offset": 696,
+      "Before": "0000000000000000",
+      "After": "2e61676870726f62"
+    },
+    {
+      "Offset": 705,
+      "Before": "0000",
+      "After": "1002"
+    },
+    {
+      "Offset": 709,
+      "Before": "000000",
+      "After": "40f101"
+    },
+    {
+      "Offset": 713,
+      "Before": "0000",
+      "After": "1002"
+    },
+    {
+      "Offset": 717,
+      "Before": "0000",
+      "After": "c00f"
+    },
+    {
+      "Offset": 732,
+      "Before": "00",
+      "After": "40"
+    },
+    {
+      "Offset": 735,
+      "Before": "00",
+      "After": "e0"
+    },
+    {
+      "Offset": 4630,
+      "Before": "58",
+      "After": "d0"
+    },
+    {
+      "Offset": 4635,
+      "Before": "2003",
+      "After": "0005"
+    },
+    {
+      "Offset": 4809,
+      "Before": "58",
+      "After": "d0"
+    },
+    {
+      "Offset": 4814,
+      "Before": "2003",
+      "After": "0005"
+    },
+    {
+      "Offset": 5012,
+      "Before": "58",
+      "After": "d0"
+    },
+    {
+      "Offset": 5017,
+      "Before": "2003",
+      "After": "0005"
+    },
+    {
+      "Offset": 11389,
+      "Before": "58",
+      "After": "d0"
+    },
+    {
+      "Offset": 11422,
+      "Before": "8935b09d4f00",
+      "After": "e96d15f10190"
+    },
+    {
+      "Offset": 14816,
+      "Before": "b90a000000",
+      "After": "e91b09f101"
+    },
+    {
+      "Offset": 55046,
+      "Before": "1f03",
+      "After": "ff04"
+    },
+    {
+      "Offset": 55057,
+      "Before": "57",
+      "After": "cf"
+    },
+    {
+      "Offset": 167792,
+      "Before": "83ec08568b74241c",
+      "After": "e9ebb3ee01909090"
+    },
+    {
+      "Offset": 178060,
+      "Before": "2003",
+      "After": "0005"
+    },
+    {
+      "Offset": 178080,
+      "Before": "00",
+      "After": "e0"
+    },
+    {
+      "Offset": 178294,
+      "Before": "2003",
+      "After": "0005"
+    },
+    {
+      "Offset": 178314,
+      "Before": "00",
+      "After": "e0"
+    },
+    {
+      "Offset": 343170,
+      "Before": "19",
+      "After": "28"
+    },
+    {
+      "Offset": 343300,
+      "Before": "0f",
+      "After": "17"
+    },
+    {
+      "Offset": 343399,
+      "Before": "1f03",
+      "After": "ff04"
+    },
+    {
+      "Offset": 343429,
+      "Before": "19",
+      "After": "28"
+    },
+    {
+      "Offset": 343493,
+      "Before": "19",
+      "After": "28"
+    },
+    {
+      "Offset": 343584,
+      "Before": "57",
+      "After": "cf"
+    },
+    {
+      "Offset": 343614,
+      "Before": "0f",
+      "After": "17"
+    },
+    {
+      "Offset": 343680,
+      "Before": "0f",
+      "After": "17"
+    },
+    {
+      "Offset": 343794,
+      "Before": "1f03",
+      "After": "ff04"
+    },
+    {
+      "Offset": 343828,
+      "Before": "19",
+      "After": "28"
+    },
+    {
+      "Offset": 343843,
+      "Before": "57",
+      "After": "cf"
+    },
+    {
+      "Offset": 343877,
+      "Before": "0f",
+      "After": "17"
+    },
+    {
+      "Offset": 343958,
+      "Before": "19",
+      "After": "28"
+    },
+    {
+      "Offset": 343991,
+      "Before": "0f",
+      "After": "17"
+    },
+    {
+      "Offset": 344011,
+      "Before": "1f03",
+      "After": "ff04"
+    },
+    {
+      "Offset": 344045,
+      "Before": "19",
+      "After": "28"
+    },
+    {
+      "Offset": 344139,
+      "Before": "19",
+      "After": "28"
+    },
+    {
+      "Offset": 344195,
+      "Before": "57",
+      "After": "cf"
+    },
+    {
+      "Offset": 344229,
+      "Before": "0f",
+      "After": "17"
+    },
+    {
+      "Offset": 344321,
+      "Before": "0f",
+      "After": "17"
+    },
+    {
+      "Offset": 344372,
+      "Before": "f4",
+      "After": "ec"
+    },
+    {
+      "Offset": 344375,
+      "Before": "fa",
+      "After": "f5"
+    },
+    {
+      "Offset": 344431,
+      "Before": "19",
+      "After": "28"
+    },
+    {
+      "Offset": 344454,
+      "Before": "19",
+      "After": "28"
+    },
+    {
+      "Offset": 344487,
+      "Before": "0f",
+      "After": "17"
+    },
+    {
+      "Offset": 344510,
+      "Before": "0f",
+      "After": "17"
+    },
+    {
+      "Offset": 346834,
+      "Before": "58",
+      "After": "d0"
+    },
+    {
+      "Offset": 346839,
+      "Before": "2003",
+      "After": "0005"
+    },
+    {
+      "Offset": 375623,
+      "Before": "58",
+      "After": "d0"
+    },
+    {
+      "Offset": 375628,
+      "Before": "2003",
+      "After": "0005"
+    },
+    {
+      "Offset": 375975,
+      "Before": "58",
+      "After": "d0"
+    },
+    {
+      "Offset": 375980,
+      "Before": "2003",
+      "After": "0005"
+    },
+    {
+      "Offset": 487105,
+      "Before": "1603",
+      "After": "f604"
+    },
+    {
+      "Offset": 487117,
+      "Before": "e001",
+      "After": "c802"
+    },
+    {
+      "Offset": 487190,
+      "Before": "8d04808d0480c1e005",
+      "After": "69c000050000909090"
+    },
+    {
+      "Offset": 487219,
+      "Before": "8d04808d0480c1e005",
+      "After": "69c000050000909090"
+    },
+    {
+      "Offset": 487245,
+      "Before": "8d04808d0480c1e005",
+      "After": "69c000050000909090"
+    },
+    {
+      "Offset": 487280,
+      "Before": "8d04808d0c80",
+      "After": "6bc828909090"
+    },
+    {
+      "Offset": 487322,
+      "Before": "8d04808d0480c1e005",
+      "After": "69c000050000909090"
+    },
+    {
+      "Offset": 487357,
+      "Before": "8d04808d0c80",
+      "After": "6bc828909090"
+    },
+    {
+      "Offset": 487400,
+      "Before": "8d04808d0480c1e005",
+      "After": "69c000050000909090"
+    },
+    {
+      "Offset": 487433,
+      "Before": "8d04808d0c80",
+      "After": "6bc828909090"
+    },
+    {
+      "Offset": 488751,
+      "Before": "c64603015f5e",
+      "After": "e93ccce90190"
+    },
+    {
+      "Offset": 578928,
+      "Before": "83ec10568d742404",
+      "After": "e98b6ae801909090"
+    },
+    {
+      "Offset": 591795,
+      "Before": "1f03",
+      "After": "ff04"
+    },
+    {
+      "Offset": 591913,
+      "Before": "57",
+      "After": "cf"
+    },
+    {
+      "Offset": 596581,
+      "Before": "58",
+      "After": "d0"
+    },
+    {
+      "Offset": 596590,
+      "Before": "2003",
+      "After": "0005"
+    },
+    {
+      "Offset": 597576,
+      "Before": "2003",
+      "After": "0005"
+    },
+    {
+      "Offset": 597583,
+      "Before": "58",
+      "After": "d0"
+    },
+    {
+      "Offset": 597623,
+      "Before": "58",
+      "After": "d0"
+    },
+    {
+      "Offset": 597628,
+      "Before": "2003",
+      "After": "0005"
+    },
+    {
+      "Offset": 597647,
+      "Before": "58",
+      "After": "d0"
+    },
+    {
+      "Offset": 597652,
+      "Before": "2003",
+      "After": "0005"
+    },
+    {
+      "Offset": 598730,
+      "Before": "58",
+      "After": "d0"
+    },
+    {
+      "Offset": 598735,
+      "Before": "2003",
+      "After": "0005"
+    },
+    {
+      "Offset": 650736,
+      "Before": "83ec108b54241c",
+      "After": "e93b54e7019090"
+    },
+    {
+      "Offset": 651200,
+      "Before": "83ec085355",
+      "After": "e9db52e701"
+    },
+    {
+      "Offset": 671040,
+      "Before": "a1dc125800",
+      "After": "e95b04e701"
+    },
+    {
+      "Offset": 671083,
+      "Before": "83c40433f6",
+      "After": "e9c002e701"
+    },
+    {
+      "Offset": 671501,
+      "Before": "8b15ec125800",
+      "After": "e95e01e70190"
+    },
+    {
+      "Offset": 671605,
+      "Before": "4003",
+      "After": "2005"
+    },
+    {
+      "Offset": 671622,
+      "Before": "10",
+      "After": "17"
+    },
+    {
+      "Offset": 672859,
+      "Before": "e8",
+      "After": "e9"
+    },
+    {
+      "Offset": 672861,
+      "Before": "2ffdff",
+      "After": "fce601"
+    },
+    {
+      "Offset": 675866,
+      "Before": "2003",
+      "After": "0005"
+    },
+    {
+      "Offset": 675881,
+      "Before": "58",
+      "After": "d0"
+    },
+    {
+      "Offset": 677205,
+      "Before": "31",
+      "After": "4f"
+    },
+    {
+      "Offset": 677221,
+      "Before": "1e",
+      "After": "2d"
+    },
+    {
+      "Offset": 677257,
+      "Before": "18",
+      "After": "27"
+    },
+    {
+      "Offset": 677272,
+      "Before": "0f",
+      "After": "17"
+    },
+    {
+      "Offset": 677300,
+      "Before": "0c",
+      "After": "13"
+    },
+    {
+      "Offset": 677326,
+      "Before": "088b3578295700",
+      "After": "0ce95cede60190"
+    },
+    {
+      "Offset": 713080,
+      "Before": "2003",
+      "After": "0005"
+    },
+    {
+      "Offset": 713090,
+      "Before": "58",
+      "After": "d0"
+    },
+    {
+      "Offset": 713100,
+      "Before": "2003",
+      "After": "0005"
+    },
+    {
+      "Offset": 713110,
+      "Before": "d801",
+      "After": "d002"
+    },
+    {
+      "Offset": 713162,
+      "Before": "2003",
+      "After": "0005"
+    },
+    {
+      "Offset": 713169,
+      "Before": "58",
+      "After": "d0"
+    },
+    {
+      "Offset": 751673,
+      "Before": "2003",
+      "After": "0005"
+    },
+    {
+      "Offset": 751683,
+      "Before": "58",
+      "After": "d0"
+    },
+    {
+      "Offset": 763406,
+      "Before": "58",
+      "After": "d0"
+    },
+    {
+      "Offset": 776353,
+      "Before": "2003",
+      "After": "0005"
+    },
+    {
+      "Offset": 776363,
+      "Before": "58",
+      "After": "d0"
+    },
+    {
+      "Offset": 776502,
+      "Before": "2003",
+      "After": "0005"
+    },
+    {
+      "Offset": 776512,
+      "Before": "58",
+      "After": "d0"
+    }
+  ],
+  "AppendGzip": "H4sIAAAAAAACCu3ZTWhcVRQA4Jd0BmPtNM84SVOJ4iJi1SrE2kWpsyiELLTYkdo0tpifpbgpdKZEkOAwZjE87E6o0CyKyyK6KwXpTygpIogUERddiFiZaaOkKrHYOs/7pi0adSW48vs2597Lefeee96b1fSeGh3OleLHouhwsf5mLY4qhfpyPP5OZTjXmnh3UzvNL0+NdI+cWxyMOo5Pp/mvw0pSalb3RPNppT8p/BxGvR8WVkI43wq5t346ObNQv5AbWW0VfhtsR39Wb8eH43q6+fB9Sf9y30TUOtoebB+ffn1pS9eN1869HTLy0fRId7l55IcH2+X0UDHpXwnHNcrF5KHo0EvR7ae6fqz9GnWFmp840cymN0qd2dD5b3q6FnvPjD6Qmz83tzHZPdwzvr/cHNw60L7Wk82WduWiJFw4KRcbnX0PhI3rF3pmFlpT7U6lzZvPDIR6mr98/5fjz2RlnT22LoremstFlXsa15vxUwPt2lJW857q1X/YNhe2vdW9eU0Djk+fzTY6fexIFHU6dTGfPTA7/mzfzMLS2LquqcnWwraB9h/5SeHbhdDpTyq7e0/Vvsta2NzyRuhy0p9dff5SGF/asTjX3VhsdFZCVrOTtel21vLfsrKVmYUTl7P277q59gVdzH8UTlsJo9b81Y3tKHwMycvDQ61PT97O21l4bqQcVfp2FjZkcf3OQpzF7mtf7mtc2Tu+v/FZMhcnk8XaWJxtUh8rzqbVR9LqUFodTKvFtBqn1Q1ptaf5fpqmjbm4MVmcmjz46uLQ3e9juWfvvtaTH9yt6r8+r5b//M59a/mv7ozq+S/CaLaev5yF0+uzZpxe3dipKNmeZb2443po5fVke5axYyWMV5Lts4/vj1q1vrXvu5x9F6XVieejyrbS06+EsLV0NAuPlpay8HBp5kAIm0rvZSEufXwwhHtLq1novlaojQ5v6JQ0OhzPToTmjCeV8DbOvHD/2p8VAAAAAAAA8D+U/dGsCwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAwL/xO9A316cAEAIA",
+  "Stages": [
+    "--terrain",
+    "--guard",
+    "--weather",
+    "--world-overlays",
+    "--hud",
+    "--camera"
+  ],
+  "VerifiedChecks": [
+    "tile guards: 6 boundary/sentinel/null/valid cases",
+    "frame clear: 921600 bytes, surrounding guards preserved",
+    "weather update: 400 original + 520 extra cells, stack/register/RNG checks",
+    "weather grid: negative/out-of-map camera bounds",
+    "weather raster: actual x86 routine, 5 corner/clipping cases, 8-pixel trails",
+    "extra weather draw: random stream and stack preserved",
+    "camera: edges, negative coordinates and maps smaller than viewport",
+    "HUD drawing anchor: x=240, y=592",
+    "HUD controls: real draw/hit-test paths, matching child coordinates, untouched menus",
+    "HUD text: explicit call-site translation, world labels unchanged",
+    "minimap camera border: all five existing projection modes",
+    "minimap camera border: clipped to maps smaller than viewport"
+  ]
+}
