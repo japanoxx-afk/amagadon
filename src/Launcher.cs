@@ -12,8 +12,8 @@ using System.Threading.Tasks;
 using System.Web.Script.Serialization;
 using System.Windows.Forms;
 
-[assembly: System.Reflection.AssemblyVersion("0.2.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersion("0.2.0-preview")]
+[assembly: System.Reflection.AssemblyVersion("0.2.1.0")]
+[assembly: System.Reflection.AssemblyInformationalVersion("0.2.1-preview")]
 namespace Amagadon {
     public class Settings {
         public string GamePath="";
@@ -22,8 +22,8 @@ namespace Amagadon {
     }
     public class Backup { public string Directory; public string[] Existing; }
     public static class Core {
-        public const string Version = "0.2.0";
-        public const string DisplayVersion = "0.2.0-preview";
+        public const string Version = "0.2.1";
+        public const string DisplayVersion = "0.2.1-preview";
         public static readonly string Home = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "AmagadonLauncher");
         public static readonly JavaScriptSerializer Json = new JavaScriptSerializer();
         public static string Hash(string path) { using(var h=SHA256.Create()) using(var f=File.OpenRead(path)) return BitConverter.ToString(h.ComputeHash(f)).Replace("-", "").ToLowerInvariant(); }
@@ -46,7 +46,13 @@ namespace Amagadon {
             return "[ddraw]\r\nwidth="+width+"\r\nheight="+height+"\r\nwindowed="+(!s.Fullscreen).ToString().ToLowerInvariant()+"\r\nfullscreen="+s.Fullscreen.ToString().ToLowerInvariant()+"\r\nmaintas="+s.MaintainAspect.ToString().ToLowerInvariant()+"\r\naspect_ratio=\r\nrenderer="+s.Renderer+"\r\ndevmode="+(!s.ConfineMouse).ToString().ToLowerInvariant()+"\r\nmaxfps=60\r\nmaxgameticks=-1\r\nsinglecpu=true\r\nnonexclusive=true\r\nadjmouse=true\r\nfixchilds=2\r\nsavesettings=0\r\nresizable=false\r\ntoggle_borderless=true\r\nkeytogglefullscreen=0x0D\r\nd3d9_filter=0\r\nshader=\r\n";
         }
         public static void EnsureIdle(string folder) {
-            foreach(var name in new[]{"Armageddon","Armageddon.HD-preview","ACE"}) foreach(var p in Process.GetProcessesByName(name)) { using(p) { throw new IOException("게임 또는 맵 에디터를 먼저 종료해주세요."); } }
+            string target=Path.GetFullPath(folder).TrimEnd(Path.DirectorySeparatorChar);
+            foreach(var name in new[]{"Armageddon","Armageddon.HD-preview","ACE"}) foreach(var p in Process.GetProcessesByName(name)) { using(p) {
+                string running;
+                try {running=Path.GetDirectoryName(p.MainModule.FileName).TrimEnd(Path.DirectorySeparatorChar);}
+                catch(Exception) {if(p.HasExited)continue;throw new IOException("실행 중인 게임 경로를 확인할 수 없습니다. 게임 또는 맵 에디터를 종료해주세요.");}
+                if(String.Equals(running,target,StringComparison.OrdinalIgnoreCase))throw new IOException("이 설치 폴더의 게임 또는 맵 에디터를 먼저 종료해주세요.");
+            } }
         }
         public static void Apply(string folder, Settings settings, string dll) {
             Validate(folder); EnsureIdle(folder);
@@ -192,6 +198,12 @@ namespace Amagadon {
             string fixture=Path.Combine(Path.GetTempPath(),"AmagadonNative-"+Guid.NewGuid().ToString("N"));Directory.CreateDirectory(fixture);
             try {
                 foreach(string name in Core.RequiredFiles)File.WriteAllBytes(Path.Combine(fixture,name),name=="Armageddon.exe"?original:new byte[]{0});
+                string previous=Path.Combine(Path.GetDirectoryName(source),NativePatch.FileName);
+                if(File.Exists(previous) && Core.Hash(previous)==NativePatch.PreviousOutputHash) {
+                    File.Copy(previous,Path.Combine(fixture,NativePatch.FileName));NativePatch.Prepare(fixture,recipe);
+                    string backup=Directory.GetFiles(Path.Combine(fixture,"LauncherBackups"),"*.exe").Single();
+                    if(Core.Hash(backup)!=NativePatch.PreviousOutputHash)throw new Exception("Prior trial backup failed");
+                }
                 string trial=NativePatch.Prepare(fixture,recipe);
                 if(Core.Hash(trial)!=r.OutputHash || NativePatch.Prepare(fixture,recipe)!=trial)throw new Exception("Trial creation/reuse failed");
                 File.WriteAllBytes(trial,new byte[]{1});rejected=false;

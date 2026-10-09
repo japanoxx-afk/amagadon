@@ -1,9 +1,9 @@
 {
-  "Version": "0.2.0-preview",
+  "Version": "0.2.1-preview",
   "ReleaseCandidate": false,
   "InputHash": "34f0bf9ed99fbf3ab88c410a3a52a2f6904e7bc7f5b88fb4ebadc935c2e9b466",
   "InputLength": 1032192,
-  "OutputHash": "2e5d6c572858167e1190d1948375f25d8a90abbb3bded3a585fa8fc88904f579",
+  "OutputHash": "98223eeeb25c1a57860acdbfbab4cd06e445e96f831bd92cc9d150fe9a670921",
   "OutputLength": 1167360,
   "Edits": [
     {
@@ -94,7 +94,7 @@
     {
       "Offset": 14816,
       "Before": "b90a000000",
-      "After": "e91b09f101"
+      "After": "e90b0bf101"
     },
     {
       "Offset": 55046,
@@ -109,7 +109,7 @@
     {
       "Offset": 167792,
       "Before": "83ec08568b74241c",
-      "After": "e9ebb3ee01909090"
+      "After": "e9dbb5ee01909090"
     },
     {
       "Offset": 178060,
@@ -347,9 +347,24 @@
       "After": "e93ccce90190"
     },
     {
+      "Offset": 576201,
+      "Before": "57",
+      "After": "cf"
+    },
+    {
+      "Offset": 576219,
+      "Before": "1f03",
+      "After": "ff04"
+    },
+    {
       "Offset": 578928,
       "Before": "83ec10568d742404",
       "After": "e98b6ae801909090"
+    },
+    {
+      "Offset": 584976,
+      "Before": "8b4424083d2c010000",
+      "After": "e93b57e80190909090"
     },
     {
       "Offset": 591795,
@@ -412,6 +427,11 @@
       "After": "0005"
     },
     {
+      "Offset": 650112,
+      "Before": "83ec105355",
+      "After": "e9cb57e701"
+    },
+    {
       "Offset": 650736,
       "Before": "83ec108b54241c",
       "After": "e93b54e7019090"
@@ -419,7 +439,12 @@
     {
       "Offset": 651200,
       "Before": "83ec085355",
-      "After": "e9db52e701"
+      "After": "e9fb52e701"
+    },
+    {
+      "Offset": 652992,
+      "Before": "83ec285355",
+      "After": "e91b4de701"
     },
     {
       "Offset": 671040,
@@ -494,7 +519,7 @@
     {
       "Offset": 677326,
       "Before": "088b3578295700",
-      "After": "0ce95cede60190"
+      "After": "0ce94cefe60190"
     },
     {
       "Offset": 713080,
@@ -542,6 +567,16 @@
       "After": "d0"
     },
     {
+      "Offset": 773415,
+      "Before": "8946188b442424",
+      "After": "e98477e5019090"
+    },
+    {
+      "Offset": 773591,
+      "Before": "8946188b442424",
+      "After": "e9f476e5019090"
+    },
+    {
       "Offset": 776353,
       "Before": "2003",
       "After": "0005"
@@ -562,7 +597,7 @@
       "After": "d0"
     }
   ],
-  "AppendGzip": "H4sIAAAAAAACCu3ZTWhcVRQA4Jd0BmPtNM84SVOJ4iJi1SrE2kWpsyiELLTYkdo0tpifpbgpdKZEkOAwZjE87E6o0CyKyyK6KwXpTygpIogUERddiFiZaaOkKrHYOs/7pi0adSW48vs2597Lefeee96b1fSeGh3OleLHouhwsf5mLY4qhfpyPP5OZTjXmnh3UzvNL0+NdI+cWxyMOo5Pp/mvw0pSalb3RPNppT8p/BxGvR8WVkI43wq5t346ObNQv5AbWW0VfhtsR39Wb8eH43q6+fB9Sf9y30TUOtoebB+ffn1pS9eN1869HTLy0fRId7l55IcH2+X0UDHpXwnHNcrF5KHo0EvR7ae6fqz9GnWFmp840cymN0qd2dD5b3q6FnvPjD6Qmz83tzHZPdwzvr/cHNw60L7Wk82WduWiJFw4KRcbnX0PhI3rF3pmFlpT7U6lzZvPDIR6mr98/5fjz2RlnT22LoremstFlXsa15vxUwPt2lJW857q1X/YNhe2vdW9eU0Djk+fzTY6fexIFHU6dTGfPTA7/mzfzMLS2LquqcnWwraB9h/5SeHbhdDpTyq7e0/Vvsta2NzyRuhy0p9dff5SGF/asTjX3VhsdFZCVrOTtel21vLfsrKVmYUTl7P277q59gVdzH8UTlsJo9b81Y3tKHwMycvDQ61PT97O21l4bqQcVfp2FjZkcf3OQpzF7mtf7mtc2Tu+v/FZMhcnk8XaWJxtUh8rzqbVR9LqUFodTKvFtBqn1Q1ptaf5fpqmjbm4MVmcmjz46uLQ3e9juWfvvtaTH9yt6r8+r5b//M59a/mv7ozq+S/CaLaev5yF0+uzZpxe3dipKNmeZb2443po5fVke5axYyWMV5Lts4/vj1q1vrXvu5x9F6XVieejyrbS06+EsLV0NAuPlpay8HBp5kAIm0rvZSEufXwwhHtLq1novlaojQ5v6JQ0OhzPToTmjCeV8DbOvHD/2p8VAAAAAAAA8D+U/dGsCwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAwL/xO9A316cAEAIA",
+  "AppendGzip": "H4sIAAAAAAACCu3ZT4jUVRwA8N+uOzSp40626ipbGGy0hkWbGcg2gSALheSGuZqS69JJugi7IxvI0jAKDT+SggKD3YPQIZAoupgguq6yJoGIeejgIaJixt1iTTH/NdP7jVptSYcg6vD5XL7vvfn+3vv+3rw3l2k+uKa9KZd9JIoGWoq7CtloMFOcyva+NdjeVNn03qJqLTXV19nYOTbeGtWNbKulvg4jca6cXxftqQ0uiDOXQ6v548x0CMcqIffmpQP9o8UTTZ1XKplfWqvRHxWr2YFssbZ4YE68YGr+pqiyt9paHdn22kRHw9XtY7tDRira1tnYU97545JqT21HS7xgOixX6mmJH4h2vBjdeqrhp8L1qCHU/Oj+ctK9mqv32o59k24Ybz6y5v6mPWPD8+K17enejT3l1uULq5PppDexuimKwwvHPS2l+rybw8TFE+n+0UpftV5p+caTC0M95Z9/+NPyR5Kyju6bFUVvDDdFg/eULpazjy2sFiaSmtflL9xl2qYw7c3GxTM2YGTb0WSiQ/t2RlF9p06mkgeGep+a3z860T2roW9rZXTFwurv+XHm29Gw06cG1zYfLHyfbGG54/Wwy/GC5NX3nA3ts6vGhxtL46X6SMgq17MW3cqa+ktWMtI/uv98sv2rb8z8gk6mPgmrTYdWZc+FedUoHIb4pfa2yhcHbuV1ZZ7p7IkGO7syc5O4rCuTTeJDXZlzT4TYOHl6Q+m79b0bS6fj4Wy8taXQnU0mm1x81+Fid8tQLb+0lm+r5Vtr+ZZaPlvLz63l0+XdtVqtNJwtbW3p27rllfG2387PVHr9hsqcj+5U/d/Xkw31dH34/6mnI9Qz+em/Wc+dGt6eWcPcZL1wy5rCgUkXroWLHA08W7h+pjHEpwvXPwg3dFdHoZLMU7i2NFykgSWFC8no9rNJr3PsjcOzP0+vj6Lmd8eOfxbGo+OdY8ejmUaKtVn5dKpezLGhUndruHcdo5VX31xS/bvPL935vJA6c/t8F1Jf3W4VU+dCa6iYOp+EQ7OTw3/q8rz6A/HKJOuFVRfD1bkYr0wyVk2H9nS8cmjZxqjyTnbm/e5JfgdyVzY9Hw2uyD3+cgjLc3uT8HBuIgkP5vo3h7Ao934SsrnDW0K4N3clCY2T6cKa9rlJSZvCOe+NB8PF+/K5+6oRAAAAAAAA3F3yR7NdAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA/olfAaEzhQIAEAIA",
   "Stages": [
     "--terrain",
     "--guard",
@@ -580,8 +615,12 @@
     "extra weather draw: random stream and stack preserved",
     "camera: edges, negative coordinates and maps smaller than viewport",
     "HUD drawing anchor: x=240, y=592",
-    "HUD controls: real draw/hit-test paths, matching child coordinates, untouched menus",
-    "HUD text: explicit call-site translation, world labels unchanged",
+    "HUD containers: drawing/tooltips translated; resource icons stay at top; menus unchanged",
+    "Resource numbers: horizontal translation only, same top row as icons",
+    "Actual HUD press/release at x=920,y=645 emits click result in all three command containers",
+    "HUD silhouette: inverse mapping, transparent holes, playable side strips, screen bounds",
+    "Portrait: both video creation paths translate only HUD slot three",
+    "Shared unit visibility rectangle: world origin plus 1279x719, not 799x599",
     "minimap camera border: all five existing projection modes",
     "minimap camera border: clipped to maps smaller than viewport"
   ]

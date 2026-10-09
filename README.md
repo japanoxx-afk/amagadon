@@ -30,9 +30,9 @@ if ($test.ExitCode -ne 0) { throw 'Self-test failed' }
 ```
 
 자동 검사: 해상도 설정, 반복 적용 시 원본 백업 유지, 기존 DLL 및 미존재 DLL 복원, 필수 게임 파일 누락.
-0.2.0-preview는 기계어 검증과 시작 단계 검사를 통과했지만 전투·저장·멀티플레이는 미검증입니다. [HD 분석 및 검증 범위](docs/hd-resolution-status.md)를 참고하세요. 시험 모드는 기본적으로 꺼져 있습니다.
+0.2.1-preview는 초상화·상단 자원·유닛 표시 경계·실제 HUD 버튼 입력을 수정했습니다. 기계어 검증 16개 범주를 통과했지만 전투·저장·멀티플레이는 미검증입니다. [HD 분석 및 검증 범위](docs/hd-resolution-status.md)를 참고하세요. 시험 모드는 기본적으로 꺼져 있습니다.
 
-`--verify-native "원본 EXE 경로"`는 패치 결과와 시험본 생성·재사용·제거, 변조 거부, 원본 보존을 검사합니다. 배포 ZIP에는 버전별 AmagadonLauncher-0.2.0-preview.exe도 포함됩니다.
+`--verify-native "원본 EXE 경로"`는 패치 결과와 시험본 생성·재사용·제거, 변조 거부, 원본 보존을 검사합니다. 배포 ZIP에는 버전별 AmagadonLauncher-0.2.1-preview.exe도 포함됩니다. 기존 시험본은 게임 종료 후 다음 실행에서 해시 확인·백업 후 교체됩니다.
 
 ## 릴리스
 

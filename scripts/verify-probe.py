@@ -153,14 +153,15 @@ checks.append('HUD drawing anchor: x=240, y=592')
 # it receives. Drawing and hit testing must share exactly the same positions,
 # including restoration of the parent anchor and the seven-argument ABI.
 PARENT, CHILD, CAPTURE = 0x3220000, 0x3230000, CONTEXT+0x400
-for entry,virtual,cleanup in [(0x49edf0,0,36),(0x49efc0,24,36)]:
-    for translated in [False,True]:
+for entry,virtual,cleanup in [(0x49edf0,0,36),(0x49efc0,24,36),(0x49eb80,0,36)]:
+    for group in [None,0x50313c,0x5030d4]:
         u=fresh();dword(u,STACK,RETURN)
         for i in range(7):dword(u,STACK+4+i*4,COM if i==1 else 0)
         dword(u,PARENT+16,30);dword(u,PARENT+20,480)
         dword(u,PARENT+0x1640,1);u.mem_write(PARENT+0x1608,b'\x01')
         dword(u,PARENT+0x13b0,CHILD);dword(u,PARENT+0x1478,10);dword(u,PARENT+0x147c,5)
         dword(u,CHILD,CHILD+0x500);dword(u,CHILD+0x500+virtual,CHILD+0x1000)
+        if entry==0x49eb80:dword(u,CHILD+0x500+24,CHILD+0x1000)
         u.mem_write(CHILD+0x1000,bytes(ks.asm(f'''
             mov eax, dword ptr [esp+12]
             mov dword ptr [{CAPTURE}], eax
@@ -169,21 +170,75 @@ for entry,virtual,cleanup in [(0x49edf0,0,36),(0x49efc0,24,36)]:
             mov eax, 1
             ret {cleanup}
         ''')[0]))
-        if translated:dword(u,0x50313c,PARENT)
+        if group:dword(u,group,PARENT)
         u.reg_write(UC_X86_REG_ECX,PARENT)
         try:run(u,entry,RETURN)
         except Exception as error:
-            raise RuntimeError(f'UI entry {entry:x} translated={translated}, EIP={u.reg_read(UC_X86_REG_EIP):x}, ESP={u.reg_read(UC_X86_REG_ESP):x}') from error
-        assert (read(u,CAPTURE),read(u,CAPTURE+4))==((280,605) if translated else (40,485))
+            raise RuntimeError(f'UI entry {entry:x} group={group}, EIP={u.reg_read(UC_X86_REG_EIP):x}, ESP={u.reg_read(UC_X86_REG_ESP):x}') from error
+        assert (read(u,CAPTURE),read(u,CAPTURE+4))==((280,605) if group==0x50313c else ((280,485) if group else (40,485)))
         assert (read(u,PARENT+16),read(u,PARENT+20))==(30,480)
         assert u.reg_read(UC_X86_REG_ESP)==STACK+32
-checks.append('HUD controls: real draw/hit-test paths, matching child coordinates, untouched menus')
+checks.append('HUD containers: drawing/tooltips translated; resource icons stay at top; menus unchanged')
 
-for caller,expected in [(0x4a58f6,(340,620)),(0x4a5146,(100,500))]:
+for caller,expected in [(0x4a58f6,(340,500)),(0x4a5146,(100,500))]:
     u=fresh();dword(u,STACK,caller);dword(u,STACK+8,100);dword(u,STACK+12,500)
     run(u,0x428f70,0x428f78)
     assert (read(u,STACK+8),read(u,STACK+12))==expected
-checks.append('HUD text: explicit call-site translation, world labels unchanged')
+checks.append('Resource numbers: horizontal translation only, same top row as icons')
+
+# Real click dispatch (49f6c0), real button event handler (499e60), and
+# real point/rectangle test. Earlier tooltip tests did not exercise clicks.
+EVENT, RESULT = CONTEXT+0x600, CONTEXT+0x700
+for group in [None,0x50313c,0x50310c,0x503110]:
+    u=fresh();dword(u,STACK,RETURN)
+    for i,v in enumerate([RESULT,EVENT,0]):dword(u,STACK+4+i*4,v)
+    dword(u,PARENT+0x13b0,CHILD)
+    dword(u,PARENT+0x1478,675);dword(u,PARENT+0x147c,520)
+    dword(u,CHILD,CHILD+0x500);dword(u,CHILD+0x500+28,0x499e60)
+    dword(u,CHILD+0x19c,1)
+    for i,v in enumerate([0,0,40,40]):dword(u,CHILD+0x84+i*4,v)
+    for i,v in enumerate([920,645,1,0,0]):dword(u,EVENT+i*4,v)
+    if group:dword(u,group,PARENT)
+    u.reg_write(UC_X86_REG_ECX,PARENT)
+    run(u,0x49f6c0,RETURN)
+    assert read(u,CHILD+0x16c)==(1 if group else 0),(group,read(u,CHILD+0x16c))
+    assert (read(u,PARENT+16),read(u,PARENT+20))==(0,0)
+    assert u.reg_read(UC_X86_REG_ESP)==STACK+16
+    u.reg_write(UC_X86_REG_ESP,STACK);u.reg_write(UC_X86_REG_ECX,PARENT)
+    dword(u,EVENT+8,2)
+    run(u,0x49f6c0,RETURN)
+    assert read(u,CHILD+0x16c)==0
+    assert read(u,RESULT)&0xffff==(1 if group else 0),(group,read(u,RESULT))
+    if group:assert read(u,RESULT+8)==CHILD
+checks.append('Actual HUD press/release at x=920,y=645 emits click result in all three command containers')
+
+# Inverse HUD silhouette mapping, including the playable strips beside HUD.
+for x,y,mask,expected in [(920,645,1,0),(920,645,0,1),(239,645,1,1),(1040,645,1,1),(1279,719,1,1),(800,419,1,1),(1280,500,0,0),(-1,500,0,0),(400,720,0,0)]:
+    u=fresh();dword(u,STACK,RETURN);dword(u,STACK+4,x);dword(u,STACK+8,y)
+    if 240<=x<1040 and 420<=y<720:u.mem_write(0x5308c8+(y-420)*800+x-240,bytes([mask]))
+    run(u,0x48ed10,RETURN)
+    assert u.reg_read(UC_X86_REG_EAX)==expected,(x,y,mask)
+    assert u.reg_read(UC_X86_REG_ESP)==STACK+4
+checks.append('HUD silhouette: inverse mapping, transparent holes, playable side strips, screen bounds')
+
+for entry,stop in [(0x4bcd27,0x4bcd2e),(0x4bcdd7,0x4bcdde)]:
+    for slot in [0,3,5]:
+        u=fresh();u.reg_write(UC_X86_REG_EDI,slot);u.reg_write(UC_X86_REG_ESI,CHILD)
+        u.reg_write(UC_X86_REG_EAX,176);u.reg_write(UC_X86_REG_ECX,433)
+        dword(u,STACK+36,4)
+        run(u,entry,stop)
+        assert read(u,CHILD+24)==(416 if slot==3 else 176)
+        assert u.reg_read(UC_X86_REG_ECX)==(553 if slot==3 else 433)
+        assert u.reg_read(UC_X86_REG_EAX)==4 and u.reg_read(UC_X86_REG_ESP)==STACK
+checks.append('Portrait: both video creation paths translate only HUD slot three')
+
+u=fresh();dword(u,0x5812e8,98);dword(u,0x5812ec,13)
+u.reg_write(UC_X86_REG_EDI,WORLD)
+u.mem_write(COM+0x1800,bytes(ks.asm('mov eax, [esp+4]; mov edx, [esp+8]; mov [eax], edx; mov edx, [esp+12]; mov [eax+4], edx; mov edx, [esp+16]; mov [eax+8], edx; mov edx, [esp+20]; mov [eax+12], edx; ret 20')[0]))
+dword(u,0x4cb254,COM+0x1800)
+run(u,0x48cab7,0x48caef)
+assert tuple(read(u,WORLD+0x70f8+i*4) for i in range(4))==(3136,416,4415,1135)
+checks.append('Shared unit visibility rectangle: world origin plus 1279x719, not 799x599')
 
 for mode,span in [(0,(80,45)),(1,(40,23)),(2,(40,23)),(3,(20,12)),(4,(20,12))]:
     u=fresh();dword(u,0x4f9db8,mode);dword(u,0x4f9dd0,256);dword(u,0x4f9dd4,582)

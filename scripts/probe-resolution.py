@@ -229,6 +229,8 @@ if '--world-overlays' in sys.argv:
     immediate(0x4a5025,600,720,'Full-screen overlay rectangle height')
 
 if '--camera' in sys.argv:
+    immediate(0x48cac7,599,719,'Unit world viewport bottom; shared by ground, air, bars and selections')
+    immediate(0x48cad9,799,1279,'Unit world viewport right; shared by ground, air, bars and selections')
     for va in (0x453c80,0x453d83,0x453dc3,0x453f12,0x453f94,0x453feb,0x454049,0x45416d,0x454184):
         bytes_patch(va,bytes.fromhex('83e819'),bytes.fromhex('83e828'),'Camera horizontal extent: 40 map tiles')
     for va in (0x453d02,0x453e3c,0x453e7e,0x453f43,0x453fb5,0x4540a3,0x4540ff,0x4541bc):
@@ -290,8 +292,12 @@ if '--hud' in sys.argv:
     # the serialized UI object and relative child coordinates unchanged.
     for va,before,replay,resume in (
         (0x49edf0,'83ec108b54241c','sub esp, 16; mov edx, dword ptr [esp+28]',0x49edf7),
-        (0x49efc0,'83ec085355','sub esp, 8; push ebx; push ebp',0x49efc5)
+        (0x49efc0,'83ec085355','sub esp, 8; push ebx; push ebp',0x49efc5),
+        (0x49eb80,'83ec105355','sub esp, 16; push ebx; push ebp',0x49eb85),
+        (0x49f6c0,'83ec285355','sub esp, 40; push ebx; push ebp',0x49f6c5)
     ):
+        argument_count=3 if va==0x49f6c0 else 7
+        copy_arguments=';'.join(f'push dword ptr [ebp+{8+i*4}]' for i in reversed(range(argument_count)))
         trampoline=emit(f'{replay}; jmp {resume}')
         hook(va,bytes.fromhex(before),f'''
             cmp ecx, dword ptr [0x50313c]
@@ -300,7 +306,20 @@ if '--hud' in sys.argv:
             je translated_container
             cmp ecx, dword ptr [0x503110]
             je translated_container
+            cmp ecx, dword ptr [0x5030d4]
+            je translated_resources
             jmp {trampoline}
+        translated_resources:
+            push ebp
+            mov ebp, esp
+            push ebx
+            push esi
+            push edi
+            mov esi, ecx
+            mov edi, dword ptr [esi+16]
+            mov ebx, dword ptr [esi+20]
+            add dword ptr [esi+16], 240
+            jmp container_call
         translated_container:
             push ebp
             mov ebp, esp
@@ -312,13 +331,8 @@ if '--hud' in sys.argv:
             mov ebx, dword ptr [esi+20]
             add dword ptr [esi+16], 240
             add dword ptr [esi+20], 120
-            push dword ptr [ebp+32]
-            push dword ptr [ebp+28]
-            push dword ptr [ebp+24]
-            push dword ptr [ebp+20]
-            push dword ptr [ebp+16]
-            push dword ptr [ebp+12]
-            push dword ptr [ebp+8]
+        container_call:
+            {copy_arguments}
             call {trampoline}
             mov dword ptr [esi+16], edi
             mov dword ptr [esi+20], ebx
@@ -326,8 +340,52 @@ if '--hud' in sys.argv:
             pop esi
             pop ebx
             pop ebp
-            ret 28
-        ''','Use identical HUD container offsets for drawing and mouse hit tests')
+            ret {argument_count*4}
+        ''','Translate drawing, tooltips and actual mouse event dispatch; keep resource bar at top')
+    # This routine tests the original HUD silhouette (800x300), not a
+    # generic 800-wide screen bound. Convert only points over the centered
+    # HUD into mask coordinates; the two side strips remain playable world.
+    hook(0x48ed10,bytes.fromhex('8b4424083d2c010000'),'''
+        mov ecx, dword ptr [esp+4]
+        mov edx, dword ptr [esp+8]
+        cmp ecx, 1280
+        jae outside_screen
+        cmp edx, 720
+        jae outside_screen
+        cmp edx, 420
+        jl world_point
+        sub ecx, 240
+        cmp ecx, 800
+        jae world_point
+        sub edx, 420
+        imul edx, edx, 800
+        xor eax, eax
+        cmp byte ptr [edx+ecx+0x5308c8], 0
+        sete al
+        ret
+    world_point:
+        mov eax, 1
+        ret
+    outside_screen:
+        xor eax, eax
+        ret
+    ''','HUD silhouette hit mask uses inverse translation; outside HUD remains world')
+    # Slot three is the HUD portrait video. World videos use other slots.
+    # Translate on creation rather than every frame, including queued clips.
+    for va,resume in ((0x4bcd27,0x4bcd2a),(0x4bcdd7,0x4bcdda)):
+        # Include the following mov so the detour occupies whole instructions.
+        hook(va,bytes.fromhex('8946188b442424'),f'''
+            pushfd
+            cmp edi, 3
+            jne portrait_ready
+            add eax, 240
+            add ecx, 120
+        portrait_ready:
+            mov dword ptr [esi+24], eax
+            mov eax, dword ptr [esp+40]
+            popfd
+            jmp {resume+4}
+        ''','Move HUD portrait video slot three; leave world/cutscene video slots unchanged')
     hook(0x4039e0,bytes.fromhex('b90a000000'),'''
         add dword ptr [0x4f9dd0], 240
         add dword ptr [0x4f9dd8], 240
@@ -370,7 +428,6 @@ if '--hud' in sys.argv:
         jmp text_ready
     hud_text:
         add dword ptr [esp+12], 240
-        add dword ptr [esp+16], 120
     text_ready:
         pop eax
         sub esp, 8
