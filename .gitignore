@@ -1,0 +1,5 @@
+dist/
+third-party/cnc-ddraw.zip
+third-party/cnc-ddraw/
+*.user
+*.log
