@@ -1,10 +1,10 @@
 {
-  "Version": "0.2.2-preview",
+  "Version": "0.2.3-preview",
   "ReleaseCandidate": false,
   "InputHash": "34f0bf9ed99fbf3ab88c410a3a52a2f6904e7bc7f5b88fb4ebadc935c2e9b466",
   "InputLength": 1032192,
-  "OutputHash": "b0c91cee843f10d718ead02be28b72236cbfcabc3c6471841dfaee9a6a07cc7a",
-  "OutputLength": 1167360,
+  "OutputHash": "99e6b96114bced78e2e8bc6eb42c9f366e8fa148d9d4f482b71064bbbc252931",
+  "OutputLength": 1179648,
   "Edits": [
     {
       "Offset": 294,
@@ -14,7 +14,7 @@
     {
       "Offset": 369,
       "Before": "40f1",
-      "After": "50f3"
+      "After": "80f3"
     },
     {
       "Offset": 696,
@@ -24,7 +24,7 @@
     {
       "Offset": 705,
       "Before": "0000",
-      "After": "1002"
+      "After": "4002"
     },
     {
       "Offset": 709,
@@ -34,7 +34,7 @@
     {
       "Offset": 713,
       "Before": "0000",
-      "After": "1002"
+      "After": "4002"
     },
     {
       "Offset": 717,
@@ -53,38 +53,38 @@
     },
     {
       "Offset": 4630,
-      "Before": "58",
-      "After": "40"
+      "Before": "5802",
+      "After": "6003"
     },
     {
       "Offset": 4635,
       "Before": "2003",
-      "After": "0004"
+      "After": "8004"
     },
     {
       "Offset": 4809,
-      "Before": "58",
-      "After": "40"
+      "Before": "5802",
+      "After": "6003"
     },
     {
       "Offset": 4814,
       "Before": "2003",
-      "After": "0004"
+      "After": "8004"
     },
     {
       "Offset": 5012,
-      "Before": "58",
-      "After": "40"
+      "Before": "5802",
+      "After": "6003"
     },
     {
       "Offset": 5017,
       "Before": "2003",
-      "After": "0004"
+      "After": "8004"
     },
     {
       "Offset": 11389,
-      "Before": "58",
-      "After": "40"
+      "Before": "5802",
+      "After": "6003"
     },
     {
       "Offset": 11422,
@@ -94,277 +94,302 @@
     {
       "Offset": 14816,
       "Before": "b90a000000",
-      "After": "e9fb0af101"
+      "After": "e90b0bf101"
     },
     {
       "Offset": 55046,
-      "Before": "1f",
-      "After": "ff"
+      "Before": "1f03",
+      "After": "7f04"
     },
     {
       "Offset": 55057,
-      "Before": "57",
-      "After": "3f"
+      "Before": "5702",
+      "After": "5f03"
     },
     {
       "Offset": 167792,
       "Before": "83ec08568b74241c",
-      "After": "e9cbb5ee01909090"
+      "After": "e9ebb5ee01909090"
     },
     {
       "Offset": 177335,
       "Before": "10",
-      "After": "12"
+      "After": "1b"
     },
     {
       "Offset": 177356,
       "Before": "19",
-      "After": "20"
+      "After": "24"
     },
     {
       "Offset": 177413,
       "Before": "19",
-      "After": "20"
+      "After": "24"
     },
     {
       "Offset": 177454,
       "Before": "10",
-      "After": "12"
+      "After": "1b"
     },
     {
       "Offset": 177479,
       "Before": "19",
-      "After": "20"
+      "After": "24"
     },
     {
       "Offset": 178060,
       "Before": "2003",
-      "After": "0004"
+      "After": "8004"
     },
     {
       "Offset": 178080,
-      "Before": "00",
-      "After": "40"
+      "Before": "0002",
+      "After": "6003"
     },
     {
       "Offset": 178294,
       "Before": "2003",
-      "After": "0004"
+      "After": "8004"
     },
     {
       "Offset": 178314,
-      "Before": "00",
-      "After": "40"
+      "Before": "0002",
+      "After": "6003"
     },
     {
       "Offset": 343170,
       "Before": "19",
-      "After": "20"
+      "After": "24"
     },
     {
       "Offset": 343300,
       "Before": "0f",
-      "After": "12"
+      "After": "1b"
     },
     {
       "Offset": 343399,
-      "Before": "1f",
-      "After": "ff"
+      "Before": "1f03",
+      "After": "7f04"
     },
     {
       "Offset": 343429,
       "Before": "19",
-      "After": "20"
+      "After": "24"
     },
     {
       "Offset": 343493,
       "Before": "19",
-      "After": "20"
+      "After": "24"
     },
     {
       "Offset": 343584,
-      "Before": "57",
-      "After": "3f"
+      "Before": "5702",
+      "After": "5f03"
     },
     {
       "Offset": 343614,
       "Before": "0f",
-      "After": "12"
+      "After": "1b"
     },
     {
       "Offset": 343680,
       "Before": "0f",
-      "After": "12"
+      "After": "1b"
     },
     {
       "Offset": 343794,
-      "Before": "1f",
-      "After": "ff"
+      "Before": "1f03",
+      "After": "7f04"
     },
     {
       "Offset": 343828,
       "Before": "19",
-      "After": "20"
+      "After": "24"
     },
     {
       "Offset": 343843,
-      "Before": "57",
-      "After": "3f"
+      "Before": "5702",
+      "After": "5f03"
     },
     {
       "Offset": 343877,
       "Before": "0f",
-      "After": "12"
+      "After": "1b"
     },
     {
       "Offset": 343958,
       "Before": "19",
-      "After": "20"
+      "After": "24"
     },
     {
       "Offset": 343991,
       "Before": "0f",
-      "After": "12"
+      "After": "1b"
     },
     {
       "Offset": 344011,
-      "Before": "1f",
-      "After": "ff"
+      "Before": "1f03",
+      "After": "7f04"
     },
     {
       "Offset": 344045,
       "Before": "19",
-      "After": "20"
+      "After": "24"
     },
     {
       "Offset": 344139,
       "Before": "19",
-      "After": "20"
+      "After": "24"
     },
     {
       "Offset": 344195,
-      "Before": "57",
-      "After": "3f"
+      "Before": "5702",
+      "After": "5f03"
     },
     {
       "Offset": 344229,
       "Before": "0f",
-      "After": "12"
+      "After": "1b"
     },
     {
       "Offset": 344321,
       "Before": "0f",
-      "After": "12"
+      "After": "1b"
     },
     {
       "Offset": 344372,
       "Before": "f4",
-      "After": "f0"
+      "After": "ee"
     },
     {
       "Offset": 344375,
       "Before": "fa",
-      "After": "f7"
+      "After": "f3"
     },
     {
       "Offset": 344431,
       "Before": "19",
-      "After": "20"
+      "After": "24"
     },
     {
       "Offset": 344454,
       "Before": "19",
-      "After": "20"
+      "After": "24"
     },
     {
       "Offset": 344487,
       "Before": "0f",
-      "After": "12"
+      "After": "1b"
     },
     {
       "Offset": 344510,
       "Before": "0f",
-      "After": "12"
+      "After": "1b"
     },
     {
       "Offset": 346834,
-      "Before": "58",
-      "After": "40"
+      "Before": "5802",
+      "After": "6003"
     },
     {
       "Offset": 346839,
       "Before": "2003",
-      "After": "0004"
+      "After": "8004"
     },
     {
       "Offset": 375623,
-      "Before": "58",
-      "After": "40"
+      "Before": "5802",
+      "After": "6003"
     },
     {
       "Offset": 375628,
       "Before": "2003",
-      "After": "0004"
+      "After": "8004"
     },
     {
       "Offset": 375975,
-      "Before": "58",
-      "After": "40"
+      "Before": "5802",
+      "After": "6003"
     },
     {
       "Offset": 375980,
       "Before": "2003",
-      "After": "0004"
+      "After": "8004"
     },
     {
       "Offset": 487105,
-      "Before": "16",
-      "After": "f6"
+      "Before": "1603",
+      "After": "7604"
     },
     {
       "Offset": 487117,
       "Before": "e001",
-      "After": "3802"
+      "After": "5803"
     },
     {
       "Offset": 487190,
-      "Before": "8d04808d0480c1e005",
-      "After": "69c000040000909090"
+      "Before": "8d04",
+      "After": "69c0"
+    },
+    {
+      "Offset": 487193,
+      "Before": "8d0480c1e005",
+      "After": "040000909090"
     },
     {
       "Offset": 487219,
-      "Before": "8d04808d0480c1e005",
-      "After": "69c000040000909090"
+      "Before": "8d04",
+      "After": "69c0"
+    },
+    {
+      "Offset": 487222,
+      "Before": "8d0480c1e005",
+      "After": "040000909090"
     },
     {
       "Offset": 487245,
-      "Before": "8d04808d0480c1e005",
-      "After": "69c000040000909090"
+      "Before": "8d04",
+      "After": "69c0"
+    },
+    {
+      "Offset": 487248,
+      "Before": "8d0480c1e005",
+      "After": "040000909090"
     },
     {
       "Offset": 487280,
       "Before": "8d04808d0c80",
-      "After": "6bc820909090"
+      "After": "6bc824909090"
     },
     {
       "Offset": 487322,
-      "Before": "8d04808d0480c1e005",
-      "After": "69c000040000909090"
+      "Before": "8d04",
+      "After": "69c0"
+    },
+    {
+      "Offset": 487325,
+      "Before": "8d0480c1e005",
+      "After": "040000909090"
     },
     {
       "Offset": 487357,
       "Before": "8d04808d0c80",
-      "After": "6bc820909090"
+      "After": "6bc824909090"
     },
     {
       "Offset": 487400,
-      "Before": "8d04808d0480c1e005",
-      "After": "69c000040000909090"
+      "Before": "8d04",
+      "After": "69c0"
+    },
+    {
+      "Offset": 487403,
+      "Before": "8d0480c1e005",
+      "After": "040000909090"
     },
     {
       "Offset": 487433,
       "Before": "8d04808d0c80",
-      "After": "6bc820909090"
+      "After": "6bc824909090"
     },
     {
       "Offset": 488751,
@@ -373,13 +398,13 @@
     },
     {
       "Offset": 576201,
-      "Before": "57",
-      "After": "3f"
+      "Before": "5702",
+      "After": "5f03"
     },
     {
       "Offset": 576219,
-      "Before": "1f",
-      "After": "ff"
+      "Before": "1f03",
+      "After": "7f04"
     },
     {
       "Offset": 578928,
@@ -393,63 +418,63 @@
     },
     {
       "Offset": 591795,
-      "Before": "1f",
-      "After": "ff"
+      "Before": "1f03",
+      "After": "7f04"
     },
     {
       "Offset": 591913,
-      "Before": "57",
-      "After": "3f"
+      "Before": "5702",
+      "After": "5f03"
     },
     {
       "Offset": 596581,
-      "Before": "58",
-      "After": "40"
+      "Before": "5802",
+      "After": "6003"
     },
     {
       "Offset": 596590,
       "Before": "2003",
-      "After": "0004"
+      "After": "8004"
     },
     {
       "Offset": 597576,
       "Before": "2003",
-      "After": "0004"
+      "After": "8004"
     },
     {
       "Offset": 597583,
-      "Before": "58",
-      "After": "40"
+      "Before": "5802",
+      "After": "6003"
     },
     {
       "Offset": 597623,
-      "Before": "58",
-      "After": "40"
+      "Before": "5802",
+      "After": "6003"
     },
     {
       "Offset": 597628,
       "Before": "2003",
-      "After": "0004"
+      "After": "8004"
     },
     {
       "Offset": 597647,
-      "Before": "58",
-      "After": "40"
+      "Before": "5802",
+      "After": "6003"
     },
     {
       "Offset": 597652,
       "Before": "2003",
-      "After": "0004"
+      "After": "8004"
     },
     {
       "Offset": 598730,
-      "Before": "58",
-      "After": "40"
+      "Before": "5802",
+      "After": "6003"
     },
     {
       "Offset": 598735,
       "Before": "2003",
-      "After": "0004"
+      "After": "8004"
     },
     {
       "Offset": 650112,
@@ -489,12 +514,12 @@
     {
       "Offset": 671605,
       "Before": "4003",
-      "After": "2004"
+      "After": "a004"
     },
     {
       "Offset": 671622,
       "Before": "10",
-      "After": "12"
+      "After": "1b"
     },
     {
       "Offset": 672859,
@@ -509,120 +534,120 @@
     {
       "Offset": 675866,
       "Before": "2003",
-      "After": "0004"
+      "After": "8004"
     },
     {
       "Offset": 675881,
-      "Before": "58",
-      "After": "40"
+      "Before": "5802",
+      "After": "6003"
     },
     {
       "Offset": 677205,
       "Before": "31",
-      "After": "3f"
+      "After": "47"
     },
     {
       "Offset": 677221,
       "Before": "1e",
-      "After": "24"
+      "After": "36"
     },
     {
       "Offset": 677257,
       "Before": "18",
-      "After": "1f"
+      "After": "23"
     },
     {
       "Offset": 677272,
       "Before": "0f",
-      "After": "12"
+      "After": "1b"
     },
     {
       "Offset": 677300,
       "Before": "0c",
-      "After": "0f"
+      "After": "11"
     },
     {
       "Offset": 677326,
       "Before": "088b3578295700",
-      "After": "09e93cefe60190"
+      "After": "0ee95cefe60190"
     },
     {
       "Offset": 713080,
       "Before": "2003",
-      "After": "0004"
+      "After": "8004"
     },
     {
       "Offset": 713090,
-      "Before": "58",
-      "After": "40"
+      "Before": "5802",
+      "After": "6003"
     },
     {
       "Offset": 713100,
       "Before": "2003",
-      "After": "0004"
+      "After": "8004"
     },
     {
       "Offset": 713110,
       "Before": "d801",
-      "After": "4002"
+      "After": "6003"
     },
     {
       "Offset": 713162,
       "Before": "2003",
-      "After": "0004"
+      "After": "8004"
     },
     {
       "Offset": 713169,
-      "Before": "58",
-      "After": "40"
+      "Before": "5802",
+      "After": "6003"
     },
     {
       "Offset": 751673,
       "Before": "2003",
-      "After": "0004"
+      "After": "8004"
     },
     {
       "Offset": 751683,
-      "Before": "58",
-      "After": "40"
+      "Before": "5802",
+      "After": "6003"
     },
     {
       "Offset": 763406,
-      "Before": "58",
-      "After": "40"
+      "Before": "5802",
+      "After": "6003"
     },
     {
       "Offset": 773415,
       "Before": "8946188b442424",
-      "After": "e97477e5019090"
+      "After": "e98477e5019090"
     },
     {
       "Offset": 773591,
       "Before": "8946188b442424",
-      "After": "e9e476e5019090"
+      "After": "e9f476e5019090"
     },
     {
       "Offset": 776353,
       "Before": "2003",
-      "After": "0004"
+      "After": "8004"
     },
     {
       "Offset": 776363,
-      "Before": "58",
-      "After": "40"
+      "Before": "5802",
+      "After": "6003"
     },
     {
       "Offset": 776502,
       "Before": "2003",
-      "After": "0004"
+      "After": "8004"
     },
     {
       "Offset": 776512,
-      "Before": "58",
-      "After": "40"
+      "Before": "5802",
+      "After": "6003"
     }
   ],
-  "AppendGzip": "H4sIAAAAAAACCu3ZT4iUZRgA8G/XmdrUcScb11U28bCWhUmbeZBtIEEWCskNc92U1t2jdFlwRgxkaZiEpo88VRi4B2+BRNHFBNF1lbUIJMRDB6GIkhl3Cy0x/zXT+62YbkqHIOrw+12e733n+d7v+d55n7lM66F1nal89vEo2pEr7y5lo0KmPJXte7fQmar1v7+w3khPbetq7hobb4+m7R9spL8LM3G+WtwQ7WkUFsSZy+Gq9ZPMxRCO10LuzV8PDo2WT6a6rtQyv7fXo7uV69kd2XJj0Y458YKp+f1RbW+9vb5/8PWJpU1Xt4+9FTLS0WBXc29158+L672N4Vy84GJ4XKU3Fz8aDb8c3bqr6ZfS9agp1PzkgWoyvJqfHnUc/76labz16LpHUnvGRubF6ztb+jb3VttXtNUnW5LRxNpUFIcXjntzlel1t4SFyydbhkZr2+rTlVZvPNMW6qn+9tNfHn80KevYvllR9OZIKio8WLlUzT7VVi9NJDVvKF64z7KpsOzN5kUzNmD/4LFkocP7dkbR9E6dSic37Op7dv7Q6ETPrKZtA7XRVW31O/lx5ofRsNNfFta3HiqdT7awuvSNsMvxguTV95wJ12fWjI80V8Yr0zMhqzqdNf9W1tQ9WcnM0OiBc8n2r70x8ws6lf40PG04XNX2XJhXj8JhiF/p7Kh9dfBWXnfmua7eqLCyOzM3iY91Z7JJXNKdOft0iM2TpzdVftzYt7lyOh7JxgO5ck92eLLt3rlyT67aKC5tFDsaxfZGMdcoZhvFuY1iS/WdRqNRGclWBnLbBra+Nt4RzTw/Uy0bN9XmfHy76v++nmyop/uj/089y0M9k5/9O/XcruGDmTXMvfP80GWpcGBaSteiVOjI7tL155tDXFW6ngsduntZuTZcurY0dNGOxaULydT2M8moa+zNI7O/aNkYRa3vjZ34PMxHJ7rGToTzX27MKj5QHhsuH69WetpDly0frRXfXnz70N7383Tlz8/L6a+T81xOf3MrnA2hWk6fS8Lh2ckx//byvLs6IF6dJL605lJolUvx6iRvzcVwfTFeveuJzVHtQHZmP/cmfZ+/0v9iVFiVX/lqCCvye5OwLD+RhCX5oS0hLMx/mIRs/sjWEB7KX0lC82S6vK5z7nB/ONR9cSF02fkXHp75cwkAAAAAAAB/K/mj2S4AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD/xB98iPx/ABACAA==",
+  "AppendGzip": "H4sIAAAAAAACCu3ZX4hUVRgA8LvrDE3quJOtutoWBRtpWLSpgWwTCCIUkhvmuinp7qP0IrgTBrZ42RYaLvpUD4H74FsgkfRigui6K2tRSIgPPfgQUTHjbrGWmP+a6dxRqzXpLYr6/V6+c8797rnfPXPOfZmWI2s7MsXCY1G0q3VoT1yIBvJDU4WefQMdmWrvu4tq9ezU9s7mztGxtqjhQF89+1UYSYqV0oZouD6wIMlfCq2WD/PTIZyshtwbPx3qHxk6lem8XM3/0laL/mioVthVGKov3jUnWTA1vzeq7q+11Q70vTbR0XRlx+hbISMb9XU2d1de/2FJrbu+szVZMB0eV+5uTR6Mdr4U3byr6cf4WtQUan78YCXtXik2eu0nv841jbUcX3t/Znh0cF6yviPXs7m70rZ8YW0yl/Ym1mSiJLxw0t1absy7JUw8dCrXP1LdXmtUWrn+9MJQT+Xn7+94/PG0rBOfz4qivYOZaOCe8sVK4YmFtXgirXlD6cJdps2EaW80L56xAAf6TqQTHV3/ZhQ1Vup0Nr1hd8/K+f0jE+tmNW3fVh1ZsbD2e36S/2YkrPSnA+tbjsTfpUtY6XgjrHKyIH314bOhfXb12GBzeazcGAlZlUbWAzezpv6UlY70jxw8ny7/muszf6DT2cPhaYdDqzp8YV4tCpshebmjvfrZoZt5XflnO7ujgc6u/Nw0LuvKF9L4SFf+3FMhNk+e2VT+dmPP5vKZZLCQbGuN1xXSySbb7zocr2vNhR+uXnq4Xmqvl9rqpdZ6qVAvza2XcpW4Xq+XBwvlba3bt219daz95v6Zym3cVJ3zwe2q//l6CqGervf/PfUsDfVMfvQ313O7hn0za5gbhVOWCRsmF1/dmwkn8rn4Wl84Mrueia+tbI6iPUvjamOeqw+no0viC+nojrNpr3N077HZn+Q2RlHLO6PjH4fHROOdo+PRTAeG6rNKc7KNSU6mtZTXtYWjt3Sk2vf2ktpfXZ9uXI+zX9za33H2y99a50IrTY6z52+1js5Oj8D4pXkzP19Rsiq968XVF8NRupisStNXT4f2dLJq97LNUTUuzDzv3el3oXi594VoYEXxyVdCWF7cn4ZHixNpeKjYvyWERcX30lAoHtsawr3Fy2lonszFazvmpiX2hn3fkwyEgzj+/H13lAQAAAAAAMD/WPpHs1UAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAID/pl8B/OSE5wBAAgA=",
   "Stages": [
     "--terrain",
     "--guard",
@@ -633,21 +658,21 @@
   ],
   "VerifiedChecks": [
     "tile guards: 6 boundary/sentinel/null/valid cases",
-    "frame clear: 589824 bytes, surrounding guards preserved",
-    "weather update: 400 original + 176 extra cells, stack/register/RNG checks",
+    "frame clear: 995328 bytes, surrounding guards preserved",
+    "weather update: 400 original + 572 extra cells, stack/register/RNG checks",
     "weather grid: negative/out-of-map camera bounds",
     "weather raster: actual x86 routine, 5 corner/clipping cases, 8-pixel trails",
     "extra weather draw: random stream and stack preserved",
     "camera: edges, negative coordinates and maps smaller than viewport",
-    "HUD drawing anchor: x=112, y=448",
+    "HUD drawing anchor: x=176, y=736",
     "HUD containers: drawing/tooltips translated; resource icons stay at top; menus unchanged",
     "Resource numbers: horizontal translation only, same top row as icons",
-    "Actual HUD press/release at x=815,y=501 emits click result in all three command containers",
+    "Actual HUD press/release at x=879,y=789 emits click result in all three command containers",
     "HUD silhouette: inverse mapping, transparent holes, playable side strips, screen bounds",
     "Portrait: both video creation paths translate only HUD slot three",
-    "Shared unit visibility rectangle: world origin plus 1023x575, not 799x599",
+    "Shared unit visibility rectangle: world origin plus 1151x863, not 799x599",
     "minimap camera border: all five existing projection modes",
     "minimap camera border: clipped to maps smaller than viewport",
-    "Fog preparation: all 32x18 cells, three visibility states, real neighbor/cache routines, outside guards and fog state preserved"
+    "Fog preparation: all 36x27 cells, three visibility states, real neighbor/cache routines, outside guards and fog state preserved"
   ]
 }

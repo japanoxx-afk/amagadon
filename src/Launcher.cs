@@ -12,18 +12,18 @@ using System.Threading.Tasks;
 using System.Web.Script.Serialization;
 using System.Windows.Forms;
 
-[assembly: System.Reflection.AssemblyVersion("0.2.2.0")]
-[assembly: System.Reflection.AssemblyInformationalVersion("0.2.2-preview")]
+[assembly: System.Reflection.AssemblyVersion("0.2.3.0")]
+[assembly: System.Reflection.AssemblyInformationalVersion("0.2.3-preview")]
 namespace Amagadon {
     public class Settings {
         public string GamePath="";
-        public bool NativeHD=false, OutputHD=false, Fullscreen=false, MaintainAspect=true, ConfineMouse=true, Compatibility=true;
+        public bool NativeHD=false, OutputHD=false, Fullscreen=true, MaintainAspect=false, ConfineMouse=true, Compatibility=true;
         public string Renderer="auto";
     }
     public class Backup { public string Directory; public string[] Existing; }
     public static class Core {
-        public const string Version = "0.2.2";
-        public const string DisplayVersion = "0.2.2-preview";
+        public const string Version = "0.2.3";
+        public const string DisplayVersion = "0.2.3-preview";
         public static readonly string Home = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "AmagadonLauncher");
         public static readonly JavaScriptSerializer Json = new JavaScriptSerializer();
         public static string Hash(string path) { using(var h=SHA256.Create()) using(var f=File.OpenRead(path)) return BitConverter.ToString(h.ComputeHash(f)).Replace("-", "").ToLowerInvariant(); }
@@ -42,8 +42,8 @@ namespace Amagadon {
         }
         public static string Profile(Settings s) {
             if(!new[]{"auto","gdi","direct3d9","opengl"}.Contains(s.Renderer))throw new IOException("지원하지 않는 렌더러 설정입니다.");
-            int width=s.NativeHD?0:(s.OutputHD?1024:800),height=s.NativeHD?0:(s.OutputHD?576:600);
-            return "[ddraw]\r\nwidth="+width+"\r\nheight="+height+"\r\nwindowed="+(!s.Fullscreen).ToString().ToLowerInvariant()+"\r\nfullscreen="+s.Fullscreen.ToString().ToLowerInvariant()+"\r\nmaintas="+s.MaintainAspect.ToString().ToLowerInvariant()+"\r\naspect_ratio=\r\nrenderer="+s.Renderer+"\r\ndevmode="+(!s.ConfineMouse).ToString().ToLowerInvariant()+"\r\nmaxfps=60\r\nmaxgameticks=-1\r\nsinglecpu=true\r\nnonexclusive=true\r\nadjmouse=true\r\nfixchilds=2\r\nsavesettings=0\r\nresizable=false\r\ntoggle_borderless=true\r\nkeytogglefullscreen=0x0D\r\nd3d9_filter=0\r\nshader=\r\n";
+            int width=s.NativeHD?0:(s.OutputHD?1152:800),height=s.NativeHD?0:(s.OutputHD?864:600);
+            return "[ddraw]\r\nwidth="+width+"\r\nheight="+height+"\r\nwindowed="+(!s.Fullscreen).ToString().ToLowerInvariant()+"\r\nfullscreen="+s.Fullscreen.ToString().ToLowerInvariant()+"\r\nmaintas="+s.MaintainAspect.ToString().ToLowerInvariant()+"\r\naspect_ratio=\r\nboxing=false\r\nrenderer="+s.Renderer+"\r\ndevmode="+(!s.ConfineMouse).ToString().ToLowerInvariant()+"\r\nmaxfps=60\r\nmaxgameticks=-1\r\nsinglecpu=true\r\nnonexclusive=true\r\nadjmouse=true\r\nfixchilds=2\r\nsavesettings=0\r\nresizable=false\r\ntoggle_borderless=true\r\nkeytogglefullscreen=0x0D\r\nd3d9_filter=0\r\nshader=\r\n";
         }
         public static void EnsureIdle(string folder) {
             string target=Path.GetFullPath(folder).TrimEnd(Path.DirectorySeparatorChar);
@@ -84,14 +84,14 @@ namespace Amagadon {
             Label title=new Label {Text="ARMAGEDDON",Font=new Font("Segoe UI",28,FontStyle.Bold),AutoSize=true,Location=new Point(30,22)}; Controls.Add(title);
             AddLabel("아마게돈  /  LAUNCHER v"+Core.DisplayVersion,32,85);
             AddLabel("게임 설치 폴더",32,118); path.SetBounds(32,145,570,30); Controls.Add(path); Button browse=Button("찾아보기",614,142,112,36); browse.Click+=delegate { using(var d=new FolderBrowserDialog()) { d.SelectedPath=path.Text; if(d.ShowDialog()==DialogResult.OK) path.Text=d.SelectedPath; } };
-            AddLabel("내부 해상도 · 지도 표시 영역",32,205); resolution.DropDownStyle=ComboBoxStyle.DropDownList; resolution.Items.AddRange(new object[]{"800 × 600 · 원본","1024 × 576 · 실제 영역 확장 · 시험"}); resolution.SetBounds(32,232,338,34); Controls.Add(resolution);
-            AddLabel("출력 크기 · 화면 확대",388,205); output.DropDownStyle=ComboBoxStyle.DropDownList; output.Items.AddRange(new object[]{"내부 해상도와 동일","1024 × 576 출력"}); output.SetBounds(388,232,338,34); Controls.Add(output);
+            AddLabel("내부 해상도 · 지도 표시 영역",32,205); resolution.DropDownStyle=ComboBoxStyle.DropDownList; resolution.Items.AddRange(new object[]{"800 × 600 · 원본","1152 × 864 · 실제 영역 확장 · 시험"}); resolution.SetBounds(32,232,338,34); Controls.Add(resolution);
+            AddLabel("출력 크기 · 화면 확대",388,205); output.DropDownStyle=ComboBoxStyle.DropDownList; output.Items.AddRange(new object[]{"내부 해상도와 동일","1152 × 864 출력"}); output.SetBounds(388,232,338,34); Controls.Add(output);
             fullscreen.Text="전체화면 (Alt+Enter로 전환)";fullscreen.SetBounds(32,282,338,36);Controls.Add(fullscreen);
             aspect.DropDownStyle=ComboBoxStyle.DropDownList;aspect.Items.AddRange(new object[]{"비율 유지 · 여백 허용","화면 채우기 · 비율이 다르면 늘어남"});aspect.SetBounds(388,283,338,34);Controls.Add(aspect);
             AddLabel("그래픽 렌더러",32,329);renderer.DropDownStyle=ComboBoxStyle.DropDownList;renderer.Items.AddRange(new object[]{"자동","GDI","Direct3D 9","OpenGL"});renderer.SetBounds(32,356,338,34);Controls.Add(renderer);
             confine.Text="게임에 포커스가 있을 때 마우스 가두기";confine.SetBounds(388,351,338,44);Controls.Add(confine);
             compat.Text="그래픽 호환성 적용 (원본 DLL/설정 백업)"; compat.SetBounds(32,401,680,36); Controls.Add(compat);
-            Controls.Add(new Label{Text="1024×576 내부 해상도는 개발 시험 기능입니다. 전투·저장·멀티플레이 검증이 남아 있습니다.\r\n원본 EXE를 유지하고 별도 HD 시험본으로 실행합니다. ACE는 원본 그래픽으로 실행합니다.",Location=new Point(32,447),Size=new Size(694,46),Font=new Font("맑은 고딕",9)});
+            Controls.Add(new Label{Text="1152×864 내부 해상도는 개발 시험 기능입니다. 4:3 시야를 사용합니다. 전투·저장·멀티플레이 검증이 남아 있습니다.\r\n원본 EXE를 유지하고 별도 HD 시험본으로 실행합니다. ACE는 원본 그래픽으로 실행합니다.",Location=new Point(32,447),Size=new Size(694,46),Font=new Font("맑은 고딕",9)});
             game=Button("게임 실행",32,506,338,60); game.BackColor=Color.FromArgb(169,66,39); editor=Button("맵 에디터 실행",388,506,338,60);
             update=Button("업데이트",32,585,160,40); var notes=Button("패치노트",208,585,160,40); var restore=Button("원본 설정 복원",388,585,160,40); var logs=Button("진단 로그",564,585,162,40);
             status.SetBounds(32,642,694,45); status.ForeColor=Color.FromArgb(158,174,194); Controls.Add(status);
@@ -178,10 +178,12 @@ namespace Amagadon {
             try {
                 foreach(var n in Core.RequiredFiles) File.WriteAllText(Path.Combine(d,n),"fixture");
                 string dll=Path.Combine(d,"wrapper");File.WriteAllText(dll,"new"); File.WriteAllText(Path.Combine(d,"ddraw.ini"),"original");
-                Core.Apply(d,new Settings{OutputHD=true},dll); if(!File.ReadAllText(Path.Combine(d,"ddraw.ini")).Contains("width=1024"))throw new Exception("Output profile failed");
+                Core.Apply(d,new Settings{OutputHD=true},dll); if(!File.ReadAllText(Path.Combine(d,"ddraw.ini")).Contains("width=1152"))throw new Exception("Output profile failed");
                 Core.Apply(d,new Settings(),dll); Core.Restore(d); if(File.ReadAllText(Path.Combine(d,"ddraw.ini"))!="original" || File.Exists(Path.Combine(d,"ddraw.dll")))throw new Exception("Restore failed");
                 File.WriteAllText(Path.Combine(d,"ddraw.dll"),"old-dll"); Core.Apply(d,new Settings{NativeHD=true},dll);Core.Restore(d);if(File.ReadAllText(Path.Combine(d,"ddraw.dll"))!="old-dll")throw new Exception("DLL backup failed");
                 if(!Core.Profile(new Settings{NativeHD=true}).Contains("width=0\r\nheight=0"))throw new Exception("Native/output separation failed");
+                string fill=Core.Profile(new Settings{NativeHD=true,Fullscreen=true,MaintainAspect=false});
+                foreach(string option in new[]{"fullscreen=true","windowed=false","maintas=false","boxing=false","adjmouse=true"})if(!fill.Contains(option+"\r\n"))throw new Exception("Screen fill profile failed: "+option);
                 if(!Core.Profile(new Settings{ConfineMouse=false,Fullscreen=true,Renderer="gdi"}).Contains("devmode=true"))throw new Exception("Mouse profile failed");
                 bool unknown=false;try{NativePatch.Build(Encoding.ASCII.GetBytes("unknown"),new PatchRecipe());}catch(IOException){unknown=true;}if(!unknown)throw new Exception("Unknown EXE accepted");
                 File.Delete(Path.Combine(d,"ACE.exe"));bool failed=false;try{Core.Validate(d);}catch(IOException){failed=true;}if(!failed)throw new Exception("Validation failed");Core.Log("SELF-TEST PASS");
