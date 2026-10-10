@@ -488,6 +488,67 @@ if '--hud' in sys.argv:
             jmp {entry+8}
         ''','Move HUD health/shield numbers and detail text, including both shadow passes')
 
+    # Read the engine's saved elapsed-seconds counter, not wall-clock time.
+    # Format without CRT allocation; preserve all registers and flags around HUD draw.
+    timer_buffer=section_va+0x1f00
+    hook(0x4a602d,bytes.fromhex('8b3578295700'),f"""
+        pushfd
+        pushad
+        cld
+        movzx eax, word ptr [0x503c2a]
+        xor edx, edx
+        mov ecx, 60
+        div ecx
+        mov ebx, edx
+        xor ecx, ecx
+        mov esi, 10
+    timer_minutes:
+        xor edx, edx
+        div esi
+        push edx
+        inc ecx
+        test eax, eax
+        jnz timer_minutes
+        cmp ecx, 2
+        jae timer_digits
+        push 0
+        inc ecx
+    timer_digits:
+        mov edi, {timer_buffer}
+    timer_pop:
+        pop eax
+        add al, 48
+        stosb
+        loop timer_pop
+        mov al, 58
+        stosb
+        mov eax, ebx
+        xor edx, edx
+        div esi
+        add al, 48
+        stosb
+        mov eax, edx
+        add al, 48
+        stosb
+        xor eax, eax
+        stosb
+        push 0xe6e6e6
+        push {timer_buffer}
+        push 14
+        mov eax, dword ptr [0x4f75f0]
+        sub eax, 164
+        push eax
+        mov eax, dword ptr [0x4f9db0]
+        add eax, 304
+        push eax
+        call 0x4a8720
+        add esp, 20
+        popad
+        popfd
+        mov esi, dword ptr [0x572978]
+        jmp 0x4a6033
+    """,'Draw saved simulation elapsed time centered above HUD buttons')
+
 if code_cursor:
     # Add our own section; never borrow unrelated executable padding or BSS.
     file_align=pe.OPTIONAL_HEADER.FileAlignment

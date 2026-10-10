@@ -15,7 +15,7 @@ while i<len(original):
     start=i
     while i<len(original) and original[i]!=patched[i]:i+=1
     edits.append({'Offset':start,'Before':original[start:i].hex(),'After':patched[start:i].hex()})
-recipe={'Version':'0.2.6-preview','ReleaseCandidate':False,
+recipe={'Version':'0.2.7-preview','ReleaseCandidate':False,
     'InputHash':manifest['supported_hash'],'InputLength':len(original),
     'OutputHash':hashlib.sha256(patched).hexdigest(),'OutputLength':len(patched),
     'Edits':edits,'AppendGzip':base64.b64encode(gzip.compress(patched[len(original):],mtime=0)).decode(),

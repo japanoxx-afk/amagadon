@@ -1,9 +1,9 @@
 {
-  "Version": "0.2.6-preview",
+  "Version": "0.2.7-preview",
   "ReleaseCandidate": false,
   "InputHash": "34f0bf9ed99fbf3ab88c410a3a52a2f6904e7bc7f5b88fb4ebadc935c2e9b466",
   "InputLength": 1032192,
-  "OutputHash": "ecdd744aac3404e59c72cb00784891e767f59085952a665a9f08bb54f2d475d1",
+  "OutputHash": "fa32113de7c9d29a91afb1e35176b3c2a77a5c752d0a85daab06564dbc2094e5",
   "OutputLength": 1167360,
   "Edits": [
     {
@@ -572,6 +572,11 @@
       "After": "0ce93cefe60190"
     },
     {
+      "Offset": 679981,
+      "Before": "8b3578295700",
+      "After": "e97ee6e60190"
+    },
+    {
       "Offset": 689952,
       "Before": "535556578b7c241c",
       "After": "e98bbee601909090"
@@ -657,7 +662,7 @@
       "After": "0003"
     }
   ],
-  "AppendGzip": "H4sIAAAAAAACCu3ZT2wc1R0H8LGzqy7gjbfUSZwopT4YSisCdZMcUjMVQZZVKtQYhTgGRBJLvfB/1eymVAQ3y8bAagSXthKVYlXhFAlVrbgAEgLHiZxWSBFKc2glDlX/aTc2VQwoJUB3+2YMFDelB6SqPXw+l+/M2zfz+83zeyf3vjAymItLX46i/X31g7VSVCnWF0vjT1UGc62Jn6xrd/KLe4e6h2bn+qPMkX2d/O/DSBI3qzui6U5lTVJ8J1z1/qJ4PsTxVpj7wdvPTc7UT+aGLrSKf+9vR59Ub5f2l+qd9fuvSNYsXjkRtZ5u97eP7LtvfqDr3XtmD4cZ+WjfUPdY88BfN7THOuW+ZM35UK4x1pd8MSrfFi0/1fVW7b2oK/T81aPN9PbdOLvbePwPha653ldGvpCbnp1andw6WBjfPdbsv25te6GQ3s1vz0VJ+OBkrK+RvffO8OL6ycLkTGtvO+u0+f7X14Z+mn9781/Kv5K29eozq6Lo0FQuqnyusdQsbVrbrs2nPe+onvs3r82F137QvX7FAhzZ92r6opeeORBF2UqdyqcPPDy+5crJmfnRVV1797RmNq9t/3N+UvzTTFjpX1du7X2h9pd0CZsDPwirnKxJP336TLg+s21uqrsx18hGwqxmNqt/edbiJbPSkcmZo2+ky7/9/ZV/oFP5X4Zq5XDVmj63uh2FzZDcPrix9dpzy/OGizcOjUWV64eLPWleM1wspXnVcPHs10J2L5ze1fjzzvHdjdPJVCnZ01cfLZUX1l86VhvtOxZe16kOdKobO9X+TrWvUy11qj2daqH5RKfTaUyVGnv69u656+65jZ/cP4uFnbtaV/z8o67/9/2UQj/Dx/5/+rk29LPw/H+tn496+NHKHno+rB9OWS5smELtYpQLJ3I4nNNwZPZvrr13NpzQg1fXW+XaxYF0aEPtXDp0z5n0bmj20MuX/6qwM4p6fzx74sUwHp0Ymj0R9n+9s6p6WX22XDue1m+M9oeDdu1M63tPbsi+8NN+724s/17Pv57u53r+t2nU8mdDpBNr+Tc+vHrp8nSz/+6d1dn8ZGs68TvblsJRWUq2ppO2nQ/X55OtD39ld9Q6Wlp5nsfScx9fmPh2VLklvv6OEDfHT6cxHM+nsSWevDPEpvinaVwTv3xXiC/FF9Loj0dvC3FZPJVG90KxNjJYSluqjwz2lCfCVh9PKuHsvX7L59sr6517IDzwjfjZB0Nsjm9/KMR1cVwOcXX8s0dCXBXf8GiIdfHFH4Yoxaceywo9+/hyoVCgUA7VetJqEzt3je9ODoZC67av/LiP633z3vDcd+Pf3Bfi7nigEmI83lQNsSM+eSDEt+It3w+xPT59MOts6dGss/unss6WprLODtWzzv5YzzobOZx1duxw1lnP9H/s7M2bLukMAAAAAACAVPqPZqsAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAB8Fv8A7T/COgAQAgA=",
+  "AppendGzip": "H4sIAAAAAAACCu3ZT2wUVRzA8dftblyg2464LVtSsYeCSCiyAgcoo9Y0jRgii4W2QuifxAN//LOxu4ixrKxD1c1ELmqCCRtT4oFAjMQLkhBYSlMkJoQUDphwMKjNbltMq6RQqDv+3rQoFfVgYvDw/Rz6m3n7m/n95s17u4eWHKur8prGo0p1BK3OpKFiAWvYaPwgVuXNNX88J+/4hlvDnnCmJ6RcB9oc33cyYpvZ+DrV5cRK7cB1OSr5IjAi4XROcid+OdKetnq94bFc4NdQXt3NyhsdhuWUd8yyS4dnN6vcvnwof6BtR19lwc1tmb2S4VNtYU8ku/OnufmIEw3apSNSLhUJ2g+r6Ho1eVXBz8lbqkB6XtSd1ac3Tfes4vRVf0FPycm6h7xdmUSxvbbK39gUyYYWl+WH/Pqsr9arbHlgOxJMuffdJDe2ev3t6Vxr3u00e/uJMukne+Pan8qf1G2d2l+o1J6EV8UeSI1mjeqyfLJP97wuPvgXt/XKbSc85dMm4EDbKX2j4/t3KuXO1FmfvmBX4/LZ7em++sKC1pZcellZ/o98O/BDWmb6XGxtybHkgJ7CbOWbMst2qX70rn457l/Zk/CkelLuiGRl3azQZNbwPVl6pD3dfUVPf+3t6S/orO+oVIvKUa5rsDivZDHYG6oqct8cmcyrCawOR1RsSU2gSMcFNQFDx3k1gUtLJXqGzm9M/djQ2JQ6bycMuyVo1RvRofJ7x5L1wUNyOyde6cQrnHjIiQeduOHEi5y4P/ue4ziphJFqCba2bN7SU3H3+hn2N2zMzfr8Ttf3vx9D+qk59P/pZ6H0M/Tlf9bPnR4+nN5D0VR92WVeWTD+5Ljyyo6skX0qW6ZjWfLWJdmhnfOtXDQ5XqmH5iYH9dC2fn0Wzuw5MfNrf4NSJR9lznwl4+pMOHNG1r/lFMZnWJlo8rSun6oPyUZbmM69/v5c9wn/7nNPavJzy3dBr2fLd1mHpO+SBJ2Y9F2ZOjo+Uy/2b68Xu/n2Cp34/MpR2Sqj9gqdtHJEjkfsFbsea1K5bmP6fo7ofW+ONT+nYmvMJS9KeMbcp0ON2afDcrN9k4Rq8xMdFpgnNkt4xBzTIWTWr5cww0zo4BkKJOuqDN2SVVdVFG2Wpd5ox2TvXVjzYH56vcFX5IJV5sFXJSwzN7wmYbFpRiXMNz99S8I88/HdEuaY429LMMyz77iFDr47WUgK+KNSrUhXa27Y2Nhkd0qhObXTH+73ek9ul+teMi/ukLDFrIxJaDSr4xLWmb07JTxrLn9DQq15vtPtbHS329nLCbez0YTb2R7L7ex7y+2sbq/b2aG9bmdFXf/Y2bWnpzo70DZRcsy3aHVEhfuPr5aBG6Opi+FzJ/VLDPffGHuhtisTH7PGPR2F21XtKSXfrc3epYev3jq66nDqss6Qs9QF+RPOHN46MDCgtuqc7cXd+uer+jP9yN36K9C3VBZhJDvxVHne6g22p6fevxO6Z4oAAAAAAAAAAADuK/2PZmYBAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAwL/xG6ZfzesAEAIA",
   "Stages": [
     "--terrain",
     "--guard",
@@ -685,6 +690,7 @@
     "minimap camera border: clipped to maps smaller than viewport",
     "Fog preparation: all 32x24 cells, three visibility states, real neighbor/cache routines, outside guards and fog state preserved",
     "HUD detail text: 24 audited callers, actual foreground/shadow helpers, HP/shield/production text, world labels preserved",
-    "Selection drag: actual start/live/release/outline, 9 directions/player/camera cases up to 1023x767, solid HUD start rejected"
+    "Selection drag: actual start/live/release/outline, 9 directions/player/camera cases up to 1023x767, solid HUD start rejected",
+    "HUD timer: actual formatter and shadow helpers, 9 reset/load/minute-boundary cases, centered at 416x604, simulation counter unchanged"
   ]
 }

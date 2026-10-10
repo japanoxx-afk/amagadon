@@ -341,6 +341,31 @@ run(u,0x4076a5,0x407773)
 assert bytes(u.mem_read(0x52fae0,1))==b'\0'
 checks.append('Selection drag: actual start/live/release/outline, 9 directions/player/camera cases up to 1023x767, solid HUD start rejected')
 
+# The original simulation update increments saved elapsed seconds every 20 ticks.
+u=fresh();u.mem_write(0x503c2a,b'\0\0');u.mem_write(0x503c20,b'\0')
+for tick in range(20):
+    run(u,0x429298,0x4292fc)
+    assert struct.unpack('<H',bytes(u.mem_read(0x503c2a,2)))[0]==(tick+1)//20
+
+# Execute timer formatting and both original shadow passes at the font boundary.
+# Repeated rendering reads the same saved counter without advancing simulation.
+for seconds, expected in [(0,'00:00'),(1,'00:01'),(59,'00:59'),(60,'01:00'),(5999,'99:59'),(6000,'100:00'),(65535,'1092:15'),(42,'00:42'),(0,'00:00')]:
+    u=fresh();seen=[]
+    u.mem_write(0x503c2a,struct.pack('<H',seconds))
+    dword(u,0x4f9db0,112);dword(u,0x4f75f0,768)
+    def timer_font(uc,address,size,user):
+        sp=uc.reg_read(UC_X86_REG_ESP)
+        pointer=read(uc,sp+28)
+        label=bytes(uc.mem_read(pointer,16)).split(b'\0')[0].decode('ascii')
+        seen.append((read(uc,sp+20),read(uc,sp+24),label))
+    u.hook_add(UC_HOOK_CODE,timer_font,begin=0x428f78,end=0x428f78)
+    u.mem_write(0x428f78,bytes(ks.asm('pop esi; add esp, 8; ret')[0]))
+    run(u,0x4a602d,0x4a6033)
+    assert seen==[(417,605,expected),(416,604,expected)],seen
+    assert u.reg_read(UC_X86_REG_ESP)==STACK
+    assert struct.unpack('<H',bytes(u.mem_read(0x503c2a,2)))[0]==seconds
+checks.append('HUD timer: actual formatter and shadow helpers, 9 reset/load/minute-boundary cases, centered at 416x604, simulation counter unchanged')
+
 report={'kind':'machine-code-emulation','executable_hash':manifest['output_hash'],'checks':checks,'gameplay_validated':False,'multiplayer_validated':False}
 out=path.parent/'probe-verification.json';out.write_text(json.dumps(report,indent=2),encoding='utf8')
 print(json.dumps(report,indent=2))

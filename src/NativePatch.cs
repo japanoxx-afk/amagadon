@@ -14,7 +14,7 @@ namespace Amagadon {
     }
     public static class NativePatch {
         public const string InputHash="34f0bf9ed99fbf3ab88c410a3a52a2f6904e7bc7f5b88fb4ebadc935c2e9b466";
-        public const string RecipeHash="30d96efdb36f0d7e9da962e886667d790fb01856f1ef57811b51fa59a9e60509";
+        public const string RecipeHash="00f1e53b1ebc429fa5ff096de7ef9cd54003653d0e2a9b16c652a8ae73a5005c";
         public const string FileName="Armageddon.HD-preview.exe";
         public const string PreviousOutputHash="2e5d6c572858167e1190d1948375f25d8a90abbb3bded3a585fa8fc88904f579";
         public const string PriorOutputHash="98223eeeb25c1a57860acdbfbab4cd06e445e96f831bd92cc9d150fe9a670921";
@@ -22,7 +22,8 @@ namespace Amagadon {
         public const string LargerOutputHash="99e6b96114bced78e2e8bc6eb42c9f366e8fa148d9d4f482b71064bbbc252931";
         public const string FourThreeOutputHash="71544b3b4b525b61cacd4cd832e1ad1299206c2b9d3d4bd49ec011d4882cb215";
         public const string HudTextOutputHash="15c72df3b371e36ceb7851708929626e87b92cd439caa37fd8652d3885e0c091";
-        public static bool IsPrevious(string hash) { return hash==PreviousOutputHash || hash==PriorOutputHash || hash==WideOutputHash || hash==LargerOutputHash || hash==FourThreeOutputHash || hash==HudTextOutputHash; }
+        public const string SelectionOutputHash="ecdd744aac3404e59c72cb00784891e767f59085952a665a9f08bb54f2d475d1";
+        public static bool IsPrevious(string hash) { return hash==PreviousOutputHash || hash==PriorOutputHash || hash==WideOutputHash || hash==LargerOutputHash || hash==FourThreeOutputHash || hash==HudTextOutputHash || hash==SelectionOutputHash; }
         public static string Digest(byte[] b) { using(var h=SHA256.Create()) return BitConverter.ToString(h.ComputeHash(b)).Replace("-","").ToLowerInvariant(); }
         static byte[] Hex(string s) {
             if(s==null || s.Length%2!=0) throw new IOException("패치 바이트 형식 오류");
