@@ -49,6 +49,14 @@ for va in (0x4ae17c,0x4ae1cf,0x4b783d,0x4bd8a5,0x4bd93a,0x4ba60c):immediate(va,6
 immediate(0x4ae190,472,768,'World sprites cover HUD side regions')
 for va in (0x40d704,0x453d66,0x453ef1,0x453fc5,0x4907b2):immediate(va,799,1023,'Mouse bounds')
 for va in (0x40d710,0x453e1f,0x453f1d,0x45407d,0x490828):immediate(va,599,767,'Mouse bounds')
+# Selection drag start, live rectangle and released rectangle retain a
+# separate 475-pixel world/HUD cut-off, independent of mouse screen bounds.
+# Start points still go through the relocated HUD silhouette test.
+immediate(0x4076aa,475,767,'Allow selection drag start across full screen height')
+bytes_patch(0x407aa0,bytes.fromhex('6681f9db01'),bytes.fromhex('6681f9ff02'),'Released selection rectangle clamps to screen bottom')
+bytes_patch(0x407ab1,bytes.fromhex('8d88db010000'),bytes.fromhex('8d88ff020000'),'Released selection world-coordinate correction matches screen height')
+bytes_patch(0x407d0d,bytes.fromhex('6681f9db01'),bytes.fromhex('6681f9ff02'),'Live selection rectangle clamps to screen bottom')
+immediate(0x407d21,475,767,'Live selection world-coordinate correction matches screen height')
 # Extra terrain rendering is a separate probe stage. The 25-column weather
 # cache is NOT expanded here: stop before its memory indexing for extra tiles.
 if '--terrain' in sys.argv:

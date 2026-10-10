@@ -305,6 +305,42 @@ for entry in (0x4a8720,0x4a8790):
         assert u.reg_read(UC_X86_REG_ESP)==STACK+4
 checks.append('HUD detail text: 24 audited callers, actual foreground/shadow helpers, HP/shield/production text, world labels preserved')
 
+# Actual start/live/release selection code, using the game's existing packet
+# fields and world-to-screen offsets. Cover all player-slot indexing and both
+# drag directions beyond the old 800x600 region, without changing unit limits.
+for player in (0,1,7):
+    for start,end,origin in [((20,20),(1023,767),(0,0)),((1023,767),(20,20),(3136,416)),((900,650),(1023,767),(32,64))]:
+        u=fresh();packet=0x52f510+player*64;rect=player*16
+        u.mem_write(0x4e7270,bytes([player]));u.mem_write(packet,b'\x01')
+        world_start=(start[0]+origin[0],start[1]+origin[1])
+        world_end=(end[0]+origin[0],end[1]+origin[1])
+        u.mem_write(packet+16,struct.pack('<HHHH',world_start[0],world_start[1],start[0],start[1]))
+        run(u,0x4076a5,0x407773)
+        assert bytes(u.mem_read(0x52fae0,1))==b'\x01',(player,start)
+        assert (read(u,0x51be00+player*8),read(u,0x51be04+player*8))==world_start
+        u.mem_write(packet+1,b'\x01')
+        u.mem_write(packet+16,struct.pack('<HHHH',world_end[0],world_end[1],end[0],end[1]))
+        run(u,0x407cd2,0x407d6e)
+        expected=(min(world_start[0],world_end[0]),min(world_start[1],world_end[1]),max(world_start[0],world_end[0]),max(world_start[1],world_end[1]))
+        assert tuple(read(u,0x52f9a0+rect+i*4) for i in range(4))==expected,('live',player,start,end)
+        u.reg_write(UC_X86_REG_EDI,player*64);u.reg_write(UC_X86_REG_EBP,player)
+        run(u,0x407a22,0x407af7)
+        assert tuple(read(u,0x52fa40+rect+i*4) for i in range(4))==expected,('release',player,start,end)
+        assert bytes(u.mem_read(0x52fae0,1))==b'\0'
+        # The actual selection outline renderer must receive the expanded
+        # rectangle in screen space after subtracting the camera origin.
+        dword(u,0x5812e8,origin[0]//32);dword(u,0x5812ec,origin[1]//32)
+        u.reg_write(UC_X86_REG_ESP,STACK)
+        run(u,0x4a4f85,0x4a4fe0)
+        outline=tuple(read(u,STACK+0x5c+i*4) for i in range(4))
+        assert outline==(expected[0]-origin[0],expected[1]-origin[1],expected[2]-origin[0],expected[3]-origin[1]),('outline',outline)
+# A solid HUD point must still reject starting a world selection.
+u=fresh();u.mem_write(0x52f510,b'\x01');u.mem_write(0x52f520,struct.pack('<HHHH',815,693,815,693))
+u.mem_write(0x5308c8+(693-468)*800+815-112,b'\x01')
+run(u,0x4076a5,0x407773)
+assert bytes(u.mem_read(0x52fae0,1))==b'\0'
+checks.append('Selection drag: actual start/live/release/outline, 9 directions/player/camera cases up to 1023x767, solid HUD start rejected')
+
 report={'kind':'machine-code-emulation','executable_hash':manifest['output_hash'],'checks':checks,'gameplay_validated':False,'multiplayer_validated':False}
 out=path.parent/'probe-verification.json';out.write_text(json.dumps(report,indent=2),encoding='utf8')
 print(json.dumps(report,indent=2))

@@ -1,9 +1,9 @@
 {
-  "Version": "0.2.5-preview",
+  "Version": "0.2.6-preview",
   "ReleaseCandidate": false,
   "InputHash": "34f0bf9ed99fbf3ab88c410a3a52a2f6904e7bc7f5b88fb4ebadc935c2e9b466",
   "InputLength": 1032192,
-  "OutputHash": "15c72df3b371e36ceb7851708929626e87b92cd439caa37fd8652d3885e0c091",
+  "OutputHash": "ecdd744aac3404e59c72cb00784891e767f59085952a665a9f08bb54f2d475d1",
   "OutputLength": 1167360,
   "Edits": [
     {
@@ -95,6 +95,31 @@
       "Offset": 14816,
       "Before": "b90a000000",
       "After": "e9fb0af101"
+    },
+    {
+      "Offset": 30379,
+      "Before": "db01",
+      "After": "ff02"
+    },
+    {
+      "Offset": 31395,
+      "Before": "db01",
+      "After": "ff02"
+    },
+    {
+      "Offset": 31411,
+      "Before": "db01",
+      "After": "ff02"
+    },
+    {
+      "Offset": 32016,
+      "Before": "db01",
+      "After": "ff02"
+    },
+    {
+      "Offset": 32034,
+      "Before": "db01",
+      "After": "ff02"
     },
     {
       "Offset": 55046,
@@ -659,6 +684,7 @@
     "minimap camera border: all five existing projection modes",
     "minimap camera border: clipped to maps smaller than viewport",
     "Fog preparation: all 32x24 cells, three visibility states, real neighbor/cache routines, outside guards and fog state preserved",
-    "HUD detail text: 24 audited callers, actual foreground/shadow helpers, HP/shield/production text, world labels preserved"
+    "HUD detail text: 24 audited callers, actual foreground/shadow helpers, HP/shield/production text, world labels preserved",
+    "Selection drag: actual start/live/release/outline, 9 directions/player/camera cases up to 1023x767, solid HUD start rejected"
   ]
 }
