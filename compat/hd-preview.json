@@ -1,9 +1,9 @@
 {
-  "Version": "0.2.4-preview",
+  "Version": "0.2.5-preview",
   "ReleaseCandidate": false,
   "InputHash": "34f0bf9ed99fbf3ab88c410a3a52a2f6904e7bc7f5b88fb4ebadc935c2e9b466",
   "InputLength": 1032192,
-  "OutputHash": "71544b3b4b525b61cacd4cd832e1ad1299206c2b9d3d4bd49ec011d4882cb215",
+  "OutputHash": "15c72df3b371e36ceb7851708929626e87b92cd439caa37fd8652d3885e0c091",
   "OutputLength": 1167360,
   "Edits": [
     {
@@ -547,6 +547,16 @@
       "After": "0ce93cefe60190"
     },
     {
+      "Offset": 689952,
+      "Before": "535556578b7c241c",
+      "After": "e98bbee601909090"
+    },
+    {
+      "Offset": 690064,
+      "Before": "535556578b7c241c",
+      "After": "e98bbee601909090"
+    },
+    {
       "Offset": 713080,
       "Before": "2003",
       "After": "0004"
@@ -622,7 +632,7 @@
       "After": "0003"
     }
   ],
-  "AppendGzip": "H4sIAAAAAAACCu3ZT4iUZRgA8G/XGRr/jDvZrq5i4mEtC5M28yDbHAQRCskNc92U1D1Kl6XdEQNZHKalho+8VGDgHrwJEkUXE0TXVdYikBAPBR4iSmbcLdYS818zvd+o5GZ1CKIOv9/leb93nnnf53v3feayLUfXdaTyucejaKC1tLeYiwazpclczzuDHalq7/sLavX05I7O5s7Rsfao4eDOevqbMBPnK4WN0XB9sC3OXg2jlo+yUyGcqobc2z8f6RspnUl1Xqtmf22vRfcr1XIDuVJ94cDsuG1yXm9U3V9rrx3c+dr40qbru0bfDBnpaGdnc3dl94+Lat31/ta4bSpsV+5ujR+N+l+K7nyr6afizagp1PzkoUryeD3feFp86ttM01jLiXWPpIZHh+bGGzoyPVu6K+0r5tcmMsnT+NpUFIcXjrtby411t4aFS2cyfSPVHbVGpZVbz8wP9VR++eEP259Iyjp5YEYU7RtKRYMPla9Uck/NrxXHk5o3Fi7/ybKpsOzt5oXTDuDgzpPJQscO7I6ixkmdTSdf2NPz7Ly+kfH1M5p2bK+OrJpf+z0/zn43Ek7688ENLUeLl5IjrCx9I5xy3Ja8+vD5MD6/ZmyouTxWbsyErEojq/1O1uQDWclM38ihi8nxr701/Q90Nv1x2K0/jKrDl+fWonAZ4pc7Fle/OHInryv7XGd3NLiyKzsniY91ZXNJXNKVvfB0iM0T5zaXv9/Us6V8Lh7KxdtbS+tz/RMLH5wrrm89HJarF5bWC4vrhfZ6obVeyNULc+qFTOWter1eHsqVt7fu2L7t1bHF99+fycymzdXZH96r+r+vJxfq6Tr8/6lneahn4pN/rZ57Nbw7vYY5d/cPXZYKFyZTvBGlQkd2hT4NLTOwqnjzQujQvctK1f7ijaXJ1KLi5WRq1/nkqXN03/FZn2U2RVHLe6OnPw3z0enO0dPh/pfqMwozS6P9xVPJ/uX17aHRlo9UX397UeMN/+rz5vKdz0vpL5P7XEp/lYRi+kIISWIxffHu6Nis5LJ/fXVuIz9enSS+uOZKaJUr8eokac1UGE/Fq/c8sSWqHspN7+fupO/z13pfiAZX5Ve+EsKK/P4kLMuPJ2FJvm9rCAvyHyQhlz++LYSZ+WtJaJ5Il9Z1zOnvDZe6Jx4MXXbp+Yen/1wCAAAAAADA30r+0ewUAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACAf+I3nAfpwAAQAgA=",
+  "AppendGzip": "H4sIAAAAAAACCu3ZT2wc1R0H8LGzqy7gjbfUSZwopT4YSisCdZMcUjMVQZZVKtQYhTgGRBJLvfB/1eymVAQ3y8bAagSXthKVYlXhFAlVrbgAEgLHiZxWSBFKc2glDlX/aTc2VQwoJUB3+2YMFDelB6SqPXw+l+/M2zfz+83zeyf3vjAymItLX46i/X31g7VSVCnWF0vjT1UGc62Jn6xrd/KLe4e6h2bn+qPMkX2d/O/DSBI3qzui6U5lTVJ8J1z1/qJ4PsTxVpj7wdvPTc7UT+aGLrSKf+9vR59Ub5f2l+qd9fuvSNYsXjkRtZ5u97eP7LtvfqDr3XtmD4cZ+WjfUPdY88BfN7THOuW+ZM35UK4x1pd8MSrfFi0/1fVW7b2oK/T81aPN9PbdOLvbePwPha653ldGvpCbnp1andw6WBjfPdbsv25te6GQ3s1vz0VJ+OBkrK+RvffO8OL6ycLkTGtvO+u0+f7X14Z+mn9781/Kv5K29eozq6Lo0FQuqnyusdQsbVrbrs2nPe+onvs3r82F137QvX7FAhzZ92r6opeeORBF2UqdyqcPPDy+5crJmfnRVV1797RmNq9t/3N+UvzTTFjpX1du7X2h9pd0CZsDPwirnKxJP336TLg+s21uqrsx18hGwqxmNqt/edbiJbPSkcmZo2+ky7/9/ZV/oFP5X4Zq5XDVmj63uh2FzZDcPrix9dpzy/OGizcOjUWV64eLPWleM1wspXnVcPHs10J2L5ze1fjzzvHdjdPJVCnZ01cfLZUX1l86VhvtOxZe16kOdKobO9X+TrWvUy11qj2daqH5RKfTaUyVGnv69u656+65jZ/cP4uFnbtaV/z8o67/9/2UQj/Dx/5/+rk29LPw/H+tn496+NHKHno+rB9OWS5smELtYpQLJ3I4nNNwZPZvrr13NpzQg1fXW+XaxYF0aEPtXDp0z5n0bmj20MuX/6qwM4p6fzx74sUwHp0Ymj0R9n+9s6p6WX22XDue1m+M9oeDdu1M63tPbsi+8NN+724s/17Pv57u53r+t2nU8mdDpBNr+Tc+vHrp8nSz/+6d1dn8ZGs68TvblsJRWUq2ppO2nQ/X55OtD39ld9Q6Wlp5nsfScx9fmPh2VLklvv6OEDfHT6cxHM+nsSWevDPEpvinaVwTv3xXiC/FF9Loj0dvC3FZPJVG90KxNjJYSluqjwz2lCfCVh9PKuHsvX7L59sr6517IDzwjfjZB0Nsjm9/KMR1cVwOcXX8s0dCXBXf8GiIdfHFH4Yoxaceywo9+/hyoVCgUA7VetJqEzt3je9ODoZC67av/LiP633z3vDcd+Pf3Bfi7nigEmI83lQNsSM+eSDEt+It3w+xPT59MOts6dGss/unss6WprLODtWzzv5YzzobOZx1duxw1lnP9H/s7M2bLukMAAAAAACAVPqPZqsAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAB8Fv8A7T/COgAQAgA=",
   "Stages": [
     "--terrain",
     "--guard",
@@ -648,6 +658,7 @@
     "Shared unit visibility rectangle: world origin plus 1023x767, not 799x599",
     "minimap camera border: all five existing projection modes",
     "minimap camera border: clipped to maps smaller than viewport",
-    "Fog preparation: all 32x24 cells, three visibility states, real neighbor/cache routines, outside guards and fog state preserved"
+    "Fog preparation: all 32x24 cells, three visibility states, real neighbor/cache routines, outside guards and fog state preserved",
+    "HUD detail text: 24 audited callers, actual foreground/shadow helpers, HP/shield/production text, world labels preserved"
   ]
 }

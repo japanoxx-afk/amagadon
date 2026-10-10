@@ -180,7 +180,7 @@ for entry,virtual,cleanup in [(0x49edf0,0,36),(0x49efc0,24,36),(0x49eb80,0,36)]:
         assert u.reg_read(UC_X86_REG_ESP)==STACK+32
 checks.append('HUD containers: drawing/tooltips translated; resource icons stay at top; menus unchanged')
 
-for caller,expected in [(0x4a58f6,(212,500)),(0x4a5146,(100,500))]:
+for caller,expected in [(0x4a58f6,(212,500)),(0x4a5146,(212,668)),(0x4a517e,(212,668)),(0x43fd37,(100,500))]:
     u=fresh();dword(u,STACK,caller);dword(u,STACK+8,100);dword(u,STACK+12,500)
     run(u,0x428f70,0x428f78)
     assert (read(u,STACK+8),read(u,STACK+12))==expected
@@ -278,6 +278,32 @@ for visibility in (0,1,2):
         assert bytes(u.mem_read(fog_start+(264*x+y)*2,2))==b'\xa5\xa5'
     assert u.reg_read(UC_X86_REG_ESP)==STACK+12
 checks.append('Fog preparation: all 32x24 cells, three visibility states, real neighbor/cache routines, outside guards and fog state preserved')
+
+# Execute both original shadow helpers and our font entry hook together.
+# Capture at the font backend boundary, after the actual prologue, to verify
+# the foreground and one-pixel shadow each move once and retain their spacing.
+detail_calls=(0x4a6a39,0x4a6bce,0x4a6de5,0x4a6e9d,0x4a6f4f,0x4a7038,
+    0x4a741b,0x4a7528,0x4a76bf,0x4a772f,0x4a7b9a,0x4a7cc9,0x4a7d2a,
+    0x4a7dec,0x4a7e67,0x4a7eec,0x4a7ff4,0x4a82c2,0x4a837b,0x4a83de,
+    0x4a843f,0x4a84a3,0x4a8507,0x4a869d)
+for entry in (0x4a8720,0x4a8790):
+    for caller in [call+5 for call in detail_calls if call+5+struct.unpack('<i',data[pe.get_offset_from_rva(call-base)+1:pe.get_offset_from_rva(call-base)+5])[0]==entry]+[0x43fd37,0x4a5ca2]:
+        u=fresh();seen=[]
+        from unicorn import UC_HOOK_CODE
+        def font_backend(uc,address,size,user):
+            sp=uc.reg_read(UC_X86_REG_ESP)
+            seen.append((read(uc,sp+20),read(uc,sp+24)))
+        u.hook_add(UC_HOOK_CODE,font_backend,begin=0x428f78,end=0x428f78)
+        u.mem_write(0x428f78,bytes(ks.asm('pop esi; add esp, 8; ret')[0]))
+        dword(u,STACK,caller)
+        for i,v in enumerate([300,565,13,CONTEXT+0x800,0x969696]):dword(u,STACK+4+i*4,v)
+        u.mem_write(caller,b'\x90')
+        run(u,entry,caller)
+        moved=caller not in (0x43fd37,0x4a5ca2)
+        x,y=(412,733) if moved else (300,565)
+        assert seen==[(x+1,y+1),(x,y)],(entry,caller,seen)
+        assert u.reg_read(UC_X86_REG_ESP)==STACK+4
+checks.append('HUD detail text: 24 audited callers, actual foreground/shadow helpers, HP/shield/production text, world labels preserved')
 
 report={'kind':'machine-code-emulation','executable_hash':manifest['output_hash'],'checks':checks,'gameplay_validated':False,'multiplayer_validated':False}
 out=path.parent/'probe-verification.json';out.write_text(json.dumps(report,indent=2),encoding='utf8')

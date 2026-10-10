@@ -430,11 +430,15 @@ if '--hud' in sys.argv:
     # Translate only the identified HUD call sites, never world labels.
     text_sites=(0x4a58f6,0x4a592e,0x4a598e,0x4a59c6,0x4a5a61,0x4a5a99,0x4a5bbc,0x4a5bf6)
     tests=';'.join(f'cmp eax, {site}; je hud_text' for site in text_sites)
+    name_tests=';'.join(f'cmp eax, {site}; je hud_name' for site in (0x4a5146,0x4a517e))
     hook(0x428f70,bytes.fromhex('83ec08568b74241c'),f'''
         push eax
         mov eax, dword ptr [esp+4]
         {tests}
+        {name_tests}
         jmp text_ready
+    hud_name:
+        add dword ptr [esp+16], 168
     hud_text:
         add dword ptr [esp+12], 112
     text_ready:
@@ -443,7 +447,38 @@ if '--hud' in sys.argv:
         push esi
         mov esi, dword ptr [esp+28]
         jmp 0x428f78
-    ''','Move HUD resource text with the HUD; preserve world text positions')
+    ''','Align selected name and shadow with HUD; keep resources at top and world labels unchanged')
+    # Selection/production details use shadowed text helpers, independently
+    # of the UI containers. Only these audited call sites need HUD translation.
+    detail_calls=(0x4a6a39,0x4a6bce,0x4a6de5,0x4a6e9d,0x4a6f4f,0x4a7038,
+        0x4a741b,0x4a7528,0x4a76bf,0x4a772f,0x4a7b9a,0x4a7cc9,0x4a7d2a,
+        0x4a7dec,0x4a7e67,0x4a7eec,0x4a7ff4,0x4a82c2,0x4a837b,0x4a83de,
+        0x4a843f,0x4a84a3,0x4a8507,0x4a869d)
+    for entry in (0x4a8720,0x4a8790):
+        sites=[]
+        for call in detail_calls:
+            off=pe.get_offset_from_rva(call-0x400000)
+            instruction=next(md.disasm(original[off:off+5],call))
+            if instruction.mnemonic!='call':raise ValueError('HUD detail call signature')
+            if instruction.operands[0].imm==entry:sites.append(call+5)
+        detail_tests=';'.join(f'cmp eax, {site}; je detail_text' for site in sites)
+        hook(entry,bytes.fromhex('535556578b7c241c'),f'''
+            push eax
+            mov eax, dword ptr [esp+4]
+            {detail_tests}
+            jmp detail_ready
+        detail_text:
+            add dword ptr [esp+8], 112
+            add dword ptr [esp+12], 168
+        detail_ready:
+            pop eax
+            push ebx
+            push ebp
+            push esi
+            push edi
+            mov edi, dword ptr [esp+28]
+            jmp {entry+8}
+        ''','Move HUD health/shield numbers and detail text, including both shadow passes')
 
 if code_cursor:
     # Add our own section; never borrow unrelated executable padding or BSS.
