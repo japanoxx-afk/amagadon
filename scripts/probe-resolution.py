@@ -13,7 +13,7 @@ if dest.resolve().parent != (workspace/'test-game').resolve():raise ValueError('
 pe=pefile.PE(data=original); result=bytearray(original); records=[]
 md=Cs(CS_ARCH_X86,CS_MODE_32);md.detail=True
 ks=Ks(KS_ARCH_X86,KS_MODE_32)
-section=bytearray(0x24000);code_cursor=0
+section=bytearray(0x21000);code_cursor=0
 section_rva=(pe.OPTIONAL_HEADER.SizeOfImage+0xfff)&~0xfff
 section_va=pe.OPTIONAL_HEADER.ImageBase+section_rva
 
@@ -42,20 +42,20 @@ def immediate(va,old,new,reason):
     if i.imm_size!=4 or struct.unpack('<I',i.bytes[i.imm_offset:i.imm_offset+4])[0]!=old:raise ValueError(hex(va)+' unexpected bytes')
     start=offset+i.imm_offset; result[start:start+4]=struct.pack('<I',new)
     records.append({'va':hex(va),'offset':start,'expected':struct.pack('<I',old).hex(),'replacement':struct.pack('<I',new).hex(),'purpose':reason})
-for va in (0x40121a,0x4012cd,0x401398,0x454ad6,0x45bb4b,0x45bcab,0x491a6d,0x491e46,0x491e7b,0x491e93,0x4922ce):immediate(va,800,1152,'DirectDraw/display dimensions')
-for va in (0x401215,0x4012c8,0x401393,0x454ad1,0x45bb46,0x45bca6,0x491a64,0x491e4c,0x491e76,0x491e8e,0x4922c9):immediate(va,600,864,'DirectDraw/display dimensions')
-for va in (0x4ae172,0x4ae186,0x4ae1c9,0x4b7833,0x4bd89b,0x4bd930):immediate(va,800,1152,'Software renderer width/row stride')
-for va in (0x4ae17c,0x4ae1cf,0x4b783d,0x4bd8a5,0x4bd93a,0x4ba60c):immediate(va,600,864,'Software renderer height')
-immediate(0x4ae190,472,864,'World sprites cover HUD side regions')
-for va in (0x40d704,0x453d66,0x453ef1,0x453fc5,0x4907b2):immediate(va,799,1151,'Mouse bounds')
-for va in (0x40d710,0x453e1f,0x453f1d,0x45407d,0x490828):immediate(va,599,863,'Mouse bounds')
+for va in (0x40121a,0x4012cd,0x401398,0x454ad6,0x45bb4b,0x45bcab,0x491a6d,0x491e46,0x491e7b,0x491e93,0x4922ce):immediate(va,800,1024,'DirectDraw/display dimensions')
+for va in (0x401215,0x4012c8,0x401393,0x454ad1,0x45bb46,0x45bca6,0x491a64,0x491e4c,0x491e76,0x491e8e,0x4922c9):immediate(va,600,768,'DirectDraw/display dimensions')
+for va in (0x4ae172,0x4ae186,0x4ae1c9,0x4b7833,0x4bd89b,0x4bd930):immediate(va,800,1024,'Software renderer width/row stride')
+for va in (0x4ae17c,0x4ae1cf,0x4b783d,0x4bd8a5,0x4bd93a,0x4ba60c):immediate(va,600,768,'Software renderer height')
+immediate(0x4ae190,472,768,'World sprites cover HUD side regions')
+for va in (0x40d704,0x453d66,0x453ef1,0x453fc5,0x4907b2):immediate(va,799,1023,'Mouse bounds')
+for va in (0x40d710,0x453e1f,0x453f1d,0x45407d,0x490828):immediate(va,599,767,'Mouse bounds')
 # Extra terrain rendering is a separate probe stage. The 25-column weather
 # cache is NOT expanded here: stop before its memory indexing for extra tiles.
 if '--terrain' in sys.argv:
-    immediate(0x4a3f74,832,1184,'Terrain horizontal loop')
+    immediate(0x4a3f74,832,1056,'Terrain horizontal loop')
     va=0x4a3f84;off=pe.get_offset_from_rva(va-0x400000)
     if original[off:off+3]!=b'\x83\xfe\x10':raise ValueError('Terrain row signature')
-    result[off+2]=27;records.append({'va':hex(va),'offset':off+2,'expected':'10','replacement':'1b','purpose':'Terrain vertical loop covers 864 pixels'})
+    result[off+2]=24;records.append({'va':hex(va),'offset':off+2,'expected':'10','replacement':'18','purpose':'Terrain vertical loop covers 768 pixels'})
     if '--weather' not in sys.argv:
         # Early terrain-only comparison stage; the full stage retains weather.
         va=0x4a3f0d
@@ -123,7 +123,7 @@ if '--weather' in sys.argv:
     expanded_cell:
         pushfd
         pushad
-        imul eax, esi, 36
+        imul eax, esi, 32
         add eax, edi
         imul eax, eax, 132
         add eax, {cache}
@@ -177,7 +177,7 @@ if '--weather' in sys.argv:
         mov edx, dword ptr [{rng}]
         mov dword ptr [eax+20], edx
         mov esi, {cache}
-        mov edi, 972
+        mov edi, 920
     draw_next:
         cmp byte ptr [esi+4], 0
         je draw_skip
@@ -201,7 +201,7 @@ if '--weather' in sys.argv:
         pushfd
         pushad
         mov edi, {cache}
-        mov ecx, 32076
+        mov ecx, 30360
         xor eax, eax
         cld
         rep stosd
@@ -213,40 +213,40 @@ if '--weather' in sys.argv:
         pop esi
         jmp 0x477535
     ''','Reset added visual cache when weather/game state initializes')
-    immediate(0x476ec0,790,1142,'Weather horizontal clipping')
-    immediate(0x476ecb,480,856,'Weather vertical clipping including eight-pixel trails')
+    immediate(0x476ec0,790,1014,'Weather horizontal clipping')
+    immediate(0x476ecb,480,760,'Weather vertical clipping including eight-pixel trails')
     for va in (0x476f16,0x476f33,0x476f4d,0x476f9a,0x476fe8):
-        bytes_patch(va,bytes.fromhex('8d04808d0480c1e005'),bytes(ks.asm('imul eax, eax, 1152; nop; nop; nop')[0]),'Weather raster row stride 1152')
+        bytes_patch(va,bytes.fromhex('8d04808d0480c1e005'),bytes(ks.asm('imul eax, eax, 1024; nop; nop; nop')[0]),'Weather raster row stride 1024')
     for va in (0x476f70,0x476fbd,0x477009):
         # In these sites other instructions separate the two LEAs and SHL.
-        # Replace 25*y with 36*y before the unchanged final shift by five.
-        bytes_patch(va,bytes.fromhex('8d04808d0c80'),bytes(ks.asm('imul ecx, eax, 36; nop; nop; nop')[0]),'Weather raster row stride 1152 (ECX)')
+        # Replace 25*y with 32*y before the unchanged final shift by five.
+        bytes_patch(va,bytes.fromhex('8d04808d0c80'),bytes(ks.asm('imul ecx, eax, 32; nop; nop; nop')[0]),'Weather raster row stride 1024 (ECX)')
 
 if '--world-overlays' in sys.argv:
     # Cache preparation precedes both fog draw passes. Expand all three
     # phases together; retain the existing visibility lookup and fade policy.
     for va,before,after in (
-        (0x42b4b5,'8d4310','8d431b'),
-        (0x42b4ca,'8d6e19','8d6e24'),
-        (0x42b52c,'83f810','83f81b'),
-        (0x42b545,'8d6e19','8d6e24')):
-        bytes_patch(va,bytes.fromhex(before),bytes.fromhex(after),'Prepare fog cache across full 36x27 viewport')
-    immediate(0x42b504,25,36,'Fog visibility cache columns; preserve original visibility values')
-    for va in (0x42b78a,0x42b874):immediate(va,800,1152,'Terrain overlay/fog horizontal loop')
-    for va in (0x42b79e,0x42b888):immediate(va,512,864,'Terrain overlay/fog vertical tile coverage')
-    immediate(0x4a5016,800,1152,'Full-screen overlay rectangle width')
-    immediate(0x4a5025,600,864,'Full-screen overlay rectangle height')
+        (0x42b4b5,'8d4310','8d4318'),
+        (0x42b4ca,'8d6e19','8d6e20'),
+        (0x42b52c,'83f810','83f818'),
+        (0x42b545,'8d6e19','8d6e20')):
+        bytes_patch(va,bytes.fromhex(before),bytes.fromhex(after),'Prepare fog cache across full 32x24 viewport')
+    immediate(0x42b504,25,32,'Fog visibility cache columns; preserve original visibility values')
+    for va in (0x42b78a,0x42b874):immediate(va,800,1024,'Terrain overlay/fog horizontal loop')
+    for va in (0x42b79e,0x42b888):immediate(va,512,768,'Terrain overlay/fog vertical tile coverage')
+    immediate(0x4a5016,800,1024,'Full-screen overlay rectangle width')
+    immediate(0x4a5025,600,768,'Full-screen overlay rectangle height')
 
 if '--camera' in sys.argv:
-    immediate(0x48cac7,599,863,'Unit world viewport bottom; shared by ground, air, bars and selections')
-    immediate(0x48cad9,799,1151,'Unit world viewport right; shared by ground, air, bars and selections')
+    immediate(0x48cac7,599,767,'Unit world viewport bottom; shared by ground, air, bars and selections')
+    immediate(0x48cad9,799,1023,'Unit world viewport right; shared by ground, air, bars and selections')
     for va in (0x453c80,0x453d83,0x453dc3,0x453f12,0x453f94,0x453feb,0x454049,0x45416d,0x454184):
-        bytes_patch(va,bytes.fromhex('83e819'),bytes.fromhex('83e824'),'Camera horizontal extent: 36 map tiles')
+        bytes_patch(va,bytes.fromhex('83e819'),bytes.fromhex('83e820'),'Camera horizontal extent: 32 map tiles')
     for va in (0x453d02,0x453e3c,0x453e7e,0x453f43,0x453fb5,0x4540a3,0x4540ff,0x4541bc):
-        bytes_patch(va,bytes.fromhex('83e80f'),bytes.fromhex('83e81b'),'Camera vertical extent: 27 map tiles')
-    bytes_patch(0x4541a5,bytes.fromhex('83e90f'),bytes.fromhex('83e91b'),'Camera vertical extent in ECX')
-    bytes_patch(0x454132,bytes.fromhex('83c0f4'),bytes.fromhex('83c0ee'),'Camera center request horizontal half extent')
-    bytes_patch(0x454135,bytes.fromhex('83c1fa'),bytes.fromhex('83c1f3'),'Camera center request vertical half extent')
+        bytes_patch(va,bytes.fromhex('83e80f'),bytes.fromhex('83e818'),'Camera vertical extent: 24 map tiles')
+    bytes_patch(0x4541a5,bytes.fromhex('83e90f'),bytes.fromhex('83e918'),'Camera vertical extent in ECX')
+    bytes_patch(0x454132,bytes.fromhex('83c0f4'),bytes.fromhex('83c0f0'),'Camera center request horizontal half extent')
+    bytes_patch(0x454135,bytes.fromhex('83c1fa'),bytes.fromhex('83c1f4'),'Camera center request vertical half extent')
     hook(0x4a3d40,bytes.fromhex('a1dc125800'),'''
         pushfd
         pushad
@@ -254,7 +254,7 @@ if '--camera' in sys.argv:
         test ecx, ecx
         jz camera_done
         movzx eax, word ptr [ecx+230]
-        sub eax, 36
+        sub eax, 32
         jns x_max_ready
         xor eax, eax
     x_max_ready:
@@ -269,7 +269,7 @@ if '--camera' in sys.argv:
     x_ready:
         mov dword ptr [0x5812e8], edx
         movzx eax, word ptr [ecx+232]
-        sub eax, 27
+        sub eax, 24
         jns y_max_ready
         xor eax, eax
     y_max_ready:
@@ -291,11 +291,11 @@ if '--camera' in sys.argv:
     ''','Clamp camera against expanded viewport, including maps smaller than viewport')
 
 if '--hud' in sys.argv:
-    immediate(0x402c7c,600,864,'HUD anchor uses actual screen bottom')
+    immediate(0x402c7c,600,768,'HUD anchor uses actual screen bottom')
     hook(0x402c9e,bytes.fromhex('8935b09d4f00'),'''
-        mov dword ptr [0x4f9db0], 176
+        mov dword ptr [0x4f9db0], 112
         jmp 0x402ca4
-    ''','Center original 800-pixel HUD on 1152-pixel surface')
+    ''','Center original 800-pixel HUD on 1024-pixel surface')
     # Both the draw and hit-test containers add their stored x/y to each
     # child position. Use the same temporary anchor for both paths. Leave
     # the serialized UI object and relative child coordinates unchanged.
@@ -327,7 +327,7 @@ if '--hud' in sys.argv:
             mov esi, ecx
             mov edi, dword ptr [esi+16]
             mov ebx, dword ptr [esi+20]
-            add dword ptr [esi+16], 176
+            add dword ptr [esi+16], 112
             jmp container_call
         translated_container:
             push ebp
@@ -338,8 +338,8 @@ if '--hud' in sys.argv:
             mov esi, ecx
             mov edi, dword ptr [esi+16]
             mov ebx, dword ptr [esi+20]
-            add dword ptr [esi+16], 176
-            add dword ptr [esi+20], 264
+            add dword ptr [esi+16], 112
+            add dword ptr [esi+20], 168
         container_call:
             {copy_arguments}
             call {trampoline}
@@ -357,16 +357,16 @@ if '--hud' in sys.argv:
     hook(0x48ed10,bytes.fromhex('8b4424083d2c010000'),'''
         mov ecx, dword ptr [esp+4]
         mov edx, dword ptr [esp+8]
-        cmp ecx, 1152
+        cmp ecx, 1024
         jae outside_screen
-        cmp edx, 864
+        cmp edx, 768
         jae outside_screen
-        cmp edx, 564
+        cmp edx, 468
         jl world_point
-        sub ecx, 176
+        sub ecx, 112
         cmp ecx, 800
         jae world_point
-        sub edx, 564
+        sub edx, 468
         imul edx, edx, 800
         xor eax, eax
         cmp byte ptr [edx+ecx+0x5308c8], 0
@@ -387,8 +387,8 @@ if '--hud' in sys.argv:
             pushfd
             cmp edi, 3
             jne portrait_ready
-            add eax, 176
-            add ecx, 264
+            add eax, 112
+            add ecx, 168
         portrait_ready:
             mov dword ptr [esi+24], eax
             mov eax, dword ptr [esp+40]
@@ -396,21 +396,21 @@ if '--hud' in sys.argv:
             jmp {resume+4}
         ''','Move HUD portrait video slot three; leave world/cutscene video slots unchanged')
     hook(0x4039e0,bytes.fromhex('b90a000000'),'''
-        add dword ptr [0x4f9dd0], 176
-        add dword ptr [0x4f9dd8], 176
-        add dword ptr [0x4f9dd4], 264
-        add dword ptr [0x4f9ddc], 264
+        add dword ptr [0x4f9dd0], 112
+        add dword ptr [0x4f9dd8], 112
+        add dword ptr [0x4f9dd4], 168
+        add dword ptr [0x4f9ddc], 168
         mov ecx, 10
         jmp 0x4039e5
     ''','Move minimap bounds used by drawing, clicking and alarms together')
     # Existing projection modes are 2, 1 and 1/2 mini pixels per map tile.
     # Keep those projections, expand only the visible camera rectangle.
-    bytes_patch(0x4a5553,bytes.fromhex('8d4831'),bytes.fromhex('8d4847'),'Minimap 2x horizontal camera span')
-    bytes_patch(0x4a5563,bytes.fromhex('83c01e'),bytes.fromhex('83c036'),'Minimap 2x vertical span: 864/32*2=54')
-    bytes_patch(0x4a5587,bytes.fromhex('8d4818'),bytes.fromhex('8d4823'),'Minimap 1x horizontal camera span')
-    bytes_patch(0x4a5596,bytes.fromhex('83c00f'),bytes.fromhex('83c01b'),'Minimap 1x vertical camera span')
-    bytes_patch(0x4a55b2,bytes.fromhex('8d480c'),bytes.fromhex('8d4811'),'Minimap half-scale horizontal camera span')
-    bytes_patch(0x4a55cc,bytes.fromhex('83c008'),bytes.fromhex('83c00e'),'Minimap half-scale vertical camera span')
+    bytes_patch(0x4a5553,bytes.fromhex('8d4831'),bytes.fromhex('8d483f'),'Minimap 2x horizontal camera span')
+    bytes_patch(0x4a5563,bytes.fromhex('83c01e'),bytes.fromhex('83c030'),'Minimap 2x vertical span: 768/32*2=54')
+    bytes_patch(0x4a5587,bytes.fromhex('8d4818'),bytes.fromhex('8d481f'),'Minimap 1x horizontal camera span')
+    bytes_patch(0x4a5596,bytes.fromhex('83c00f'),bytes.fromhex('83c018'),'Minimap 1x vertical camera span')
+    bytes_patch(0x4a55b2,bytes.fromhex('8d480c'),bytes.fromhex('8d480f'),'Minimap half-scale horizontal camera span')
+    bytes_patch(0x4a55cc,bytes.fromhex('83c008'),bytes.fromhex('83c00c'),'Minimap half-scale vertical camera span')
     hook(0x4a55cf,bytes.fromhex('8b3578295700'),'''
         mov esi, dword ptr [0x4f9dd8]
         dec esi
@@ -436,7 +436,7 @@ if '--hud' in sys.argv:
         {tests}
         jmp text_ready
     hud_text:
-        add dword ptr [esp+12], 176
+        add dword ptr [esp+12], 112
     text_ready:
         pop eax
         sub esp, 8

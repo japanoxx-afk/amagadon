@@ -14,12 +14,13 @@ namespace Amagadon {
     }
     public static class NativePatch {
         public const string InputHash="34f0bf9ed99fbf3ab88c410a3a52a2f6904e7bc7f5b88fb4ebadc935c2e9b466";
-        public const string RecipeHash="e13d5371d4b0e594575866a67db09bfed83cfab67e59e663b975babf21dcd51f";
+        public const string RecipeHash="a6c614f1085892d0556e0e11cb5bd40addb008efac4dc98e1c4a226a1dfda32c";
         public const string FileName="Armageddon.HD-preview.exe";
         public const string PreviousOutputHash="2e5d6c572858167e1190d1948375f25d8a90abbb3bded3a585fa8fc88904f579";
         public const string PriorOutputHash="98223eeeb25c1a57860acdbfbab4cd06e445e96f831bd92cc9d150fe9a670921";
         public const string WideOutputHash="b0c91cee843f10d718ead02be28b72236cbfcabc3c6471841dfaee9a6a07cc7a";
-        public static bool IsPrevious(string hash) { return hash==PreviousOutputHash || hash==PriorOutputHash || hash==WideOutputHash; }
+        public const string LargerOutputHash="99e6b96114bced78e2e8bc6eb42c9f366e8fa148d9d4f482b71064bbbc252931";
+        public static bool IsPrevious(string hash) { return hash==PreviousOutputHash || hash==PriorOutputHash || hash==WideOutputHash || hash==LargerOutputHash; }
         public static string Digest(byte[] b) { using(var h=SHA256.Create()) return BitConverter.ToString(h.ComputeHash(b)).Replace("-","").ToLowerInvariant(); }
         static byte[] Hex(string s) {
             if(s==null || s.Length%2!=0) throw new IOException("패치 바이트 형식 오류");
