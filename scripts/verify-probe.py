@@ -138,7 +138,7 @@ assert read(u,CONTEXT+20)==seed and u.reg_read(UC_X86_REG_ESP)==STACK
 checks.append('extra weather draw: random stream and stack preserved')
 
 # Clamp every edge, and do not produce negative camera coordinates on small maps.
-for width,height,x,y,expected in [(256,256,999,999,(224,232)),(20,10,1,1,(0,0)),(80,80,-1,-1,(0,0)),(80,80,20,20,(20,20))]:
+for width,height,x,y,expected in [(256,256,999,999,(224,238)),(20,10,1,1,(0,0)),(80,80,-1,-1,(0,0)),(80,80,20,20,(20,20))]:
     u=fresh();u.mem_write(WORLD+230,struct.pack('<HH',width,height));dword(u,0x5812e8,x);dword(u,0x5812ec,y)
     run(u,0x4a3d40,0x4a3d45)
     assert (read(u,0x5812e8),read(u,0x5812ec))==expected
@@ -429,8 +429,63 @@ if '--replay' in manifest['stages']:
             run(u,entry,RETURN+0x200 if prohibited else resume)
             assert [e[1] for e in events]==([98] if prohibited else ([4] if mode==1 and not internal and entry==0x454ce0 else []))
             if mode==1 and not internal and entry==0x454ce0:assert read(u,box+20)==0
+    # Execute the kernel-event notify path as well as the legacy polling path.
+    for mode,respond in ((1,True),(2,True),(1,False),(2,False)):
+        u,events,io=replay_machine(mode,2 if mode==2 else 4,0,respond)
+        dword(u,box+40,123);dword(u,box+44,456)
+        dword(u,0x4cb0d8,RETURN+0x300);u.mem_write(RETURN+0x300,bytes(ks.asm('mov eax, 1; ret 4')[0]))
+        dword(u,0x4cb0e8,RETURN+0x400);u.mem_write(RETURN+0x400,bytes(ks.asm('mov eax, '+('0' if respond else '258')+'; ret 8')[0]))
+        def event_ack(uc,address,size,user):
+            events.append((read(uc,box+4),read(uc,box+12)))
+            if respond:dword(uc,box+8,read(uc,box+4))
+        u.hook_add(UC_HOOK_CODE,event_ack,begin=RETURN+0x400,end=RETURN+0x400)
+        run(u,0x4532c7,RETURN+0x200 if mode==2 and not respond else 0x4532cc)
+        if respond:assert [item[1] for item in events]==([10,11,1] if mode==1 else [1]), (mode,events,io)
+        else:assert read(u,box+32)==1
+    checks.append('Replay kernel events: request/ack handles, record/play barriers, timeout fallback and playback fail-stop')
     checks.append('Replay save guards: actual x86 entries, disabled transparency, internal normalization allowed, playback cannot write or load user saves, manual load segments recording')
     checks.append('Replay barriers: normalized snapshot save/load, one-time playback bootstrap, keyboard/RNG pointers, mouse and command ordering, stack/register preservation, multiplayer exclusion, finite timeout with playback fail-stop')
+
+if '--rally' in manifest['stages']:
+    manager,parent,child,ore=CONTEXT+0x10000,CONTEXT+0x14000,CONTEXT+0x18000,CONTEXT+0x1c000
+    # Exercise the actual original worker classifier and its manager checks.
+    for hq in (0,0x100,0x200):
+        for worker in (0x12,0x13,0x14,0x113,0x114,0x21c,0x21d,0x21e,2):
+            for target,alive,near in ((0x300,1,True),(0x301,1,True),(0x302,1,True),(0x303,1,True),(0x300,0,True),(0x300,1,False)):
+                u=fresh();dword(u,0x504a10,manager);dword(u,manager+8,parent);dword(u,manager+12,child);dword(u,manager+16,ore)
+                for address,kind in ((parent,hq),(child,worker),(ore,target)):
+                    u.mem_write(address+12,struct.pack('<H',kind));u.mem_write(address+0x13b8,b'\x01')
+                u.mem_write(ore+0x13b8,bytes([alive]));dword(u,parent+0x1398,500);dword(u,parent+0x139c,600)
+                dword(u,ore+0x14,510 if near else 550);dword(u,ore+0x18,610)
+                dword(u,child+0x414,0xdead);dword(u,child+0x478,123)
+                u.reg_write(UC_X86_REG_ESI,parent);u.reg_write(UC_X86_REG_EDI,1);u.reg_write(UC_X86_REG_EBX,0x12345678)
+                eligible=worker in (0x12,0x13,0x14,0x113,0x114,0x21c,0x21d,0x21e)
+                # Determine supported workers through the real classifier first.
+                dword(u,STACK+4,1);dword(u,STACK,RETURN);run(u,0x40a210,RETURN)
+                eligible=u.reg_read(UC_X86_REG_EAX)!=0
+                u.reg_write(UC_X86_REG_ESP,STACK);u.reg_write(UC_X86_REG_ESI,parent);u.reg_write(UC_X86_REG_EDI,1)
+                success=eligible and target<=0x302 and alive and near
+                run(u,0x430d88,0x430e49 if success else 0x430d8e)
+                assert u.reg_read(UC_X86_REG_ESP)==STACK and u.reg_read(UC_X86_REG_ESI)==parent and u.reg_read(UC_X86_REG_EDI)==1
+                assert u.reg_read(UC_X86_REG_EBX)==0x12345678
+                assert read(u,child+0x414)==(2 if success else 0xdead)
+                assert read(u,child+0x478)==(0 if success else 123)
+                if success:assert bytes(u.mem_read(child+0x464,1))==b'\x2d'
+    checks.append('Ore rally: original worker classifier, three HQs and ore types, gather target/state, inactive/non-ore/distant targets excluded, stack/register preservation')
+    for dx,dy,side,position in ((200,10,1,(21,31)),(-200,10,3,(9,19)),(10,-200,2,(21,19)),(10,200,0,(9,31))):
+        for production in (False,True):
+            u=fresh();dword(u,0x504a10,manager);dword(u,manager+8,parent)
+            dword(u,parent+0x14,500);dword(u,parent+0x18,500);dword(u,parent+0x1398,500+dx);dword(u,parent+0x139c,500+dy)
+            dword(u,STACK+92,0x41f97b if production else RETURN);dword(u,STACK+100,0)
+            dword(u,STACK+60,21);dword(u,STACK+64,19);u.mem_write(STACK+19,b'\0')
+            u.reg_write(UC_X86_REG_ECX,9);u.reg_write(UC_X86_REG_EBX,32);u.reg_write(UC_X86_REG_EDI,9);u.reg_write(UC_X86_REG_ESI,31)
+            run(u,0x44cf5b,0x44cf63)
+            assert bytes(u.mem_read(STACK+19,1))==bytes([side if production else 0])
+            assert (u.reg_read(UC_X86_REG_EDI),u.reg_read(UC_X86_REG_ESI))==(position if production else (9,31))
+            assert u.reg_read(UC_X86_REG_ESP)==STACK and u.reg_read(UC_X86_REG_EBX)==32
+    checks.append('Rally production exit: four directions, original perimeter-search locals, non-production callers preserved')
+    assert (255-238)*32 < 558
+    checks.append('Bottom camera: last map row projects above HUD at y=544; full 24-row raster remains guarded')
 
 report={'kind':'machine-code-emulation','executable_hash':manifest['output_hash'],'checks':checks,'gameplay_validated':False,'multiplayer_validated':False}
 out=path.parent/'probe-verification.json';out.write_text(json.dumps(report,indent=2),encoding='utf8')

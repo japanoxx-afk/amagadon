@@ -251,8 +251,8 @@ if '--camera' in sys.argv:
     for va in (0x453c80,0x453d83,0x453dc3,0x453f12,0x453f94,0x453feb,0x454049,0x45416d,0x454184):
         bytes_patch(va,bytes.fromhex('83e819'),bytes.fromhex('83e820'),'Camera horizontal extent: 32 map tiles')
     for va in (0x453d02,0x453e3c,0x453e7e,0x453f43,0x453fb5,0x4540a3,0x4540ff,0x4541bc):
-        bytes_patch(va,bytes.fromhex('83e80f'),bytes.fromhex('83e818'),'Camera vertical extent: 24 map tiles')
-    bytes_patch(0x4541a5,bytes.fromhex('83e90f'),bytes.fromhex('83e918'),'Camera vertical extent in ECX')
+        bytes_patch(va,bytes.fromhex('83e80f'),bytes.fromhex('83e812'),'Camera bottom: 18 visible tiles above HUD')
+    bytes_patch(0x4541a5,bytes.fromhex('83e90f'),bytes.fromhex('83e912'),'Camera bottom in ECX: 18 visible tiles above HUD')
     bytes_patch(0x454132,bytes.fromhex('83c0f4'),bytes.fromhex('83c0f0'),'Camera center request horizontal half extent')
     bytes_patch(0x454135,bytes.fromhex('83c1fa'),bytes.fromhex('83c1f4'),'Camera center request vertical half extent')
     hook(0x4a3d40,bytes.fromhex('a1dc125800'),'''
@@ -277,7 +277,7 @@ if '--camera' in sys.argv:
     x_ready:
         mov dword ptr [0x5812e8], edx
         movzx eax, word ptr [ecx+232]
-        sub eax, 24
+        sub eax, 18
         jns y_max_ready
         xor eax, eax
     y_max_ready:
@@ -560,6 +560,21 @@ if '--replay' in sys.argv:
         mov dword ptr [{box+12}], eax
         inc dword ptr [{box+4}]
         mov ebx, dword ptr [{box+4}]
+        cmp dword ptr [{box+40}], 0
+        je replay_poll_start
+        push dword ptr [{box+40}]
+        call dword ptr [0x4cb0d8]
+        test eax, eax
+        jz replay_timeout
+        push 10000
+        push dword ptr [{box+44}]
+        call dword ptr [0x4cb0e8]
+        test eax, eax
+        jnz replay_timeout
+        cmp dword ptr [{box+8}], ebx
+        je replay_ack
+        jmp replay_timeout
+    replay_poll_start:
         mov edi, 10000
     replay_wait:
         cmp dword ptr [{box+8}], ebx
@@ -568,6 +583,7 @@ if '--replay' in sys.argv:
         call dword ptr [0x4cb0fc]
         dec edi
         jnz replay_wait
+    replay_timeout:
         mov dword ptr [{box+32}], 1
         cmp dword ptr [{box}], 2
         je replay_abort
@@ -716,6 +732,165 @@ if '--replay' in sys.argv:
             {restore}
             jmp {resume}
         """,'Protect user saves during replay' if va==0x454be0 else 'Only internal replay load allowed; segment recording on user load')
+
+# Gameplay additions are optional and excluded from the archived replay recipe.
+if '--rally' in sys.argv:
+    code_cursor=max(code_cursor,0x23000)
+    # Retain the original collision-aware perimeter search; only choose its
+    # initial side. Other callers (placement, loading, etc.) remain unchanged.
+    hook(0x44cf5b,bytes.fromhex('894c2444895c2448'),"""
+        mov dword ptr [esp+0x44], ecx
+        mov dword ptr [esp+0x48], ebx
+        pushfd
+        pushad
+        cmp dword ptr [esp+128], 0x41f97b
+        jne spawn_done
+        mov eax, dword ptr [esp+136]
+        cmp eax, 1700
+        jae spawn_done
+        mov ecx, dword ptr [0x504a10]
+        test ecx, ecx
+        jz spawn_done
+        mov ecx, dword ptr [ecx+eax*4+8]
+        test ecx, ecx
+        jz spawn_done
+        mov eax, dword ptr [ecx+0x1398]
+        mov edx, dword ptr [ecx+0x139c]
+        mov ebx, eax
+        or ebx, edx
+        jz spawn_done
+        sub eax, dword ptr [ecx+0x14]
+        sub edx, dword ptr [ecx+0x18]
+        mov ebx, eax
+        sar ebx, 31
+        xor eax, ebx
+        sub eax, ebx
+        mov esi, edx
+        sar esi, 31
+        xor edx, esi
+        sub edx, esi
+        cmp eax, edx
+        jb spawn_vertical
+        test ebx, ebx
+        js spawn_left
+        mov byte ptr [esp+55], 1
+        mov edi, dword ptr [esp+96]
+        mov esi, dword ptr [esp+108]
+        dec esi
+        jmp spawn_set
+    spawn_left:
+        mov byte ptr [esp+55], 3
+        mov edi, dword ptr [esp+104]
+        mov esi, dword ptr [esp+100]
+        jmp spawn_set
+    spawn_vertical:
+        test esi, esi
+        js spawn_top
+        mov byte ptr [esp+55], 0
+        mov edi, dword ptr [esp+104]
+        mov esi, dword ptr [esp+108]
+        dec esi
+        jmp spawn_set
+    spawn_top:
+        mov byte ptr [esp+55], 2
+        mov edi, dword ptr [esp+96]
+        mov esi, dword ptr [esp+100]
+    spawn_set:
+        mov dword ptr [esp], edi
+        mov dword ptr [esp+4], esi
+    spawn_done:
+        popad
+        popfd
+        jmp 0x44cf63
+    """,'Choose production exit side towards rally, retain original collision search')
+    hook(0x430d88,bytes.fromhex('8b8698130000'),"""
+        pushfd
+        pushad
+        movzx eax, word ptr [esi+0xc]
+        cmp eax, 0
+        je gather_hq
+        cmp eax, 0x100
+        je gather_hq
+        cmp eax, 0x200
+        jne gather_fallback
+    gather_hq:
+        mov eax, dword ptr [esi+0x1398]
+        or eax, dword ptr [esi+0x139c]
+        jz gather_fallback
+        cmp edi, 1700
+        jae gather_fallback
+        mov ebp, dword ptr [0x504a10]
+        test ebp, ebp
+        jz gather_fallback
+        mov ebx, dword ptr [ebp+edi*4+8]
+        test ebx, ebx
+        jz gather_fallback
+        push edi
+        call 0x40a210
+        add esp, 4
+        test eax, eax
+        jz gather_fallback
+        xor edi, edi
+        mov ecx, 65
+        mov edx, -1
+    gather_scan:
+        mov eax, dword ptr [ebp+edi*4+8]
+        test eax, eax
+        jz gather_next
+        cmp byte ptr [eax+0x13b8], 0
+        je gather_next
+        movzx eax, word ptr [eax+0xc]
+        sub eax, 0x300
+        cmp eax, 2
+        ja gather_next
+        mov eax, dword ptr [ebp+edi*4+8]
+        push edx
+        mov edx, dword ptr [eax+0x14]
+        sub edx, dword ptr [esi+0x1398]
+        mov eax, edx
+        sar eax, 31
+        xor edx, eax
+        sub edx, eax
+        cmp edx, 32
+        ja gather_reject
+        push edx
+        mov eax, dword ptr [ebp+edi*4+8]
+        mov edx, dword ptr [eax+0x18]
+        sub edx, dword ptr [esi+0x139c]
+        mov eax, edx
+        sar eax, 31
+        xor edx, eax
+        sub edx, eax
+        pop eax
+        cmp edx, 32
+        ja gather_reject
+        add eax, edx
+        cmp eax, ecx
+        jae gather_reject
+        mov ecx, eax
+        pop edx
+        mov edx, edi
+        jmp gather_next
+    gather_reject:
+        pop edx
+    gather_next:
+        inc edi
+        cmp edi, 1700
+        jb gather_scan
+        cmp edx, -1
+        je gather_fallback
+        mov dword ptr [ebx+0x414], edx
+        mov byte ptr [ebx+0x464], 0x2d
+        mov dword ptr [ebx+0x478], 0
+        popad
+        popfd
+        jmp 0x430e49
+    gather_fallback:
+        popad
+        popfd
+        mov eax, dword ptr [esi+0x1398]
+        jmp 0x430d8e
+    """,'HQ ore rally assigns original gather state to produced harvesters')
 
 if code_cursor:
     # Add our own section; never borrow unrelated executable padding or BSS.

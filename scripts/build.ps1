@@ -1,10 +1,10 @@
-param([string]$OutputDirectory = "")
+﻿param([string]$OutputDirectory = "")
 $ErrorActionPreference = 'Stop'
 $root = Split-Path $PSScriptRoot -Parent
 $out = if ($OutputDirectory) { [IO.Path]::GetFullPath($OutputDirectory) } else { Join-Path $root 'dist' }
 New-Item -ItemType Directory -Force $out | Out-Null
 $csc = Join-Path $env:WINDIR 'Microsoft.NET\Framework\v4.0.30319\csc.exe'
-& $csc /nologo /target:winexe /platform:x86 /optimize+ /codepage:65001 /reference:System.Windows.Forms.dll /reference:System.Drawing.dll /reference:System.Web.Extensions.dll /reference:System.Net.Http.dll /reference:System.IO.Compression.dll /reference:System.IO.Compression.FileSystem.dll /resource:"$root\compat\hd-preview.json,Amagadon.HdPreviewRecipe" /out:"$out\AmagadonLauncher.exe" "$root\src\Launcher.cs" "$root\src\NativePatch.cs" "$root\src\Replay.cs" "$root\src\ReplayTests.cs"
+& $csc /nologo /target:winexe /platform:x86 /optimize+ /codepage:65001 /reference:System.Windows.Forms.dll /reference:System.Drawing.dll /reference:System.Web.Extensions.dll /reference:System.Net.Http.dll /reference:System.IO.Compression.dll /reference:System.IO.Compression.FileSystem.dll /resource:"$root\compat\hd-preview.json,Amagadon.HdPreviewRecipe" /resource:"$root\compat\replay-0.3.0.json,Amagadon.LegacyReplayRecipe" /out:"$out\AmagadonLauncher.exe" "$root\src\Launcher.cs" "$root\src\NativePatch.cs" "$root\src\Replay.cs" "$root\src\ReplayTests.cs" "$root\src\ReplayBrowser.cs"
 if ($LASTEXITCODE -ne 0) { throw 'Compile failed' }
 $version = [regex]::Match((Get-Content "$root\src\Launcher.cs" -Raw),'DisplayVersion = "([^"]+)"').Groups[1].Value
 if ($version -notmatch '^\d+\.\d+\.\d+(-preview)?$') { throw 'Invalid build version' }

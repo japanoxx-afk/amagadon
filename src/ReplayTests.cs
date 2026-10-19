@@ -27,7 +27,10 @@ namespace Amagadon {
                 string divergent=Path.Combine(root,"divergent.agr");ReplayFiles.Pack(changed,divergent,info);
                 using(var playback=new ReplaySession(root,fixture,divergent,true)) {playback.Run();Check(playback.ChildExitCode==0xe001,"desync fail-stop exit");Check(playback.Result.Contains("유닛 위치"),"desync reported");}
                 using(var stopped=new ReplaySession(root,fixture,archive,true)) {stopped.RequestStop();stopped.Run();Check(stopped.Result=="리플레이 재생을 중단했습니다.","explicit playback cancellation");}
-                Core.Log("REPLAY PROCESS TEST PASS: suspended child activation, snapshot, keyboard/mouse/RNG/command transport, archive finalization, playback, canonical world result");
+                string legacyArchive;
+                using(var recording=new ReplaySession(root,fixture,null,true,false)) {recording.Run();Check(recording.ChildExitCode==0,"polling recording exit race");legacyArchive=recording.CreatedReplay;Check(legacyArchive!=null,"polling archive completed");}
+                using(var playback=new ReplaySession(root,fixture,legacyArchive,true,false)) {playback.Run();Check(playback.ChildExitCode==0 && playback.Result=="리플레이 재생을 완료했습니다.","polling playback exit race");}
+                Core.Log("REPLAY PROCESS TEST PASS: kernel events and legacy polling, suspended child activation, snapshot, keyboard/mouse/RNG/command transport, archive finalization, playback, canonical world result");
             } finally {Directory.Delete(root,true);}
         }
         public static void Run() {

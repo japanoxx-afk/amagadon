@@ -14,6 +14,19 @@ asm=f'''
  mov dword ptr [{box+12}], eax
  inc dword ptr [{box+4}]
  mov ebx, dword ptr [{box+4}]
+ cmp dword ptr [{box+40}], 0
+ je poll_start
+ push dword ptr [{box+40}]
+ call dword ptr [{imports['SetEvent']}]
+ push 10000
+ push dword ptr [{box+44}]
+ call dword ptr [{imports['WaitForSingleObject']}]
+ test eax, eax
+ jnz timeout
+ cmp dword ptr [{box+8}], ebx
+ je ack
+ jmp timeout
+ poll_start:
  mov edi, 10000
  wait_ack:
  cmp dword ptr [{box+8}], ebx
@@ -22,6 +35,7 @@ asm=f'''
  call dword ptr [{imports['Sleep']}]
  dec edi
  jnz wait_ack
+ timeout:
  push 1
  call dword ptr [{imports['ExitProcess']}]
  ack:

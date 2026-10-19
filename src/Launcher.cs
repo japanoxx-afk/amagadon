@@ -12,8 +12,8 @@ using System.Threading.Tasks;
 using System.Web.Script.Serialization;
 using System.Windows.Forms;
 
-[assembly: System.Reflection.AssemblyVersion("0.3.1.0")]
-[assembly: System.Reflection.AssemblyInformationalVersion("0.3.1-preview")]
+[assembly: System.Reflection.AssemblyVersion("0.3.2.0")]
+[assembly: System.Reflection.AssemblyInformationalVersion("0.3.2-preview")]
 namespace Amagadon {
     public class Settings {
         public string GamePath="";
@@ -24,8 +24,8 @@ namespace Amagadon {
     }
     public class Backup { public string Directory; public string[] Existing; }
     public static class Core {
-        public const string Version = "0.3.1";
-        public const string DisplayVersion = "0.3.1-preview";
+        public const string Version = "0.3.2";
+        public const string DisplayVersion = "0.3.2-preview";
         public static readonly string Home = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "AmagadonLauncher");
         public static readonly JavaScriptSerializer Json = new JavaScriptSerializer();
         public static string Hash(string path) { using(var h=SHA256.Create()) using(var f=File.OpenRead(path)) return BitConverter.ToString(h.ComputeHash(f)).Replace("-", "").ToLowerInvariant(); }
@@ -52,7 +52,7 @@ namespace Amagadon {
         }
         public static void EnsureIdle(string folder) {
             string target=Path.GetFullPath(folder).TrimEnd(Path.DirectorySeparatorChar);
-            foreach(var name in new[]{"Armageddon","Armageddon.HD-preview","ACE"}) foreach(var p in Process.GetProcessesByName(name)) { using(p) {
+            foreach(var name in new[]{"Armageddon","Armageddon.HD-preview","Armageddon.Replay","ACE"}) foreach(var p in Process.GetProcessesByName(name)) { using(p) {
                 string running;
                 try {running=Path.GetDirectoryName(p.MainModule.FileName).TrimEnd(Path.DirectorySeparatorChar);}
                 catch(Exception) {if(p.HasExited)continue;throw new IOException("실행 중인 게임 경로를 확인할 수 없습니다. 게임 또는 맵 에디터를 종료해주세요.");}
@@ -102,7 +102,7 @@ namespace Amagadon {
             update=Button("업데이트",32,585,160,40); var notes=Button("패치노트",208,585,160,40); var restore=Button("원본 설정 복원",388,585,160,40); var logs=Button("진단 로그",564,585,162,40);
             autoReplay.Text="싱글플레이 리플레이 자동 기록 · 1024×768 시험 모드";autoReplay.SetBounds(32,636,694,34);Controls.Add(autoReplay);
             replay=Button("리플레이 재생",32,681,338,40);var replayFolder=Button("리플레이 저장 폴더",388,681,338,40);
-            replay.Click+=async delegate {if(activeReplay!=null && activeReplay.IsPlayback) {activeReplay.RequestStop();return;}using(var dialog=new OpenFileDialog {Title="게임 리플레이 선택",Filter="아마게돈 리플레이 (*.agr)|*.agr",InitialDirectory=ReplayFiles.Home}) {Directory.CreateDirectory(ReplayFiles.Home);if(dialog.ShowDialog(this)==DialogResult.OK) {resolution.SelectedIndex=1;compat.Checked=true;await Launch("Armageddon.exe",dialog.FileName);}}};
+            replay.Click+=async delegate {if(activeReplay!=null && activeReplay.IsPlayback) {activeReplay.RequestStop();return;}using(var dialog=new ReplayBrowser()) {if(dialog.ShowDialog(this)==DialogResult.OK) {resolution.SelectedIndex=1;compat.Checked=true;await Launch("Armageddon.exe",dialog.SelectedReplay);}}};
             replayFolder.Click+=delegate {Directory.CreateDirectory(ReplayFiles.Home);Process.Start("explorer.exe",ReplayFiles.Home);};
             status.SetBounds(32,740,694,55); status.ForeColor=Color.FromArgb(158,174,194); Controls.Add(status);
             settings=new Settings(); try { string f=Path.Combine(Core.Home,"settings.json"); if(File.Exists(f)) settings=Core.Json.Deserialize<Settings>(File.ReadAllText(f)); } catch(Exception ex) { Core.Log(ex.Message); }
@@ -135,7 +135,7 @@ namespace Amagadon {
                 else {
                     if(settings.NativeHD) {
                         if(!settings.Compatibility)throw new IOException("HD 시험본은 그래픽 호환성 적용이 필요합니다.");
-                        file=NativePatch.Prepare(settings.GamePath,Path.Combine(Base,"compat","hd-preview.json"));
+                        file=replaySource==null?NativePatch.Prepare(settings.GamePath,Path.Combine(Base,"compat","hd-preview.json")):NativePatch.PrepareReplay(settings.GamePath,replaySource);
                     }
                     if(settings.Compatibility) {
                         string wrapper=Path.Combine(Base,"compat","ddraw.dll");
@@ -187,7 +187,7 @@ namespace Amagadon {
             if(args.Length==2 && args[0]=="--test-replay-process") {try {ReplayTests.ProcessRoundTrip(args[1]);return 0;}catch(Exception ex) {Core.Log(ex.ToString());return 1;}}
             if(args.Length==2 && args[0]=="--verify-native") {try{SelfTest.NativeRun(args[1]);return 0;}catch(Exception ex){Core.Log(ex.ToString());return 1;}}
             if(args.Contains("--self-test")) { try { SelfTest.Run();ReplayTests.Run();return 0; } catch(Exception ex) {Core.Log(ex.ToString());return 1;} }
-            bool first; using(var mutex=new System.Threading.Mutex(true,"Local\\AmagadonLauncher",out first)) {if(!first)return 0; Application.EnableVisualStyles();Application.SetCompatibleTextRenderingDefault(false);Application.Run(new Launcher());} return 0;
+            bool first; using(var mutex=new System.Threading.Mutex(true,"Local\\AmagadonLauncher-"+Core.DisplayVersion,out first)) {if(!first)return 0; Application.EnableVisualStyles();Application.SetCompatibleTextRenderingDefault(false);Application.Run(new Launcher());} return 0;
         }
     }
     static class SelfTest {
@@ -230,6 +230,14 @@ namespace Amagadon {
                 }
                 string trial=NativePatch.Prepare(fixture,recipe);
                 if(Core.Hash(trial)!=r.OutputHash || NativePatch.Prepare(fixture,recipe)!=trial)throw new Exception("Trial creation/reuse failed");
+                string oldReplay=Path.Combine(fixture,"old.agr");
+                using(var archive=System.IO.Compression.ZipFile.Open(oldReplay,System.IO.Compression.ZipArchiveMode.Create))
+                using(var writer=new StreamWriter(archive.CreateEntry("manifest.json").Open()))writer.Write(Core.Json.Serialize(new ReplayInfo {Frames=1,Complete=true,ExecutableHash=NativePatch.LegacyOutputHash,Version="0.3.0-preview"}));
+                string legacy=NativePatch.PrepareReplay(fixture,oldReplay);
+                if(Core.Hash(legacy)!=NativePatch.LegacyOutputHash || NativePatch.PrepareReplay(fixture,oldReplay)!=legacy || Core.Hash(trial)!=r.OutputHash)throw new Exception("Legacy replay selection changed current patch");
+                File.WriteAllBytes(legacy,new byte[]{1});rejected=false;
+                try {NativePatch.PrepareReplay(fixture,oldReplay);}catch(IOException){rejected=true;}
+                if(!rejected)throw new Exception("Unknown legacy replay executable accepted");
                 File.WriteAllBytes(trial,new byte[]{1});rejected=false;
                 try{NativePatch.Remove(fixture,recipe);}catch(IOException){rejected=true;}
                 if(!rejected || !File.Exists(trial))throw new Exception("Foreign trial removal allowed");

@@ -1,0 +1,724 @@
+{
+  "Version": "0.3.0-preview",
+  "ReleaseCandidate": false,
+  "InputHash": "34f0bf9ed99fbf3ab88c410a3a52a2f6904e7bc7f5b88fb4ebadc935c2e9b466",
+  "InputLength": 1032192,
+  "OutputHash": "77fcba1d142a4ccb1075eb71a53f51cf2f6d64245e5ee2bf380558ee6db613b6",
+  "OutputLength": 1196032,
+  "Edits": [
+    {
+      "Offset": 294,
+      "Before": "04",
+      "After": "05"
+    },
+    {
+      "Offset": 369,
+      "Before": "40f1",
+      "After": "c0f3"
+    },
+    {
+      "Offset": 696,
+      "Before": "0000000000000000",
+      "After": "2e61676870726f62"
+    },
+    {
+      "Offset": 705,
+      "Before": "0000",
+      "After": "8002"
+    },
+    {
+      "Offset": 709,
+      "Before": "000000",
+      "After": "40f101"
+    },
+    {
+      "Offset": 713,
+      "Before": "0000",
+      "After": "8002"
+    },
+    {
+      "Offset": 717,
+      "Before": "0000",
+      "After": "c00f"
+    },
+    {
+      "Offset": 732,
+      "Before": "00",
+      "After": "40"
+    },
+    {
+      "Offset": 735,
+      "Before": "00",
+      "After": "e0"
+    },
+    {
+      "Offset": 4630,
+      "Before": "5802",
+      "After": "0003"
+    },
+    {
+      "Offset": 4635,
+      "Before": "2003",
+      "After": "0004"
+    },
+    {
+      "Offset": 4809,
+      "Before": "5802",
+      "After": "0003"
+    },
+    {
+      "Offset": 4814,
+      "Before": "2003",
+      "After": "0004"
+    },
+    {
+      "Offset": 5012,
+      "Before": "5802",
+      "After": "0003"
+    },
+    {
+      "Offset": 5017,
+      "Before": "2003",
+      "After": "0004"
+    },
+    {
+      "Offset": 11389,
+      "Before": "5802",
+      "After": "0003"
+    },
+    {
+      "Offset": 11422,
+      "Before": "8935b09d4f00",
+      "After": "e96d15f10190"
+    },
+    {
+      "Offset": 14816,
+      "Before": "b90a000000",
+      "After": "e9fb0af101"
+    },
+    {
+      "Offset": 30379,
+      "Before": "db01",
+      "After": "ff02"
+    },
+    {
+      "Offset": 31395,
+      "Before": "db01",
+      "After": "ff02"
+    },
+    {
+      "Offset": 31411,
+      "Before": "db01",
+      "After": "ff02"
+    },
+    {
+      "Offset": 32016,
+      "Before": "db01",
+      "After": "ff02"
+    },
+    {
+      "Offset": 32034,
+      "Before": "db01",
+      "After": "ff02"
+    },
+    {
+      "Offset": 55046,
+      "Before": "1f",
+      "After": "ff"
+    },
+    {
+      "Offset": 55057,
+      "Before": "57",
+      "After": "ff"
+    },
+    {
+      "Offset": 167792,
+      "Before": "83ec08568b74241c",
+      "After": "e9cbb5ee01909090"
+    },
+    {
+      "Offset": 177335,
+      "Before": "10",
+      "After": "18"
+    },
+    {
+      "Offset": 177356,
+      "Before": "19",
+      "After": "20"
+    },
+    {
+      "Offset": 177413,
+      "Before": "19",
+      "After": "20"
+    },
+    {
+      "Offset": 177454,
+      "Before": "10",
+      "After": "18"
+    },
+    {
+      "Offset": 177479,
+      "Before": "19",
+      "After": "20"
+    },
+    {
+      "Offset": 178060,
+      "Before": "2003",
+      "After": "0004"
+    },
+    {
+      "Offset": 178081,
+      "Before": "02",
+      "After": "03"
+    },
+    {
+      "Offset": 178294,
+      "Before": "2003",
+      "After": "0004"
+    },
+    {
+      "Offset": 178315,
+      "Before": "02",
+      "After": "03"
+    },
+    {
+      "Offset": 340679,
+      "Before": "a0484f5000",
+      "After": "e9941dee01"
+    },
+    {
+      "Offset": 342064,
+      "Before": "8b0d784d5000",
+      "After": "e98b19ee0190"
+    },
+    {
+      "Offset": 343170,
+      "Before": "19",
+      "After": "20"
+    },
+    {
+      "Offset": 343300,
+      "Before": "0f",
+      "After": "18"
+    },
+    {
+      "Offset": 343399,
+      "Before": "1f",
+      "After": "ff"
+    },
+    {
+      "Offset": 343429,
+      "Before": "19",
+      "After": "20"
+    },
+    {
+      "Offset": 343493,
+      "Before": "19",
+      "After": "20"
+    },
+    {
+      "Offset": 343584,
+      "Before": "57",
+      "After": "ff"
+    },
+    {
+      "Offset": 343614,
+      "Before": "0f",
+      "After": "18"
+    },
+    {
+      "Offset": 343680,
+      "Before": "0f",
+      "After": "18"
+    },
+    {
+      "Offset": 343794,
+      "Before": "1f",
+      "After": "ff"
+    },
+    {
+      "Offset": 343828,
+      "Before": "19",
+      "After": "20"
+    },
+    {
+      "Offset": 343843,
+      "Before": "57",
+      "After": "ff"
+    },
+    {
+      "Offset": 343877,
+      "Before": "0f",
+      "After": "18"
+    },
+    {
+      "Offset": 343958,
+      "Before": "19",
+      "After": "20"
+    },
+    {
+      "Offset": 343991,
+      "Before": "0f",
+      "After": "18"
+    },
+    {
+      "Offset": 344011,
+      "Before": "1f",
+      "After": "ff"
+    },
+    {
+      "Offset": 344045,
+      "Before": "19",
+      "After": "20"
+    },
+    {
+      "Offset": 344139,
+      "Before": "19",
+      "After": "20"
+    },
+    {
+      "Offset": 344195,
+      "Before": "57",
+      "After": "ff"
+    },
+    {
+      "Offset": 344229,
+      "Before": "0f",
+      "After": "18"
+    },
+    {
+      "Offset": 344321,
+      "Before": "0f",
+      "After": "18"
+    },
+    {
+      "Offset": 344372,
+      "Before": "f4",
+      "After": "f0"
+    },
+    {
+      "Offset": 344375,
+      "Before": "fa",
+      "After": "f4"
+    },
+    {
+      "Offset": 344431,
+      "Before": "19",
+      "After": "20"
+    },
+    {
+      "Offset": 344454,
+      "Before": "19",
+      "After": "20"
+    },
+    {
+      "Offset": 344487,
+      "Before": "0f",
+      "After": "18"
+    },
+    {
+      "Offset": 344510,
+      "Before": "0f",
+      "After": "18"
+    },
+    {
+      "Offset": 345129,
+      "Before": "381dc83e5100",
+      "After": "e9d20dee0190"
+    },
+    {
+      "Offset": 346834,
+      "Before": "5802",
+      "After": "0003"
+    },
+    {
+      "Offset": 346839,
+      "Before": "2003",
+      "After": "0004"
+    },
+    {
+      "Offset": 347104,
+      "Before": "8b44240481ec00010000",
+      "After": "e95b06ee019090909090"
+    },
+    {
+      "Offset": 347360,
+      "Before": "8b0d582b5700",
+      "After": "e9ab05ee0190"
+    },
+    {
+      "Offset": 375623,
+      "Before": "5802",
+      "After": "0003"
+    },
+    {
+      "Offset": 375628,
+      "Before": "2003",
+      "After": "0004"
+    },
+    {
+      "Offset": 375975,
+      "Before": "5802",
+      "After": "0003"
+    },
+    {
+      "Offset": 375980,
+      "Before": "2003",
+      "After": "0004"
+    },
+    {
+      "Offset": 487105,
+      "Before": "16",
+      "After": "f6"
+    },
+    {
+      "Offset": 487117,
+      "Before": "e001",
+      "After": "f802"
+    },
+    {
+      "Offset": 487190,
+      "Before": "8d04808d0480c1e005",
+      "After": "69c000040000909090"
+    },
+    {
+      "Offset": 487219,
+      "Before": "8d04808d0480c1e005",
+      "After": "69c000040000909090"
+    },
+    {
+      "Offset": 487245,
+      "Before": "8d04808d0480c1e005",
+      "After": "69c000040000909090"
+    },
+    {
+      "Offset": 487280,
+      "Before": "8d04808d0c80",
+      "After": "6bc820909090"
+    },
+    {
+      "Offset": 487322,
+      "Before": "8d04808d0480c1e005",
+      "After": "69c000040000909090"
+    },
+    {
+      "Offset": 487357,
+      "Before": "8d04808d0c80",
+      "After": "6bc820909090"
+    },
+    {
+      "Offset": 487400,
+      "Before": "8d04808d0480c1e005",
+      "After": "69c000040000909090"
+    },
+    {
+      "Offset": 487433,
+      "Before": "8d04808d0c80",
+      "After": "6bc820909090"
+    },
+    {
+      "Offset": 488751,
+      "Before": "c64603015f5e",
+      "After": "e93ccce90190"
+    },
+    {
+      "Offset": 576201,
+      "Before": "57",
+      "After": "ff"
+    },
+    {
+      "Offset": 576219,
+      "Before": "1f",
+      "After": "ff"
+    },
+    {
+      "Offset": 578928,
+      "Before": "83ec10568d742404",
+      "After": "e98b6ae801909090"
+    },
+    {
+      "Offset": 584976,
+      "Before": "8b4424083d2c010000",
+      "After": "e93b57e80190909090"
+    },
+    {
+      "Offset": 591795,
+      "Before": "1f",
+      "After": "ff"
+    },
+    {
+      "Offset": 591913,
+      "Before": "57",
+      "After": "ff"
+    },
+    {
+      "Offset": 596581,
+      "Before": "5802",
+      "After": "0003"
+    },
+    {
+      "Offset": 596590,
+      "Before": "2003",
+      "After": "0004"
+    },
+    {
+      "Offset": 597576,
+      "Before": "2003",
+      "After": "0004"
+    },
+    {
+      "Offset": 597583,
+      "Before": "5802",
+      "After": "0003"
+    },
+    {
+      "Offset": 597623,
+      "Before": "5802",
+      "After": "0003"
+    },
+    {
+      "Offset": 597628,
+      "Before": "2003",
+      "After": "0004"
+    },
+    {
+      "Offset": 597647,
+      "Before": "5802",
+      "After": "0003"
+    },
+    {
+      "Offset": 597652,
+      "Before": "2003",
+      "After": "0004"
+    },
+    {
+      "Offset": 598730,
+      "Before": "5802",
+      "After": "0003"
+    },
+    {
+      "Offset": 598735,
+      "Before": "2003",
+      "After": "0004"
+    },
+    {
+      "Offset": 650112,
+      "Before": "83ec105355",
+      "After": "e9cb57e701"
+    },
+    {
+      "Offset": 650736,
+      "Before": "83ec108b54241c",
+      "After": "e93b54e7019090"
+    },
+    {
+      "Offset": 651200,
+      "Before": "83ec085355",
+      "After": "e9fb52e701"
+    },
+    {
+      "Offset": 652992,
+      "Before": "83ec285355",
+      "After": "e91b4de701"
+    },
+    {
+      "Offset": 671040,
+      "Before": "a1dc125800",
+      "After": "e95b04e701"
+    },
+    {
+      "Offset": 671083,
+      "Before": "83c40433f6",
+      "After": "e9c002e701"
+    },
+    {
+      "Offset": 671501,
+      "Before": "8b15ec125800",
+      "After": "e95e01e70190"
+    },
+    {
+      "Offset": 671605,
+      "Before": "4003",
+      "After": "2004"
+    },
+    {
+      "Offset": 671622,
+      "Before": "10",
+      "After": "18"
+    },
+    {
+      "Offset": 672859,
+      "Before": "e8",
+      "After": "e9"
+    },
+    {
+      "Offset": 672861,
+      "Before": "2ffdff",
+      "After": "fce601"
+    },
+    {
+      "Offset": 675866,
+      "Before": "2003",
+      "After": "0004"
+    },
+    {
+      "Offset": 675881,
+      "Before": "5802",
+      "After": "0003"
+    },
+    {
+      "Offset": 677205,
+      "Before": "31",
+      "After": "3f"
+    },
+    {
+      "Offset": 677221,
+      "Before": "1e",
+      "After": "30"
+    },
+    {
+      "Offset": 677257,
+      "Before": "18",
+      "After": "1f"
+    },
+    {
+      "Offset": 677272,
+      "Before": "0f",
+      "After": "18"
+    },
+    {
+      "Offset": 677300,
+      "Before": "0c",
+      "After": "0f"
+    },
+    {
+      "Offset": 677326,
+      "Before": "088b3578295700",
+      "After": "0ce93cefe60190"
+    },
+    {
+      "Offset": 679981,
+      "Before": "8b3578295700",
+      "After": "e97ee6e60190"
+    },
+    {
+      "Offset": 689952,
+      "Before": "535556578b7c241c",
+      "After": "e98bbee601909090"
+    },
+    {
+      "Offset": 690064,
+      "Before": "535556578b7c241c",
+      "After": "e98bbee601909090"
+    },
+    {
+      "Offset": 713080,
+      "Before": "2003",
+      "After": "0004"
+    },
+    {
+      "Offset": 713090,
+      "Before": "5802",
+      "After": "0003"
+    },
+    {
+      "Offset": 713100,
+      "Before": "2003",
+      "After": "0004"
+    },
+    {
+      "Offset": 713110,
+      "Before": "d801",
+      "After": "0003"
+    },
+    {
+      "Offset": 713162,
+      "Before": "2003",
+      "After": "0004"
+    },
+    {
+      "Offset": 713169,
+      "Before": "5802",
+      "After": "0003"
+    },
+    {
+      "Offset": 751673,
+      "Before": "2003",
+      "After": "0004"
+    },
+    {
+      "Offset": 751683,
+      "Before": "5802",
+      "After": "0003"
+    },
+    {
+      "Offset": 763406,
+      "Before": "5802",
+      "After": "0003"
+    },
+    {
+      "Offset": 773415,
+      "Before": "8946188b442424",
+      "After": "e97477e5019090"
+    },
+    {
+      "Offset": 773591,
+      "Before": "8946188b442424",
+      "After": "e9e476e5019090"
+    },
+    {
+      "Offset": 776353,
+      "Before": "2003",
+      "After": "0004"
+    },
+    {
+      "Offset": 776363,
+      "Before": "5802",
+      "After": "0003"
+    },
+    {
+      "Offset": 776502,
+      "Before": "2003",
+      "After": "0004"
+    },
+    {
+      "Offset": 776512,
+      "Before": "5802",
+      "After": "0003"
+    }
+  ],
+  "AppendGzip": "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",
+  "Stages": [
+    "--terrain",
+    "--guard",
+    "--weather",
+    "--world-overlays",
+    "--hud",
+    "--camera",
+    "--replay"
+  ],
+  "VerifiedChecks": [
+    "tile guards: 6 boundary/sentinel/null/valid cases",
+    "frame clear: 786432 bytes, surrounding guards preserved",
+    "weather update: 400 original + 368 extra cells, stack/register/RNG checks",
+    "weather grid: negative/out-of-map camera bounds",
+    "weather raster: actual x86 routine, 5 corner/clipping cases, 8-pixel trails",
+    "extra weather draw: random stream and stack preserved",
+    "camera: edges, negative coordinates and maps smaller than viewport",
+    "HUD drawing anchor: x=112, y=640",
+    "HUD containers: drawing/tooltips translated; resource icons stay at top; menus unchanged",
+    "Resource numbers: horizontal translation only, same top row as icons",
+    "Actual HUD press/release at x=815,y=693 emits click result in all three command containers",
+    "HUD silhouette: inverse mapping, transparent holes, playable side strips, screen bounds",
+    "Portrait: both video creation paths translate only HUD slot three",
+    "Shared unit visibility rectangle: world origin plus 1023x767, not 799x599",
+    "minimap camera border: all five existing projection modes",
+    "minimap camera border: clipped to maps smaller than viewport",
+    "Fog preparation: all 32x24 cells, three visibility states, real neighbor/cache routines, outside guards and fog state preserved",
+    "HUD detail text: 24 audited callers, actual foreground/shadow helpers, HP/shield/production text, world labels preserved",
+    "Selection drag: actual start/live/release/outline, 9 directions/player/camera cases up to 1023x767, solid HUD start rejected",
+    "HUD timer: actual formatter and shadow helpers, 9 reset/load/minute-boundary cases, centered at 416x604, simulation counter unchanged",
+    "Replay save guards: actual x86 entries, disabled transparency, internal normalization allowed, playback cannot write or load user saves, manual load segments recording",
+    "Replay barriers: normalized snapshot save/load, one-time playback bootstrap, keyboard/RNG pointers, mouse and command ordering, stack/register preservation, multiplayer exclusion, finite timeout with playback fail-stop"
+  ]
+}
