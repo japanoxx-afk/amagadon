@@ -13,7 +13,7 @@ if dest.resolve().parent != (workspace/'test-game').resolve():raise ValueError('
 pe=pefile.PE(data=original); result=bytearray(original); records=[]
 md=Cs(CS_ARCH_X86,CS_MODE_32);md.detail=True
 ks=Ks(KS_ARCH_X86,KS_MODE_32)
-section=bytearray(0x21000);code_cursor=0
+section=bytearray(0x28000);code_cursor=0
 section_rva=(pe.OPTIONAL_HEADER.SizeOfImage+0xfff)&~0xfff
 section_va=pe.OPTIONAL_HEADER.ImageBase+section_rva
 
@@ -27,7 +27,7 @@ def emit(assembly):
     global code_cursor
     address=section_va+code_cursor
     code=bytes(ks.asm(assembly,address)[0])
-    if code_cursor+len(code)>0x1f00:raise ValueError('Code section overflow')
+    if code_cursor+len(code)>(0x25000 if code_cursor>=0x21000 else 0x1f00):raise ValueError('Code section overflow')
     section[code_cursor:code_cursor+len(code)]=code
     code_cursor=(code_cursor+len(code)+15)&~15
     return address
@@ -548,6 +548,174 @@ if '--hud' in sys.argv:
         mov esi, dword ptr [0x572978]
         jmp 0x4a6033
     """,'Draw saved simulation elapsed time centered above HUD buttons')
+
+# Replay uses a separate code area and a zero-initialized controller mailbox.
+# The launcher activates it only in its own suspended child, never an existing game.
+# Mailbox: mode, request, ack, event, initialized, active, keyboard, RNG, error.
+if '--replay' in sys.argv:
+    code_cursor=0x21000
+    box=section_va+0x26000
+    save_name=box+0x100
+    notify=emit(f"""
+        mov dword ptr [{box+12}], eax
+        inc dword ptr [{box+4}]
+        mov ebx, dword ptr [{box+4}]
+        mov edi, 10000
+    replay_wait:
+        cmp dword ptr [{box+8}], ebx
+        je replay_ack
+        push 1
+        call dword ptr [0x4cb0fc]
+        dec edi
+        jnz replay_wait
+        mov dword ptr [{box+32}], 1
+        cmp dword ptr [{box}], 2
+        je replay_abort
+        mov dword ptr [{box}], 0
+    replay_ack:
+        cmp dword ptr [{box}], 3
+        je replay_abort
+        ret
+    replay_abort:
+        push 0xe001
+        call dword ptr [0x4cb204]
+        int3
+    """)
+    # Run after input polling and before active-state dispatch. The save roundtrip
+    # normalizes a fresh match through the same reconstruction path as playback.
+    hook(0x4532c7,bytes.fromhex('a0484f5000'),f"""
+        pushfd
+        pushad
+        cmp dword ptr [{box}], 0
+        je replay_loop_done
+        mov eax, dword ptr [esp+56]
+        mov dword ptr [{box+24}], eax
+        lea eax, [esp+52]
+        mov dword ptr [{box+36}], eax
+        call 0x4c2f13
+        add eax, 20
+        mov dword ptr [{box+28}], eax
+        cmp dword ptr [{box+16}], 0
+        jne replay_check_state
+        cmp dword ptr [{box}], 2
+        jne replay_mark_ready
+        cmp byte ptr [0x504f48], 2
+        jne replay_loop_done
+        push {save_name}
+        call 0x454ce0
+        add esp, 4
+        test eax, eax
+        jz replay_load_fail
+        cmp dword ptr [0x513ed4], 1
+        je replay_load_fail
+        mov dword ptr [{box+20}], 1
+    replay_mark_ready:
+        mov dword ptr [{box+16}], 1
+    replay_check_state:
+        cmp byte ptr [0x504f48], 4
+        jne replay_outside
+        cmp dword ptr [0x513ed4], 1
+        je replay_outside
+        cmp dword ptr [{box+20}], 0
+        jne replay_frame
+        mov eax, 10
+        call {notify}
+        cmp dword ptr [{box}], 0
+        je replay_loop_done
+        push {save_name}
+        call 0x454be0
+        add esp, 4
+        test eax, eax
+        jz replay_save_fail
+        mov eax, 11
+        call {notify}
+        cmp dword ptr [{box}], 0
+        je replay_loop_done
+        push {save_name}
+        call 0x454ce0
+        add esp, 4
+        test eax, eax
+        jz replay_load_fail
+        mov dword ptr [{box+20}], 1
+    replay_frame:
+        mov eax, 1
+        call {notify}
+        jmp replay_loop_done
+    replay_outside:
+        cmp dword ptr [{box+20}], 0
+        je replay_loop_done
+        mov eax, 4
+        call {notify}
+        mov dword ptr [{box+20}], 0
+        jmp replay_loop_done
+    replay_save_fail:
+        mov dword ptr [{box+32}], 2
+        mov dword ptr [{box}], 0
+        jmp replay_loop_done
+    replay_load_fail:
+        mov dword ptr [{box+32}], 3
+        mov dword ptr [{box}], 3
+        mov eax, 99
+        call {notify}
+    replay_loop_done:
+        popad
+        popfd
+        mov al, byte ptr [0x504f48]
+        jmp 0x4532cc
+    """,'Replay bootstrap, normalized initial save, frame input barrier, single-player gate')
+    # Raw mouse state has been collected; the next instruction consumes it.
+    for va,original_bytes,restore,resume,event in (
+        (0x453830,'8b0d784d5000','mov ecx, dword ptr [0x504d78]',0x453836,2),
+        (0x454429,'381dc83e5100','cmp byte ptr [0x513ec8], bl',0x45442f,3)):
+        hook(va,bytes.fromhex(original_bytes),f"""
+            pushfd
+            pushad
+            cmp dword ptr [{box}], 0
+            je replay_event_done
+            cmp dword ptr [{box+20}], 0
+            je replay_event_done
+            cmp dword ptr [0x513ed4], 1
+            je replay_event_done
+            mov eax, {event}
+            call {notify}
+        replay_event_done:
+            popad
+            popfd
+            {restore}
+            jmp {resume}
+        """,'Replay synchronized mouse state' if event==2 else 'Replay synchronized player command packets')
+
+    # A replay must never execute recorded UI actions that overwrite user saves.
+    # Only our audited bootstrap/normalization calls may invoke load/save.
+    for va,before,restore,resume in (
+        (0x454be0,'8b44240481ec00010000','mov eax, dword ptr [esp+4]; sub esp, 256',0x454bea),
+        (0x454ce0,'8b0d582b5700','mov ecx, dword ptr [0x572b58]',0x454ce6)):
+        hook(va,bytes.fromhex(before),f"""
+            pushfd
+            pushad
+            cmp dword ptr [{box}], 0
+            je replay_io_ready
+            mov eax, dword ptr [esp+36]
+            cmp eax, {section_va+0x21000}
+            jb replay_user_io
+            cmp eax, {section_va+0x25000}
+            jb replay_io_ready
+        replay_user_io:
+            cmp dword ptr [{box}], 2
+            jne replay_record_io
+            mov eax, 98
+            call {notify}
+            jmp replay_io_ready
+        replay_record_io:
+            cmp dword ptr [{box+20}], 0
+            je replay_io_ready
+            {'mov eax, 4; call '+str(notify)+'; mov dword ptr ['+str(box+20)+'], 0' if va==0x454ce0 else 'nop'}
+        replay_io_ready:
+            popad
+            popfd
+            {restore}
+            jmp {resume}
+        """,'Protect user saves during replay' if va==0x454be0 else 'Only internal replay load allowed; segment recording on user load')
 
 if code_cursor:
     # Add our own section; never borrow unrelated executable padding or BSS.

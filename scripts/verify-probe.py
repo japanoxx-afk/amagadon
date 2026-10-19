@@ -366,6 +366,72 @@ for seconds, expected in [(0,'00:00'),(1,'00:01'),(59,'00:59'),(60,'01:00'),(599
     assert struct.unpack('<H',bytes(u.mem_read(0x503c2a,2)))[0]==seconds
 checks.append('HUD timer: actual formatter and shadow helpers, 9 reset/load/minute-boundary cases, centered at 416x604, simulation counter unchanged')
 
+if '--replay' in manifest['stages']:
+    box=section+0x26000
+    def replay_machine(mode=1,state=4,network=0,ack=True):
+        u=fresh();events=[];io=[]
+        dword(u,box,mode);u.mem_write(0x504f48,bytes([state]));dword(u,0x513ed4,network)
+        dword(u,STACK+20,CONTEXT+0x2000)
+        dword(u,0x4cb0fc,RETURN+0x100);u.mem_write(RETURN+0x100,bytes(ks.asm('ret 4')[0]))
+        dword(u,0x4cb204,RETURN+0x200);u.mem_write(RETURN+0x200,b'\x90')
+        # OS input and full game serialization are bounded seams here; test the
+        # real hook calling conventions, ordering and state machine around them.
+        for address,label in ((0x454be0,'save'),(0x454ce0,'load')):
+            u.mem_write(address,bytes(ks.asm('mov eax, 1; ret')[0]))
+            def disk(uc,at,size,user,label=label):
+                io.append(label)
+                if label=='load':uc.mem_write(0x504f48,b'\x04')
+            u.hook_add(UC_HOOK_CODE,disk,begin=address,end=address)
+        def controller(uc,address,size,user):
+            kind=read(uc,box+12)
+            if not events or read(uc,box+4)!=events[-1][0]:events.append((read(uc,box+4),kind))
+            if ack:dword(uc,box+8,read(uc,box+4))
+        u.hook_add(UC_HOOK_CODE,controller,begin=RETURN+0x100,end=RETURN+0x100)
+        return u,events,io
+    u,events,io=replay_machine();run(u,0x4532c7,0x4532cc)
+    assert [e[1] for e in events]==[10,11,1],events
+    assert io==['save','load'],io
+    assert read(u,box+24)==CONTEXT+0x2000 and read(u,box+28)==CONTEXT+20 and read(u,box+36)==STACK+16
+    assert read(u,box+20)==1 and u.reg_read(UC_X86_REG_ESP)==STACK
+    # Replay loads exactly once, before the first input/command barrier.
+    u,events,io=replay_machine(2,2);run(u,0x4532c7,0x4532cc)
+    assert io==['load'] and [e[1] for e in events]==[1]
+    run(u,0x4532c7,0x4532cc);assert io==['load']
+    # No recorder attached: hooks must be transparent. Multiplayer is excluded.
+    for mode,network in ((0,0),(1,1)):
+        u,events,io=replay_machine(mode,4,network);run(u,0x4532c7,0x4532cc)
+        assert not events and not io
+    for entry,resume,kind in ((0x453830,0x453836,2),(0x454429,0x45442f,3)):
+        u,events,io=replay_machine();dword(u,box+20,1)
+        u.reg_write(UC_X86_REG_EBX,0x12345678);u.reg_write(UC_X86_REG_EDI,0x76543210)
+        run(u,entry,resume)
+        assert [e[1] for e in events]==[kind]
+        assert u.reg_read(UC_X86_REG_ESP)==STACK
+        assert u.reg_read(UC_X86_REG_EBX)==0x12345678 and u.reg_read(UC_X86_REG_EDI)==0x76543210
+    # A departed launcher cannot leave the recorder in an infinite wait.
+    u,events,io=replay_machine(1,4,0,False);run(u,0x4532c7,0x4532cc)
+    assert read(u,box)==0 and read(u,box+32)==1 and not io
+    # A playback without its controller aborts before any live input is consumed.
+    u,events,io=replay_machine(2,4,0,False);dword(u,box+16,1);dword(u,box+20,1)
+    run(u,0x4532c7,RETURN+0x200)
+    assert not io and read(u,box+32)==1
+    # Execute the real save/load guards, with only the OS wait/exit replaced.
+    for entry,resume,length in ((0x454be0,0x454bea,10),(0x454ce0,0x454ce6,6)):
+        for mode,internal in ((0,False),(1,True),(2,True),(2,False),(1,False)):
+            u,events,io=replay_machine(mode,4)
+            dword(u,box+20,1)
+            off=pe.get_offset_from_rva(entry-base);u.mem_write(entry,data[off:off+length])
+            dword(u,STACK,section+0x22000 if internal else RETURN)
+            def abort_io(uc,address,size,user):
+                if read(uc,box+12)==98:dword(uc,box,3)
+            u.hook_add(UC_HOOK_CODE,abort_io,begin=RETURN+0x100,end=RETURN+0x100)
+            prohibited=mode==2 and not internal
+            run(u,entry,RETURN+0x200 if prohibited else resume)
+            assert [e[1] for e in events]==([98] if prohibited else ([4] if mode==1 and not internal and entry==0x454ce0 else []))
+            if mode==1 and not internal and entry==0x454ce0:assert read(u,box+20)==0
+    checks.append('Replay save guards: actual x86 entries, disabled transparency, internal normalization allowed, playback cannot write or load user saves, manual load segments recording')
+    checks.append('Replay barriers: normalized snapshot save/load, one-time playback bootstrap, keyboard/RNG pointers, mouse and command ordering, stack/register preservation, multiplayer exclusion, finite timeout with playback fail-stop')
+
 report={'kind':'machine-code-emulation','executable_hash':manifest['output_hash'],'checks':checks,'gameplay_validated':False,'multiplayer_validated':False}
 out=path.parent/'probe-verification.json';out.write_text(json.dumps(report,indent=2),encoding='utf8')
 print(json.dumps(report,indent=2))
