@@ -12,8 +12,8 @@ using System.Threading.Tasks;
 using System.Web.Script.Serialization;
 using System.Windows.Forms;
 
-[assembly: System.Reflection.AssemblyVersion("0.3.2.0")]
-[assembly: System.Reflection.AssemblyInformationalVersion("0.3.2-preview")]
+[assembly: System.Reflection.AssemblyVersion("0.3.3.0")]
+[assembly: System.Reflection.AssemblyInformationalVersion("0.3.3-preview")]
 namespace Amagadon {
     public class Settings {
         public string GamePath="";
@@ -24,8 +24,8 @@ namespace Amagadon {
     }
     public class Backup { public string Directory; public string[] Existing; }
     public static class Core {
-        public const string Version = "0.3.2";
-        public const string DisplayVersion = "0.3.2-preview";
+        public const string Version = "0.3.3";
+        public const string DisplayVersion = "0.3.3-preview";
         public static readonly string Home = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "AmagadonLauncher");
         public static readonly JavaScriptSerializer Json = new JavaScriptSerializer();
         public static string Hash(string path) { using(var h=SHA256.Create()) using(var f=File.OpenRead(path)) return BitConverter.ToString(h.ComputeHash(f)).Replace("-", "").ToLowerInvariant(); }
@@ -52,7 +52,7 @@ namespace Amagadon {
         }
         public static void EnsureIdle(string folder) {
             string target=Path.GetFullPath(folder).TrimEnd(Path.DirectorySeparatorChar);
-            foreach(var name in new[]{"Armageddon","Armageddon.HD-preview","Armageddon.Replay","ACE"}) foreach(var p in Process.GetProcessesByName(name)) { using(p) {
+            foreach(var name in new[]{"Armageddon","Armageddon.HD-preview","Armageddon.Replay","Armageddon.Replay032","Armageddon.Replay033","ACE"}) foreach(var p in Process.GetProcessesByName(name)) { using(p) {
                 string running;
                 try {running=Path.GetDirectoryName(p.MainModule.FileName).TrimEnd(Path.DirectorySeparatorChar);}
                 catch(Exception) {if(p.HasExited)continue;throw new IOException("실행 중인 게임 경로를 확인할 수 없습니다. 게임 또는 맵 에디터를 종료해주세요.");}
@@ -100,7 +100,7 @@ namespace Amagadon {
             Controls.Add(new Label{Text="1024×768 내부 해상도는 개발 시험 기능입니다. 4:3 시야를 사용합니다. 전투·저장·멀티플레이 검증이 남아 있습니다.\r\n원본 EXE를 유지하고 별도 HD 시험본으로 실행합니다. ACE는 원본 그래픽으로 실행합니다.",Location=new Point(32,447),Size=new Size(694,46),Font=new Font("맑은 고딕",9)});
             game=Button("게임 실행",32,506,338,60); game.BackColor=Color.FromArgb(169,66,39); editor=Button("맵 에디터 실행",388,506,338,60);
             update=Button("업데이트",32,585,160,40); var notes=Button("패치노트",208,585,160,40); var restore=Button("원본 설정 복원",388,585,160,40); var logs=Button("진단 로그",564,585,162,40);
-            autoReplay.Text="싱글플레이 리플레이 자동 기록 · 1024×768 시험 모드";autoReplay.SetBounds(32,636,694,34);Controls.Add(autoReplay);
+            autoReplay.Text="싱글플레이 리플레이 자동 기록 · 실험 (AI 동기화 검증 중)";autoReplay.SetBounds(32,636,694,34);Controls.Add(autoReplay);
             replay=Button("리플레이 재생",32,681,338,40);var replayFolder=Button("리플레이 저장 폴더",388,681,338,40);
             replay.Click+=async delegate {if(activeReplay!=null && activeReplay.IsPlayback) {activeReplay.RequestStop();return;}using(var dialog=new ReplayBrowser()) {if(dialog.ShowDialog(this)==DialogResult.OK) {resolution.SelectedIndex=1;compat.Checked=true;await Launch("Armageddon.exe",dialog.SelectedReplay);}}};
             replayFolder.Click+=delegate {Directory.CreateDirectory(ReplayFiles.Home);Process.Start("explorer.exe",ReplayFiles.Home);};
@@ -183,6 +183,8 @@ namespace Amagadon {
             } catch(Exception ex) {Error(ex);} finally {update.Enabled=game.Enabled=editor.Enabled=replay.Enabled=true;}
         }
         [STAThread] public static int Main(string[] args) {
+            if(args.Length==4 && args[0]=="--capture-replay-scenario") {try {Core.EnsureIdle(args[2]);string exe=NativePatch.Prepare(args[2],Path.Combine(AppDomain.CurrentDomain.BaseDirectory,"compat","hd-preview.json"));using(var session=new ReplaySession(args[2],exe,args[1])) {session.CaptureDiagnostic=args[3];session.Run();return File.Exists(args[3])?0:1;}}catch(Exception ex){Core.Log(ex.ToString());return 1;}}
+            if(args.Length==3 && args[0]=="--diagnose-replay") {try {Core.EnsureIdle(args[2]);string exe=NativePatch.PrepareReplay(args[2],args[1]);using(var session=new ReplaySession(args[2],exe,args[1])) {session.Run();Core.Log("REAL REPLAY DIAGNOSTIC "+session.Result);return session.Result=="리플레이 재생을 완료했습니다."?0:1;}}catch(Exception ex){Core.Log(ex.ToString());return 1;}}
             if(args.Length==3 && args[0]=="--verify-replay") {try {ReplayTests.ArchiveRun(args[1],args[2]);return 0;}catch(Exception ex) {Core.Log(ex.ToString());return 1;}}
             if(args.Length==2 && args[0]=="--test-replay-process") {try {ReplayTests.ProcessRoundTrip(args[1]);return 0;}catch(Exception ex) {Core.Log(ex.ToString());return 1;}}
             if(args.Length==2 && args[0]=="--verify-native") {try{SelfTest.NativeRun(args[1]);return 0;}catch(Exception ex){Core.Log(ex.ToString());return 1;}}

@@ -803,7 +803,53 @@ if '--rally' in sys.argv:
         popfd
         jmp 0x44cf63
     """,'Choose production exit side towards rally, retain original collision search')
-    hook(0x430d88,bytes.fromhex('8b8698130000'),"""
+    rally_targets=section_va+0x1b000  # 1700 entries: target+1, rally X, rally Y
+    assert 0x1b000+1700*12<=0x21000
+    hook(0x408730,bytes.fromhex('89869c130000'),f"""
+        mov dword ptr [esi+0x139c], eax
+        pushfd
+        pushad
+        movzx eax, word ptr [esi+0xc]
+        cmp eax, 0
+        je rally_target_hq
+        cmp eax, 0x100
+        je rally_target_hq
+        cmp eax, 0x200
+        jne rally_target_done
+    rally_target_hq:
+        movzx edi, word ptr [esi+0xe]
+        cmp edi, 1700
+        jae rally_target_done
+        imul edi, edi, 12
+        add edi, {rally_targets}
+        mov dword ptr [edi], 0
+        mov eax, dword ptr [esp+56]
+        cmp eax, 1700
+        jae rally_target_done
+        mov ecx, dword ptr [0x504a10]
+        test ecx, ecx
+        jz rally_target_done
+        mov ecx, dword ptr [ecx+eax*4+8]
+        test ecx, ecx
+        jz rally_target_done
+        cmp byte ptr [ecx+0x13b8], 0
+        je rally_target_done
+        movzx edx, word ptr [ecx+0xc]
+        sub edx, 0x300
+        cmp edx, 5
+        ja rally_target_done
+        inc eax
+        mov dword ptr [edi], eax
+        mov eax, dword ptr [esi+0x1398]
+        mov dword ptr [edi+4], eax
+        mov eax, dword ptr [esi+0x139c]
+        mov dword ptr [edi+8], eax
+    rally_target_done:
+        popad
+        popfd
+        jmp 0x408736
+    """,'Remember the exact ore1/ore2 unit clicked for an HQ rally')
+    hook(0x430e49,bytes.fromhex('bf93f7ffff'),f"""
         pushfd
         pushad
         movzx eax, word ptr [esi+0xc]
@@ -830,6 +876,33 @@ if '--rally' in sys.argv:
         add esp, 4
         test eax, eax
         jz gather_fallback
+        movzx eax, word ptr [esi+0xe]
+        cmp eax, 1700
+        jae gather_scan_start
+        imul eax, eax, 12
+        add eax, {rally_targets}
+        mov edx, dword ptr [eax]
+        test edx, edx
+        jz gather_scan_start
+        dec edx
+        cmp edx, 1700
+        jae gather_scan_start
+        mov ecx, dword ptr [eax+4]
+        cmp ecx, dword ptr [esi+0x1398]
+        jne gather_scan_start
+        mov ecx, dword ptr [eax+8]
+        cmp ecx, dword ptr [esi+0x139c]
+        jne gather_scan_start
+        mov eax, dword ptr [ebp+edx*4+8]
+        test eax, eax
+        jz gather_scan_start
+        cmp byte ptr [eax+0x13b8], 0
+        je gather_scan_start
+        movzx eax, word ptr [eax+0xc]
+        sub eax, 0x300
+        cmp eax, 5
+        jbe gather_assign
+    gather_scan_start:
         xor edi, edi
         mov ecx, 65
         mov edx, -1
@@ -841,7 +914,7 @@ if '--rally' in sys.argv:
         je gather_next
         movzx eax, word ptr [eax+0xc]
         sub eax, 0x300
-        cmp eax, 2
+        cmp eax, 5
         ja gather_next
         mov eax, dword ptr [ebp+edi*4+8]
         push edx
@@ -879,18 +952,18 @@ if '--rally' in sys.argv:
         jb gather_scan
         cmp edx, -1
         je gather_fallback
+    gather_assign:
         mov dword ptr [ebx+0x414], edx
         mov byte ptr [ebx+0x464], 0x2d
         mov dword ptr [ebx+0x478], 0
-        popad
-        popfd
-        jmp 0x430e49
     gather_fallback:
         popad
         popfd
-        mov eax, dword ptr [esi+0x1398]
-        jmp 0x430d8e
-    """,'HQ ore rally assigns original gather state to produced harvesters')
+        mov edi, 0xfffff793
+        jmp 0x430e4e
+    """,'HQ ore1/ore2 gather is assigned after the original rally movement and path setup')
+
+if code_cursor>0x24d00:raise ValueError('Replay loader and command wrapper areas must remain reserved')
 
 if code_cursor:
     # Add our own section; never borrow unrelated executable padding or BSS.

@@ -21,7 +21,7 @@ namespace Amagadon {
                 string archive;
                 using(var recording=new ReplaySession(root,fixture,null,true)) {recording.Run();Check(recording.ChildExitCode==0,"native recording simulation");archive=recording.CreatedReplay;Check(archive!=null && File.Exists(archive),"child recording completed: "+recording.Result);}
                 using(var playback=new ReplaySession(root,fixture,archive,true)) {playback.Run();Check(playback.ChildExitCode==0,"native playback simulation");Check(playback.Result=="리플레이 재생을 완료했습니다.","child playback completed: "+playback.Result);}
-                string changed=Path.Combine(root,"changed");var info=ReplayFiles.Unpack(archive,changed);
+                string changed=Path.Combine(root,"changed");var info=ReplayFiles.Unpack(archive,changed);Check(info.Format==2,"new recording stores engine RNG format");
                 byte[] commands=File.ReadAllBytes(Path.Combine(changed,"commands.bin"));commands[16]^=0x40;
                 File.WriteAllBytes(Path.Combine(changed,"commands.bin"),commands);
                 string divergent=Path.Combine(root,"divergent.agr");ReplayFiles.Pack(changed,divergent,info);
@@ -46,6 +46,10 @@ namespace Amagadon {
                 var info=new ReplayInfo {Frames=2,Complete=true,ExecutableHash="test",DataHash="test",IndexHash="test"};
                 string archive=Path.Combine(root,"match.agr");ReplayFiles.Pack(recording,archive,info);
                 var restored=ReplayFiles.Unpack(archive,Path.Combine(root,"restored"));Check(restored.Frames==2,"round trip");
+                Check(ReplayFiles.Inspect(archive).Frames==2,"list metadata round trip");
+                string peek=Path.Combine(root,"peek.bin");
+                using(var writer=new BinaryWriter(File.Create(peek))) {writer.Write(Encoding.ASCII.GetBytes("AGRPL001"));Event(writer,1,2072);Event(writer,2,64);writer.Write(3);writer.Write(0U);writer.Write(0U);writer.Write(1408);var packet=new byte[1408];packet[64]=0x7a;writer.Write(packet);Event(writer,0,0);}
+                using(var input=new ReplayReader(peek)) {var packet=input.PreviousFinalPacket();Check(packet!=null && packet.Length==64 && packet[0]==0x7a,"resolved packet lookahead");Check(input.Next().Kind==1 && input.Next().Kind==2 && input.Next().Kind==3,"lookahead preserves event cursor");Check(input.PreviousFinalPacket()==null,"final frame lookahead terminates");}
                 bool rejected=false;try {ReplayFiles.CheckGame(restored,root,Path.Combine(recording,"start.sav"));}catch(IOException){rejected=true;}Check(rejected,"different build rejected");
                 Check(ReplayFiles.MapPath(root,"..\\outside.map")==null,"map traversal");Check(ReplayFiles.MapPath(root,"C:\\outside.map")==null,"absolute map path");
                 string invalid=Path.Combine(root,"invalid.bin");
@@ -55,6 +59,12 @@ namespace Amagadon {
                 rejected=false;try {using(var reader=new ReplayReader(invalid))reader.Validate(1);}catch(IOException){rejected=true;}Check(rejected,"out of order commands");
                 using(var writer=new BinaryWriter(File.Create(invalid))) {writer.Write(Encoding.ASCII.GetBytes("AGRPL001"));Event(writer,1,2072);}
                 rejected=false;try {using(var reader=new ReplayReader(invalid))reader.Validate(1);}catch(IOException){rejected=true;}Check(rejected,"incomplete journal");
+                string rng=Path.Combine(root,"rng.bin");
+                using(var writer=new BinaryWriter(File.Create(rng))) {writer.Write(Encoding.ASCII.GetBytes("AGRPL001"));Event(writer,1,2080);Event(writer,2,72);Event(writer,3,1416);Event(writer,0,0);}
+                using(var input=new ReplayReader(rng,2))input.Validate(1);
+                using(var stream=File.Open(rng,FileMode.Open,FileAccess.Write)) {stream.Position=8+16+2080-8;stream.Write(BitConverter.GetBytes(251U),0,4);}
+                rejected=false;try {using(var input=new ReplayReader(rng,2))input.Validate(1);}catch(IOException){rejected=true;}Check(rejected,"engine RNG index bounds");
+                rejected=false;try {using(var input=new ReplayReader(rng,1))input.Validate(1);}catch(IOException){rejected=true;}Check(rejected,"format and payload binding");
                 string malicious=Path.Combine(root,"traversal.agr");
                 using(var stream=File.Create(malicious))using(var zip=new ZipArchive(stream,ZipArchiveMode.Create)) {
                     zip.CreateEntry("../outside");zip.CreateEntry("start.sav");zip.CreateEntry("commands.bin");

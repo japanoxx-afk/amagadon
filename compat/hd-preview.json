@@ -1,9 +1,9 @@
 {
-  "Version": "0.3.2-preview",
+  "Version": "0.3.3-preview",
   "ReleaseCandidate": false,
   "InputHash": "34f0bf9ed99fbf3ab88c410a3a52a2f6904e7bc7f5b88fb4ebadc935c2e9b466",
   "InputLength": 1032192,
-  "OutputHash": "f1d5748240ad0ddf2d03e9e5bd5de005ac89c0a6067e383b3b45d9844b350bad",
+  "OutputHash": "3fc4e5c50663432eafaa328e400b6344fcf9585250eb707662e29524c7e78421",
   "OutputLength": 1196032,
   "Edits": [
     {
@@ -122,6 +122,11 @@
       "After": "ff02"
     },
     {
+      "Offset": 34608,
+      "Before": "89869c130000",
+      "After": "e99be9f20190"
+    },
+    {
       "Offset": 55046,
       "Before": "1f",
       "After": "ff"
@@ -182,9 +187,9 @@
       "After": "03"
     },
     {
-      "Offset": 200072,
-      "Before": "8b8698130000",
-      "After": "e94363f00190"
+      "Offset": 200265,
+      "Before": "bf93f7ffff",
+      "After": "e91263f001"
     },
     {
       "Offset": 315227,
@@ -697,7 +702,7 @@
       "After": "0003"
     }
   ],
-  "AppendGzip": "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",
+  "AppendGzip": "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",
   "Stages": [
     "--terrain",
     "--guard",
@@ -732,8 +737,12 @@
     "Replay kernel events: request/ack handles, record/play barriers, timeout fallback and playback fail-stop",
     "Replay save guards: actual x86 entries, disabled transparency, internal normalization allowed, playback cannot write or load user saves, manual load segments recording",
     "Replay barriers: normalized snapshot save/load, one-time playback bootstrap, keyboard/RNG pointers, mouse and command ordering, stack/register preservation, multiplayer exclusion, finite timeout with playback fail-stop",
+    "Production ore rally: original destination setters and movement setup run before gather state, pathfinder ABI and stack preserved",
+    "Exact ore rally: ore1/ore2 variants, sprite-edge target versus nearer decoy, changed-rally cache invalidation",
     "Ore rally: original worker classifier, three HQs and ore types, gather target/state, inactive/non-ore/distant targets excluded, stack/register preservation",
     "Rally production exit: four directions, original perimeter-search locals, non-production callers preserved",
-    "Bottom camera: last map row projects above HUD at y=544; full 24-row raster remains guarded"
+    "Bottom camera: last map row projects above HUD at y=544; full 24-row raster remains guarded",
+    "Replay post-input compatibility: original UI helper retained, final packet replay for players 0/1/9, bounds and stack/registers preserved",
+    "Replay snapshot loader: fresh references restored immediately per unit, null/save-state preservation, fread failure, original arguments and callee-saved registers"
   ]
 }

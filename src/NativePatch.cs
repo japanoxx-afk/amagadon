@@ -14,7 +14,7 @@ namespace Amagadon {
     }
     public static class NativePatch {
         public const string InputHash="34f0bf9ed99fbf3ab88c410a3a52a2f6904e7bc7f5b88fb4ebadc935c2e9b466";
-        public const string RecipeHash="c152365525e2878b9a6cde0d037c026aa29c5df1f89715db22bfc8ca79b12619";
+        public const string RecipeHash="8b3eb48cad441ea3ef0500aaed165aeff2c34029b45ddf21fd7f0722b4dbfb45";
         public const string FileName="Armageddon.HD-preview.exe";
         public const string PreviousOutputHash="2e5d6c572858167e1190d1948375f25d8a90abbb3bded3a585fa8fc88904f579";
         public const string PriorOutputHash="98223eeeb25c1a57860acdbfbab4cd06e445e96f831bd92cc9d150fe9a670921";
@@ -25,24 +25,26 @@ namespace Amagadon {
         public const string SelectionOutputHash="ecdd744aac3404e59c72cb00784891e767f59085952a665a9f08bb54f2d475d1";
         public const string TimerOutputHash="fa32113de7c9d29a91afb1e35176b3c2a77a5c752d0a85daab06564dbc2094e5";
         public const string LegacyOutputHash="77fcba1d142a4ccb1075eb71a53f51cf2f6d64245e5ee2bf380558ee6db613b6";
+        public const string Replay032Hash="f1d5748240ad0ddf2d03e9e5bd5de005ac89c0a6067e383b3b45d9844b350bad";
+        public const string Replay033Hash="b48fa2c7c8d30ebab81c363a95cc4b3944e9f657b7d804835ec040a347b367ea";
         public static string PrepareReplay(string folder,string archive) {
             var info=ReplayFiles.Inspect(archive);
             if(info.ExecutableHash==Load(Path.Combine(AppDomain.CurrentDomain.BaseDirectory,"compat","hd-preview.json")).OutputHash)
                 return Prepare(folder,Path.Combine(AppDomain.CurrentDomain.BaseDirectory,"compat","hd-preview.json"));
-            if(info.ExecutableHash!=LegacyOutputHash)throw new IOException("이 기록의 게임 패치 버전은 지원하지 않습니다.");
+            if(info.ExecutableHash!=LegacyOutputHash && info.ExecutableHash!=Replay032Hash && info.ExecutableHash!=Replay033Hash)throw new IOException("이 기록의 게임 패치 버전은 지원하지 않습니다.");
             Core.Validate(folder);Core.EnsureIdle(folder);
             byte[] bytes;
-            using(var resource=System.Reflection.Assembly.GetExecutingAssembly().GetManifestResourceStream("Amagadon.LegacyReplayRecipe"))
+            using(var resource=System.Reflection.Assembly.GetExecutingAssembly().GetManifestResourceStream(info.ExecutableHash==Replay033Hash?"Amagadon.Replay033Recipe":(info.ExecutableHash==Replay032Hash?"Amagadon.Replay032Recipe":"Amagadon.LegacyReplayRecipe")))
             using(var memory=new MemoryStream()) {if(resource==null)throw new IOException("이전 리플레이 호환 자료가 없습니다.");resource.CopyTo(memory);bytes=memory.ToArray();}
-            if(Digest(bytes)!="cc7fcc85adb0fb0a8b6e33b440ff8f2cbc513a2d3792898186211f41185fa5dc")throw new IOException("이전 리플레이 호환 자료 검증 실패");
+            if(Digest(bytes)!=(info.ExecutableHash==Replay033Hash?"d9c14d32607c251487990baa7d081ebb4f64812af186e7b7e08634f00802745e":info.ExecutableHash==Replay032Hash?"c152365525e2878b9a6cde0d037c026aa29c5df1f89715db22bfc8ca79b12619":"cc7fcc85adb0fb0a8b6e33b440ff8f2cbc513a2d3792898186211f41185fa5dc"))throw new IOException("이전 리플레이 호환 자료 검증 실패");
             var recipe=Core.Json.Deserialize<PatchRecipe>(System.Text.Encoding.UTF8.GetString(bytes));
-            string dest=Path.Combine(folder,"Armageddon.Replay.exe");
-            if(File.Exists(dest)) {if(Core.Hash(dest)==LegacyOutputHash)return dest;throw new IOException("기존 리플레이 실행 파일의 해시가 다릅니다.");}
+            string dest=Path.Combine(folder,info.ExecutableHash==Replay033Hash?"Armageddon.Replay033.exe":(info.ExecutableHash==Replay032Hash?"Armageddon.Replay032.exe":"Armageddon.Replay.exe"));
+            if(File.Exists(dest)) {if(Core.Hash(dest)==info.ExecutableHash)return dest;throw new IOException("기존 리플레이 실행 파일의 해시가 다릅니다.");}
             byte[] output=Build(File.ReadAllBytes(Path.Combine(folder,"Armageddon.exe")),recipe);
             using(var stream=new FileStream(dest,FileMode.CreateNew,FileAccess.Write))stream.Write(output,0,output.Length);
             return dest;
         }
-        public static bool IsPrevious(string hash) { return hash==LegacyOutputHash || hash==PreviousOutputHash || hash==PriorOutputHash || hash==WideOutputHash || hash==LargerOutputHash || hash==FourThreeOutputHash || hash==HudTextOutputHash || hash==SelectionOutputHash || hash==TimerOutputHash; }
+        public static bool IsPrevious(string hash) { return hash==Replay033Hash || hash==Replay032Hash || hash==LegacyOutputHash || hash==PreviousOutputHash || hash==PriorOutputHash || hash==WideOutputHash || hash==LargerOutputHash || hash==FourThreeOutputHash || hash==HudTextOutputHash || hash==SelectionOutputHash || hash==TimerOutputHash; }
         public static string Digest(byte[] b) { using(var h=SHA256.Create()) return BitConverter.ToString(h.ComputeHash(b)).Replace("-","").ToLowerInvariant(); }
         static byte[] Hex(string s) {
             if(s==null || s.Length%2!=0) throw new IOException("패치 바이트 형식 오류");

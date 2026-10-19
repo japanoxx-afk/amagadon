@@ -56,6 +56,17 @@ asm=f'''
  rep stosd
  mov dword ptr [0x504a10], 0x600000
  mov dword ptr [0x600008], 0x604000
+ mov dword ptr [0x5049fc], 0x61b000
+ mov dword ptr [0x61b00c], 0x61c000
+ mov dword ptr [0x604004], 0xdead0000
+ mov dword ptr [0x604008], 0xdead1000
+ mov dword ptr [0x6041cc], 0xdead2000
+ mov dword ptr [0x604210], 0xdead3000
+ mov dword ptr [0x604234], 0xdead4000
+ mov dword ptr [{0x61b000+0x57c+2*68}], 0x61f000
+ mov dword ptr [{0x61b000+0x57c+2*68+4}], 0x61f00c
+ mov dword ptr [{0x61b000+0x200c+2*4}], 0x61f004
+ mov dword ptr [{0x61b000+0x296c+2*36}], 0x61f008
  mov dword ptr [0x60400c], 2
  mov dword ptr [0x604014], 10
  mov dword ptr [0x604018], 20
@@ -112,8 +123,32 @@ asm=f'''
  jne key_cached
  mov dword ptr [0x61a004], 99
  key_cached:
+ lea eax, [ebp+10]
+ cmp dword ptr [{box}], 2
+ jne engine_rng1
+ mov eax, 99
+ engine_rng1:
+ mov byte ptr [0x581158], al
  mov eax, 1
  call {notify}
+ lea eax, [ebp+10]
+ cmp byte ptr [0x581158], al
+ jne failed
+ cmp dword ptr [{box}], 2
+ jne refs_checked
+ cmp dword ptr [0x604004], 0xdead0000
+ jne failed
+ cmp dword ptr [0x604008], 0x61c000
+ jne failed
+ cmp dword ptr [0x6041cc], 0x61f000
+ jne failed
+ cmp dword ptr [0x6041d0], 0
+ jne failed
+ cmp dword ptr [0x604210], 0x61f004
+ jne failed
+ cmp dword ptr [0x604234], 0x61f008
+ jne failed
+ refs_checked:
  cmp dword ptr [0x61a004], ebp
  jne failed
  imul eax, ebp, 0x01010101
@@ -131,8 +166,26 @@ asm=f'''
  mov edi, 0x504d70
  mov ecx, 16
  rep stosd
+ lea eax, [ebp+20]
+ cmp dword ptr [{box}], 2
+ jne engine_rng2
+ mov eax, 99
+ engine_rng2:
+ mov byte ptr [0x581158], al
+ lea eax, [ebp+2000]
+ cmp dword ptr [{box}], 2
+ jne crt_rng2
+ mov eax, 99
+ crt_rng2:
+ mov dword ptr [0x61a000], eax
  mov eax, 2
  call {notify}
+ lea eax, [ebp+2000]
+ cmp dword ptr [0x61a000], eax
+ jne failed
+ lea eax, [ebp+20]
+ cmp byte ptr [0x581158], al
+ jne failed
  lea eax, [ebp+10]
  imul eax, eax, 0x01010101
  cmp dword ptr [0x504d70], eax
@@ -150,8 +203,26 @@ asm=f'''
  commands_ready:
  mov dword ptr [0x52f210], eax
  mov dword ptr [0x52f214], edx
+ lea eax, [ebp+30]
+ cmp dword ptr [{box}], 2
+ jne engine_rng3
+ mov eax, 99
+ engine_rng3:
+ mov byte ptr [0x581158], al
+ lea eax, [ebp+3000]
+ cmp dword ptr [{box}], 2
+ jne crt_rng3
+ mov eax, 99
+ crt_rng3:
+ mov dword ptr [0x61a000], eax
  mov eax, 3
  call {notify}
+ lea eax, [ebp+3000]
+ cmp dword ptr [0x61a000], eax
+ jne failed
+ lea eax, [ebp+30]
+ cmp byte ptr [0x581158], al
+ jne failed
  mov eax, dword ptr [0x52f210]
  add dword ptr [0x604014], eax
  mov eax, dword ptr [0x52f214]

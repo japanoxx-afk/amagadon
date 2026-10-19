@@ -33,7 +33,7 @@ namespace Amagadon {
                 try {
                     var info=ReplayFiles.Inspect(file.FullName);DateTime created;
                     if(DateTime.TryParse(info.CreatedUtc,null,System.Globalization.DateTimeStyles.RoundtripKind,out created))row.Text=created.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss");
-                    row.SubItems.Add(info.MapName??file.Name);row.SubItems.Add(info.Frames.ToString("N0"));row.SubItems.Add(info.Version??"알 수 없음");row.Tag=file.FullName;
+                    row.SubItems.Add(info.MapName??file.Name);row.SubItems.Add(info.Frames.ToString("N0"));row.SubItems.Add((info.Version??"알 수 없음")+(info.Format==1?" · 이전 형식":" · 난수 기록 포함"));row.Tag=file.FullName;
                 } catch(Exception ex) {row.SubItems.Add(file.Name);row.SubItems.Add("—");row.SubItems.Add(ex.Message);row.ForeColor=Color.Firebrick;}
                 list.Items.Add(row);
             }

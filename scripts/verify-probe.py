@@ -451,7 +451,7 @@ if '--rally' in manifest['stages']:
     # Exercise the actual original worker classifier and its manager checks.
     for hq in (0,0x100,0x200):
         for worker in (0x12,0x13,0x14,0x113,0x114,0x21c,0x21d,0x21e,2):
-            for target,alive,near in ((0x300,1,True),(0x301,1,True),(0x302,1,True),(0x303,1,True),(0x300,0,True),(0x300,1,False)):
+            for target,alive,near in ((0x300,1,True),(0x301,1,True),(0x302,1,True),(0x303,1,True),(0x304,1,True),(0x305,1,True),(0x306,1,True),(0x300,0,True),(0x300,1,False)):
                 u=fresh();dword(u,0x504a10,manager);dword(u,manager+8,parent);dword(u,manager+12,child);dword(u,manager+16,ore)
                 for address,kind in ((parent,hq),(child,worker),(ore,target)):
                     u.mem_write(address+12,struct.pack('<H',kind));u.mem_write(address+0x13b8,b'\x01')
@@ -464,13 +464,45 @@ if '--rally' in manifest['stages']:
                 dword(u,STACK+4,1);dword(u,STACK,RETURN);run(u,0x40a210,RETURN)
                 eligible=u.reg_read(UC_X86_REG_EAX)!=0
                 u.reg_write(UC_X86_REG_ESP,STACK);u.reg_write(UC_X86_REG_ESI,parent);u.reg_write(UC_X86_REG_EDI,1)
-                success=eligible and target<=0x302 and alive and near
-                run(u,0x430d88,0x430e49 if success else 0x430d8e)
-                assert u.reg_read(UC_X86_REG_ESP)==STACK and u.reg_read(UC_X86_REG_ESI)==parent and u.reg_read(UC_X86_REG_EDI)==1
+                success=eligible and target<=0x305 and alive and near
+                run(u,0x430e49,0x430e4e)
+                assert u.reg_read(UC_X86_REG_ESP)==STACK and u.reg_read(UC_X86_REG_ESI)==parent and u.reg_read(UC_X86_REG_EDI)==0xfffff793
                 assert u.reg_read(UC_X86_REG_EBX)==0x12345678
                 assert read(u,child+0x414)==(2 if success else 0xdead)
                 assert read(u,child+0x478)==(0 if success else 123)
                 if success:assert bytes(u.mem_read(child+0x464,1))==b'\x2d'
+    # Regression: ore2 sprite-edge click lies nearer ore1's center. Preserve
+    # the actual clicked ID instead of silently selecting the nearest center.
+    for resource in (0x300,0x301,0x302,0x303,0x304,0x305):
+        u=fresh();dword(u,0x504a10,manager)
+        for i,address,kind in ((0,parent,0x100),(1,child,0x113),(2,ore,resource),(3,ore+0x2000,0x300)):
+            dword(u,manager+8+i*4,address);u.mem_write(address+12,struct.pack('<HH',kind,i));u.mem_write(address+0x13b8,b'\x01')
+        dword(u,parent+0x1398,1071);dword(u,ore+20,1024);dword(u,ore+24,544)
+        dword(u,ore+0x2000+20,1088);dword(u,ore+0x2000+24,544)
+        dword(u,STACK+20,2);u.reg_write(UC_X86_REG_ESI,parent);u.reg_write(UC_X86_REG_EAX,543)
+        run(u,0x408730,0x408736)
+        assert read(u,section+0x1b000)==3 and read(u,parent+0x139c)==543
+        u.reg_write(UC_X86_REG_EDI,1);run(u,0x430e49,0x430e4e)
+        assert read(u,child+0x414)==2 and bytes(u.mem_read(child+0x464,1))==b'\x2d'
+        assert u.reg_read(UC_X86_REG_ESP)==STACK
+        # Changing the rally invalidates the cached target and uses normal logic.
+        dword(u,parent+0x1398,2000);dword(u,parent+0x139c,2000)
+        u.reg_write(UC_X86_REG_EDI,1);run(u,0x430e49,0x430e4e)
+    # Execute the original production rally setters and movement call before
+    # our gathering assignment. Only the full map pathfinder is a bounded seam.
+    u=fresh();dword(u,0x504a10,manager)
+    for i,address,kind in ((0,parent,0x100),(1,child,0x113),(2,ore,0x303)):
+        dword(u,manager+8+i*4,address);u.mem_write(address+12,struct.pack('<HH',kind,i));u.mem_write(address+0x13b8,b'\x01')
+    dword(u,parent+0x1398,1024);dword(u,parent+0x139c,544);dword(u,ore+20,1024);dword(u,ore+24,544)
+    dword(u,STACK+0x74,WORLD);u.reg_write(UC_X86_REG_ESI,parent);u.reg_write(UC_X86_REG_EDI,1)
+    marker=CONTEXT+0x2f000
+    u.mem_write(0x441c40,bytes(ks.asm(f'mov eax, dword ptr [esp+4]; mov dword ptr [{marker}],eax; mov eax,dword ptr [esp+8]; mov dword ptr [{marker+4}],eax; mov byte ptr [ecx+0x464],2; ret 20',0x441c40)[0]))
+    run(u,0x430d88,0x430e4e)
+    assert (read(u,marker),read(u,marker+4))==(1024,544)
+    assert read(u,child+0x414)==2 and bytes(u.mem_read(child+0x464,1))==b'\x2d'
+    assert u.reg_read(UC_X86_REG_ESP)==STACK
+    checks.append('Production ore rally: original destination setters and movement setup run before gather state, pathfinder ABI and stack preserved')
+    checks.append('Exact ore rally: ore1/ore2 variants, sprite-edge target versus nearer decoy, changed-rally cache invalidation')
     checks.append('Ore rally: original worker classifier, three HQs and ore types, gather target/state, inactive/non-ore/distant targets excluded, stack/register preservation')
     for dx,dy,side,position in ((200,10,1,(21,31)),(-200,10,3,(9,19)),(10,-200,2,(21,19)),(10,200,0,(9,31))):
         for production in (False,True):
@@ -486,6 +518,51 @@ if '--rally' in manifest['stages']:
     checks.append('Rally production exit: four directions, original perimeter-search locals, non-production callers preserved')
     assert (255-238)*32 < 558
     checks.append('Bottom camera: last map row projects above HUD at y=544; full 24-row raster remains guarded')
+
+# Audit the managed launcher's suspended-child compatibility wrapper against
+# the actual game entry it replaces. It cannot write before/after the packet.
+import re,base64
+source=(pathlib.Path(__file__).resolve().parent.parent/'src/Replay.cs').read_text(encoding='utf8')
+wrapper=base64.b64decode(re.search(r'PostInputCode="([^"]+)"',source).group(1))
+patch=base64.b64decode(re.search(r'PostInputCall="([^"]+)"',source).group(1))
+for player in (0,1,9):
+    u=fresh();target=section+0x24e00
+    assert bytes(u.mem_read(target,len(wrapper)))==b'\0'*len(wrapper)
+    u.mem_write(target,wrapper);u.mem_write(0x454436,patch)
+    u.mem_write(0x4081d0,bytes(ks.asm('mov eax, 123; ret')[0]))
+    dword(u,0x4e7270,player);u.mem_write(section+0x26200,bytes(range(64)))
+    packet=0x52f510+player*64;u.mem_write(packet-4,b'B'*4+b'X'*64+b'A'*4)
+    u.reg_write(UC_X86_REG_EBX,0x12345678);u.reg_write(UC_X86_REG_EDI,0x87654321)
+    run(u,0x454436,0x45443b)
+    assert bytes(u.mem_read(packet,64))==bytes(range(64))
+    assert bytes(u.mem_read(packet-4,4))==b'B'*4 and bytes(u.mem_read(packet+64,4))==b'A'*4
+    assert u.reg_read(UC_X86_REG_EAX)==123 and u.reg_read(UC_X86_REG_EBX)==0x12345678 and u.reg_read(UC_X86_REG_EDI)==0x87654321
+    assert u.reg_read(UC_X86_REG_ESP)==STACK
+checks.append('Replay post-input compatibility: original UI helper retained, final packet replay for players 0/1/9, bounds and stack/registers preserved')
+
+loader=base64.b64decode(re.search(r'SnapshotLoadCode="([^"]+)"',source).group(1))
+loader_call=base64.b64decode(re.search(r'SnapshotLoadCall="([^"]+)"',source).group(1))
+for result in (0,1):
+    u=fresh();target=section+0x24d00;unit=CONTEXT+0x18000
+    assert bytes(u.mem_read(target,len(loader)))==b'\0'*len(loader)
+    u.mem_write(target,loader);u.mem_write(0x44b5f7,loader_call)
+    dword(u,0x504a10,CONTEXT+0x10000);dword(u,unit+8,CONTEXT+0x20000)
+    dword(u,unit+0x1cc,0x12345678);dword(u,unit+0x1d0,0x44444444);dword(u,unit+0x210,0x87654321)
+    # Replace only the OS file-read seam; execute the real wrapper and its ABI.
+    stub=f'mov edx, dword ptr [esp+4]; mov dword ptr [edx+4], 42; mov dword ptr [edx+8], 0xdead0000; mov dword ptr [edx+0x1cc], 0xdead1111; mov dword ptr [edx+0x1d0], 0; mov dword ptr [edx+0x210], 0xdead2222; mov dword ptr [edx+20], 123; mov eax, {result}; ret'
+    u.mem_write(0x494e30,bytes(ks.asm(stub,0x494e30)[0]))
+    for offset,value in ((0,unit),(4,0x13e0),(8,1),(12,1234)):dword(u,STACK+offset,value)
+    for register in (UC_X86_REG_EBX,UC_X86_REG_EBP,UC_X86_REG_ESI,UC_X86_REG_EDI):u.reg_write(register,0x11111111+register)
+    saved=[u.reg_read(register) for register in (UC_X86_REG_EBX,UC_X86_REG_EBP,UC_X86_REG_ESI,UC_X86_REG_EDI)]
+    run(u,0x44b5f7,0x44b5fc)
+    assert u.reg_read(UC_X86_REG_ESP)==STACK and u.reg_read(UC_X86_REG_EAX)==result
+    assert [u.reg_read(register) for register in (UC_X86_REG_EBX,UC_X86_REG_EBP,UC_X86_REG_ESI,UC_X86_REG_EDI)]==saved
+    assert read(u,unit+20)==123 and read(u,unit+0x1d0)==0
+    if result:
+        assert read(u,unit+8)==CONTEXT+0x20000 and read(u,unit+4)==42
+        assert read(u,unit+0x1cc)==0x12345678 and read(u,unit+0x210)==0x87654321
+    else:assert read(u,unit+8)==0xdead0000
+checks.append('Replay snapshot loader: fresh references restored immediately per unit, null/save-state preservation, fread failure, original arguments and callee-saved registers')
 
 report={'kind':'machine-code-emulation','executable_hash':manifest['output_hash'],'checks':checks,'gameplay_validated':False,'multiplayer_validated':False}
 out=path.parent/'probe-verification.json';out.write_text(json.dumps(report,indent=2),encoding='utf8')
