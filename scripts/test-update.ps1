@@ -1,10 +1,12 @@
+param([string]$PackagePath = "")
 $ErrorActionPreference = 'Stop'
 $root = Split-Path $PSScriptRoot -Parent
 $fixture = Join-Path ([IO.Path]::GetTempPath()) ('AmagadonUpdate-' + [Guid]::NewGuid().ToString('N'))
 New-Item -ItemType Directory -Path $fixture | Out-Null
 try {
     $package = Join-Path $fixture 'package.zip'
-    Copy-Item (Join-Path $root 'dist\AmagadonLauncher.zip') $package
+    if (-not $PackagePath) { $PackagePath = Join-Path $root 'dist\AmagadonLauncher.zip' }
+    Copy-Item -LiteralPath $PackagePath -Destination $package
     $target = Join-Path $fixture 'success'
     New-Item -ItemType Directory -Path $target | Out-Null
     Set-Content (Join-Path $target 'user-settings.txt') 'keep'

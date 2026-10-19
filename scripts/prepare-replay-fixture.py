@@ -151,6 +151,22 @@ asm=f'''
  jne failed
  mov eax, 4
  call {notify}
+ push {base+0x27c00}
+ call dword ptr [{imports['GetModuleHandleA']}]
+ push {base+0x27c20}
+ push eax
+ call dword ptr [{imports['GetProcAddress']}]
+ test eax, eax
+ jz failed
+ push {base+0x27c80}
+ push 1
+ push 4096
+ push {box}
+ call eax
+ test eax, eax
+ jz failed
+ push 150
+ call dword ptr [{imports['Sleep']}]
  push 0
  call dword ptr [{imports['ExitProcess']}]
  failed:
@@ -160,6 +176,8 @@ asm=f'''
 code=bytes(ks.asm(asm,entry)[0])
 if len(code)>0x1000:raise ValueError('Fixture code limit')
 offset=section.PointerToRawData+0x24200;data[offset:offset+len(code)]=code
+for relative,value in ((0x27c00,b'kernel32.dll\0'),(0x27c20,b'VirtualProtect\0')):
+ offset=section.PointerToRawData+relative;data[offset:offset+len(value)]=value
 # Strip all replay game hooks from consideration: entry executes only the fixture.
 struct.pack_into('<I',data,pe.OPTIONAL_HEADER.get_field_absolute_offset('AddressOfEntryPoint'),entry-0x400000)
 data[section.PointerToRawData+0x26040:section.PointerToRawData+0x26048]=b'AGRTEST1'

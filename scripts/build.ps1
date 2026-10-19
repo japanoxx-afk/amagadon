@@ -1,6 +1,7 @@
+param([string]$OutputDirectory = "")
 $ErrorActionPreference = 'Stop'
 $root = Split-Path $PSScriptRoot -Parent
-$out = Join-Path $root 'dist'
+$out = if ($OutputDirectory) { [IO.Path]::GetFullPath($OutputDirectory) } else { Join-Path $root 'dist' }
 New-Item -ItemType Directory -Force $out | Out-Null
 $csc = Join-Path $env:WINDIR 'Microsoft.NET\Framework\v4.0.30319\csc.exe'
 & $csc /nologo /target:winexe /platform:x86 /optimize+ /codepage:65001 /reference:System.Windows.Forms.dll /reference:System.Drawing.dll /reference:System.Web.Extensions.dll /reference:System.Net.Http.dll /reference:System.IO.Compression.dll /reference:System.IO.Compression.FileSystem.dll /resource:"$root\compat\hd-preview.json,Amagadon.HdPreviewRecipe" /out:"$out\AmagadonLauncher.exe" "$root\src\Launcher.cs" "$root\src\NativePatch.cs" "$root\src\Replay.cs" "$root\src\ReplayTests.cs"

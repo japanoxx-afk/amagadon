@@ -7,6 +7,13 @@ namespace Amagadon {
     static class ReplayTests {
         static void Check(bool result,string message) {if(!result)throw new Exception("Replay test: "+message);}
         static void Event(BinaryWriter writer,int kind,int size) {writer.Write(kind);writer.Write(0U);writer.Write(0U);writer.Write(size);writer.Write(new byte[size]);}
+        public static void ArchiveRun(string source,string game) {
+            string root=Path.Combine(Path.GetTempPath(),"AmagadonReplayVerify-"+Guid.NewGuid().ToString("N"));
+            try {
+                var info=ReplayFiles.Unpack(source,root);ReplayFiles.CheckGame(info,game,Path.Combine(game,NativePatch.FileName));
+                Core.Log("REPLAY ARCHIVE VERIFY PASS frames="+info.Frames+" version="+info.Version+"; file structure and game hashes checked; no gameplay launched");
+            } finally {if(Directory.Exists(root))Directory.Delete(root,true);}
+        }
         public static void ProcessRoundTrip(string fixture) {
             string root=Path.Combine(Path.GetTempPath(),"AmagadonReplayProcess-"+Guid.NewGuid().ToString("N"));Directory.CreateDirectory(root);
             try {

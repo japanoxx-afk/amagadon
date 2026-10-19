@@ -100,6 +100,9 @@ namespace Amagadon {
     }
     // Only controls the process that this instance creates suspended. No attach,
     // discovery, remote thread, or injection into an already-running game.
+    sealed class ReplayMemoryException : IOException {
+        public ReplayMemoryException(string operation,int address,int length,int error) : base("리플레이 메모리 "+operation+" 실패: 0x"+address.ToString("X8")+", "+length+"바이트, Windows 오류 "+error) {}
+    }
     public sealed class ReplaySession : IDisposable {
         const int Box=0x233a000;
         const int KeyboardSize=2056;
@@ -112,6 +115,8 @@ namespace Amagadon {
         volatile bool stopRequested;
         public bool IsPlayback {get {return playback;}}
         public void RequestStop() {if(playback)stopRequested=true;}
+        public Action<string> Progress;
+        bool reportedScreen;
         public string Result { get; private set; }
         public string CreatedReplay {get;private set;}
         public int ChildExitCode {get;private set;}
@@ -128,14 +133,17 @@ namespace Amagadon {
         [DllImport("kernel32.dll")] static extern uint WaitForSingleObject(IntPtr handle,uint milliseconds);
         [DllImport("kernel32.dll")] static extern bool GetExitCodeProcess(IntPtr handle,out uint code);
         bool Exited {get {return WaitForSingleObject(handle,0)==0;}}
+        // During ExitProcess the address space can disappear before the process
+        // object is signaled. Wait for that signal before treating RPM as failure.
+        bool ExitedSoon() {bool ended=WaitForSingleObject(handle,500)==0;if(ended)Core.Log("Replay memory unavailable during exit; process exit confirmed");return ended;}
         int ExitCode {get {uint value;if(!GetExitCodeProcess(handle,out value))throw new IOException("게임 종료 코드를 읽을 수 없습니다.");return unchecked((int)value);}}
         public ReplaySession(string folder,string file,string replay) : this(folder,file,replay,false) {}
         internal ReplaySession(string folder,string file,string replay,bool testFixture) {game=folder;executable=file;source=replay;playback=replay!=null;fixture=testFixture;}
         byte[] Read(int address,int length) {
             byte[] bytes=new byte[length];IntPtr read;
-            if(!ReadProcessMemory(handle,new IntPtr(address),bytes,length,out read) || read.ToInt64()!=length)throw new IOException("리플레이 기록용 게임 메모리를 읽을 수 없습니다.");return bytes;
+            if(!ReadProcessMemory(handle,new IntPtr(address),bytes,length,out read) || read.ToInt64()!=length)throw new ReplayMemoryException("읽기",address,length,Marshal.GetLastWin32Error());return bytes;
         }
-        void Write(int address,byte[] bytes) {IntPtr written;if(!WriteProcessMemory(handle,new IntPtr(address),bytes,bytes.Length,out written) || written.ToInt64()!=bytes.Length)throw new IOException("리플레이 입력을 전달할 수 없습니다.");}
+        void Write(int address,byte[] bytes) {IntPtr written;if(!WriteProcessMemory(handle,new IntPtr(address),bytes,bytes.Length,out written) || written.ToInt64()!=bytes.Length)throw new ReplayMemoryException("쓰기",address,bytes.Length,Marshal.GetLastWin32Error());}
         uint U32(int address) {return BitConverter.ToUInt32(Read(address,4),0);}
         void Number(int address,uint value) {Write(address,BitConverter.GetBytes(value));}
         void SetSavePath(string path) {
@@ -149,6 +157,7 @@ namespace Amagadon {
                 var startup=new Startup {cb=Marshal.SizeOf(typeof(Startup))};ProcessInfo pi;
                 if(!CreateProcess(executable,new StringBuilder("\""+executable+"\""),IntPtr.Zero,IntPtr.Zero,false,4,IntPtr.Zero,game,ref startup,out pi))throw new IOException("게임을 실행할 수 없습니다. 오류 "+Marshal.GetLastWin32Error());
                 handle=pi.process;
+                Core.Log("Replay start pid="+pi.pid+" mode="+(playback?"play":"record")+" executable="+executable+" mailbox=0x"+Box.ToString("X8"));
                 try {
                     // Verify our mailbox belongs to the exact known patch before activating.
                     if(fixture) {if(Encoding.ASCII.GetString(Read(Box+64,8))!="AGRTEST1")throw new IOException("리플레이 테스트 프로세스 서명이 다릅니다: "+BitConverter.ToString(Read(Box+64,8)));}
@@ -159,7 +168,7 @@ namespace Amagadon {
                 while(!Exited) {
                     if(stopRequested) {Result="리플레이 재생을 중단했습니다.";finished=true;TerminateProcess(handle,0);WaitForSingleObject(handle,5000);break;}
                     byte[] state;
-                    try {state=Read(Box,36);} catch(IOException) {if(Exited)break;throw;}
+                    try {state=Read(Box,36);} catch(ReplayMemoryException ex) {if(ExitedSoon())break;Core.Log(ex.Message);throw;}
                     uint next=BitConverter.ToUInt32(state,4);
                     if(next==request) {
                         if(!finished && BitConverter.ToUInt32(state,32)!=0) {Result="리플레이 기록을 시작하지 못했거나 동기화 대기 시간이 초과되었습니다. 임시 기록은 보존했습니다.";finished=true;}
@@ -167,11 +176,11 @@ namespace Amagadon {
                     }
                     request=next;int kind=BitConverter.ToInt32(state,12);
                     try {Handle(kind);} catch(Exception ex) {
-                        if(Exited)break;
+                        if(Exited || (ex is ReplayMemoryException && ExitedSoon()))break;
                         Result=(playback?"리플레이 재생 중단: ":"자동 기록 중단: ")+ex.Message;Core.Log(Result);
                         Number(Box,playback?3U:0U);finished=true;
                     }
-                    try {Number(Box+8,request);}catch(IOException) {if(Exited)break;throw;}
+                    try {Number(Box+8,request);}catch(ReplayMemoryException ex) {if(ExitedSoon())break;Core.Log(ex.Message);throw;}
                 }
                 ChildExitCode=ExitCode;
                 if(playback && !finished && ChildExitCode==0xe001)Result="리플레이 동기화 대기 시간이 초과되어 재생을 중단했습니다.";
@@ -212,6 +221,11 @@ namespace Amagadon {
             if(kind==4) {
                 if(playback) {var end=reader.Next();if(end==null || end.Kind!=0)throw new IOException("기록보다 먼저 게임 장면이 종료되었습니다.");EndPlayback();return;}
                 if(writer!=null)FinishRecording();return;
+            }
+            if(kind==1 && !reportedScreen && !fixture) {
+                int width=(int)U32(0x4f75ec),height=(int)U32(0x4f75f0);
+                string message="실제 내부 해상도 "+width+"×"+height+" · "+(playback?"리플레이 재생 중":"리플레이 자동 기록 중");
+                Core.Log(message);if(Progress!=null)Progress(message);reportedScreen=true;
             }
             if(kind<1 || kind>3)throw new IOException("알 수 없는 리플레이 동기화 이벤트입니다.");
             if(playback) {

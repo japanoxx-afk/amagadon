@@ -12,19 +12,20 @@ using System.Threading.Tasks;
 using System.Web.Script.Serialization;
 using System.Windows.Forms;
 
-[assembly: System.Reflection.AssemblyVersion("0.3.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersion("0.3.0-preview")]
+[assembly: System.Reflection.AssemblyVersion("0.3.1.0")]
+[assembly: System.Reflection.AssemblyInformationalVersion("0.3.1-preview")]
 namespace Amagadon {
     public class Settings {
         public string GamePath="";
         public bool NativeHD=false, OutputHD=false, Fullscreen=true, MaintainAspect=false, ConfineMouse=true, Compatibility=true;
         public string Renderer="auto";
         public bool AutoReplay=true;
+        public int ScreenProfile=0;
     }
     public class Backup { public string Directory; public string[] Existing; }
     public static class Core {
-        public const string Version = "0.3.0";
-        public const string DisplayVersion = "0.3.0-preview";
+        public const string Version = "0.3.1";
+        public const string DisplayVersion = "0.3.1-preview";
         public static readonly string Home = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "AmagadonLauncher");
         public static readonly JavaScriptSerializer Json = new JavaScriptSerializer();
         public static string Hash(string path) { using(var h=SHA256.Create()) using(var f=File.OpenRead(path)) return BitConverter.ToString(h.ComputeHash(f)).Replace("-", "").ToLowerInvariant(); }
@@ -41,10 +42,13 @@ namespace Amagadon {
                 if(RequiredFiles.All(n=>File.Exists(Path.Combine(candidate,n))))return Path.GetFullPath(candidate);
             return "";
         }
+        public static void MigrateScreen(Settings s) {
+            if(s.ScreenProfile<1) {s.NativeHD=true;s.Fullscreen=true;s.MaintainAspect=false;s.Compatibility=true;s.ScreenProfile=1;}
+        }
         public static string Profile(Settings s) {
             if(!new[]{"auto","gdi","direct3d9","opengl"}.Contains(s.Renderer))throw new IOException("지원하지 않는 렌더러 설정입니다.");
             int width=s.NativeHD?0:(s.OutputHD?1024:800),height=s.NativeHD?0:(s.OutputHD?768:600);
-            return "[ddraw]\r\nwidth="+width+"\r\nheight="+height+"\r\nwindowed="+(!s.Fullscreen).ToString().ToLowerInvariant()+"\r\nfullscreen="+s.Fullscreen.ToString().ToLowerInvariant()+"\r\nmaintas="+s.MaintainAspect.ToString().ToLowerInvariant()+"\r\naspect_ratio=\r\nboxing=false\r\nrenderer="+s.Renderer+"\r\ndevmode="+(!s.ConfineMouse).ToString().ToLowerInvariant()+"\r\nmaxfps=60\r\nmaxgameticks=-1\r\nsinglecpu=true\r\nnonexclusive=true\r\nadjmouse=true\r\nfixchilds=2\r\nsavesettings=0\r\nresizable=false\r\ntoggle_borderless=true\r\nkeytogglefullscreen=0x0D\r\nd3d9_filter=0\r\nshader=\r\n";
+            return "[ddraw]\r\nwidth="+width+"\r\nheight="+height+"\r\nwindowed=true\r\nfullscreen="+s.Fullscreen.ToString().ToLowerInvariant()+"\r\nmaintas="+s.MaintainAspect.ToString().ToLowerInvariant()+"\r\naspect_ratio=\r\nboxing=false\r\nrenderer="+s.Renderer+"\r\ndevmode="+(!s.ConfineMouse).ToString().ToLowerInvariant()+"\r\nmaxfps=60\r\nmaxgameticks=-1\r\nsinglecpu=true\r\nnonexclusive=true\r\nadjmouse=true\r\nfixchilds=2\r\nsavesettings=0\r\nresizable=false\r\ntoggle_borderless=true\r\nkeytogglefullscreen=0x0D\r\nd3d9_filter=0\r\nshader=\r\n";
         }
         public static void EnsureIdle(string folder) {
             string target=Path.GetFullPath(folder).TrimEnd(Path.DirectorySeparatorChar);
@@ -88,7 +92,7 @@ namespace Amagadon {
             AddLabel("게임 설치 폴더",32,118); path.SetBounds(32,145,570,30); Controls.Add(path); Button browse=Button("찾아보기",614,142,112,36); browse.Click+=delegate { using(var d=new FolderBrowserDialog()) { d.SelectedPath=path.Text; if(d.ShowDialog()==DialogResult.OK) path.Text=d.SelectedPath; } };
             AddLabel("내부 해상도 · 지도 표시 영역",32,205); resolution.DropDownStyle=ComboBoxStyle.DropDownList; resolution.Items.AddRange(new object[]{"800 × 600 · 원본","1024 × 768 · 실제 영역 확장 · 시험"}); resolution.SetBounds(32,232,338,34); Controls.Add(resolution);
             AddLabel("출력 크기 · 화면 확대",388,205); output.DropDownStyle=ComboBoxStyle.DropDownList; output.Items.AddRange(new object[]{"내부 해상도와 동일","1024 × 768 출력"}); output.SetBounds(388,232,338,34); Controls.Add(output);
-            fullscreen.Text="전체화면 (Alt+Enter로 전환)";fullscreen.SetBounds(32,282,338,36);Controls.Add(fullscreen);
+            fullscreen.Text="전체 화면 채우기 (Alt+Enter로 전환)";fullscreen.SetBounds(32,282,338,36);Controls.Add(fullscreen);
             aspect.DropDownStyle=ComboBoxStyle.DropDownList;aspect.Items.AddRange(new object[]{"비율 유지 · 여백 허용","화면 채우기 · 비율이 다르면 늘어남"});aspect.SetBounds(388,283,338,34);Controls.Add(aspect);
             AddLabel("그래픽 렌더러",32,329);renderer.DropDownStyle=ComboBoxStyle.DropDownList;renderer.Items.AddRange(new object[]{"자동","GDI","Direct3D 9","OpenGL"});renderer.SetBounds(32,356,338,34);Controls.Add(renderer);
             confine.Text="게임에 포커스가 있을 때 마우스 가두기";confine.SetBounds(388,351,338,44);Controls.Add(confine);
@@ -102,6 +106,7 @@ namespace Amagadon {
             replayFolder.Click+=delegate {Directory.CreateDirectory(ReplayFiles.Home);Process.Start("explorer.exe",ReplayFiles.Home);};
             status.SetBounds(32,740,694,55); status.ForeColor=Color.FromArgb(158,174,194); Controls.Add(status);
             settings=new Settings(); try { string f=Path.Combine(Core.Home,"settings.json"); if(File.Exists(f)) settings=Core.Json.Deserialize<Settings>(File.ReadAllText(f)); } catch(Exception ex) { Core.Log(ex.Message); }
+            Core.MigrateScreen(settings);
             if(String.IsNullOrWhiteSpace(settings.GamePath))settings.GamePath=Core.FindGame();
             autoReplay.Checked=settings.AutoReplay;
             path.Text=settings.GamePath; resolution.SelectedIndex=settings.NativeHD?1:0; output.SelectedIndex=settings.OutputHD?1:0; compat.Checked=settings.Compatibility;
@@ -139,10 +144,11 @@ namespace Amagadon {
                     }
                     else { if(settings.OutputHD || settings.Fullscreen || !settings.ConfineMouse)throw new IOException("출력/화면/마우스 설정은 그래픽 호환성 적용이 필요합니다."); Core.Restore(settings.GamePath); }
                 }
+                Core.Log("Display internal="+(settings.NativeHD?"1024x768":"800x600")+" fullscreen="+settings.Fullscreen+" maintainAspect="+settings.MaintainAspect+" desktop="+Screen.FromControl(this).Bounds.Size);
                 Core.Log("Start version="+Core.DisplayVersion+" "+file+" SHA256="+Core.Hash(file)+" settings="+Core.Json.Serialize(settings));
                 if(exe=="Armageddon.exe" && settings.NativeHD && (settings.AutoReplay || replaySource!=null)) {
                     status.Text=replaySource!=null?"리플레이 시작 상태를 불러오는 중…":"게임 실행 중 · 싱글플레이 자동 기록 준비";
-                    using(var session=new ReplaySession(settings.GamePath,file,replaySource)) {activeReplay=session;if(session.IsPlayback) {replay.Text="재생 중단";replay.Enabled=true;}await Task.Run(()=>session.Run());status.Text=session.Result;}
+                    using(var session=new ReplaySession(settings.GamePath,file,replaySource)) {activeReplay=session;session.Progress=delegate(string text) {if(!IsDisposed && IsHandleCreated)BeginInvoke((Action)delegate {status.Text=text;});};if(session.IsPlayback) {replay.Text="재생 중단";replay.Enabled=true;}await Task.Run(()=>session.Run());status.Text=session.Result;}
                 } else using(var p=Process.Start(new ProcessStartInfo(file){WorkingDirectory=settings.GamePath,UseShellExecute=false})) {
                     status.Text=exe+" 실행 중"; await Task.Run(()=>p.WaitForExit());
                     Core.Log(exe+" exit=0x"+p.ExitCode.ToString("X8")); status.Text=p.ExitCode==0?"정상 종료했습니다.":"비정상 종료: 0x"+p.ExitCode.ToString("X8")+" · 실행 로그를 확인해주세요.";
@@ -177,6 +183,7 @@ namespace Amagadon {
             } catch(Exception ex) {Error(ex);} finally {update.Enabled=game.Enabled=editor.Enabled=replay.Enabled=true;}
         }
         [STAThread] public static int Main(string[] args) {
+            if(args.Length==3 && args[0]=="--verify-replay") {try {ReplayTests.ArchiveRun(args[1],args[2]);return 0;}catch(Exception ex) {Core.Log(ex.ToString());return 1;}}
             if(args.Length==2 && args[0]=="--test-replay-process") {try {ReplayTests.ProcessRoundTrip(args[1]);return 0;}catch(Exception ex) {Core.Log(ex.ToString());return 1;}}
             if(args.Length==2 && args[0]=="--verify-native") {try{SelfTest.NativeRun(args[1]);return 0;}catch(Exception ex){Core.Log(ex.ToString());return 1;}}
             if(args.Contains("--self-test")) { try { SelfTest.Run();ReplayTests.Run();return 0; } catch(Exception ex) {Core.Log(ex.ToString());return 1;} }
@@ -194,8 +201,12 @@ namespace Amagadon {
                 File.WriteAllText(Path.Combine(d,"ddraw.dll"),"old-dll"); Core.Apply(d,new Settings{NativeHD=true},dll);Core.Restore(d);if(File.ReadAllText(Path.Combine(d,"ddraw.dll"))!="old-dll")throw new Exception("DLL backup failed");
                 if(!Core.Profile(new Settings{NativeHD=true}).Contains("width=0\r\nheight=0"))throw new Exception("Native/output separation failed");
                 string fill=Core.Profile(new Settings{NativeHD=true,Fullscreen=true,MaintainAspect=false});
-                foreach(string option in new[]{"fullscreen=true","windowed=false","maintas=false","boxing=false","adjmouse=true"})if(!fill.Contains(option+"\r\n"))throw new Exception("Screen fill profile failed: "+option);
+                foreach(string option in new[]{"fullscreen=true","windowed=true","maintas=false","boxing=false","adjmouse=true"})if(!fill.Contains(option+"\r\n"))throw new Exception("Screen fill profile failed: "+option);
                 if(!Core.Profile(new Settings{ConfineMouse=false,Fullscreen=true,Renderer="gdi"}).Contains("devmode=true"))throw new Exception("Mouse profile failed");
+                var migrated=new Settings {NativeHD=false,Fullscreen=false,MaintainAspect=true,Compatibility=false};Core.MigrateScreen(migrated);
+                if(!migrated.NativeHD || !migrated.Fullscreen || migrated.MaintainAspect || !migrated.Compatibility || migrated.ScreenProfile!=1)throw new Exception("Screen migration failed");
+                migrated.NativeHD=false;migrated.Fullscreen=false;migrated.MaintainAspect=true;Core.MigrateScreen(migrated);
+                if(migrated.NativeHD || migrated.Fullscreen || !migrated.MaintainAspect)throw new Exception("Saved screen choice was overwritten");
                 bool unknown=false;try{NativePatch.Build(Encoding.ASCII.GetBytes("unknown"),new PatchRecipe());}catch(IOException){unknown=true;}if(!unknown)throw new Exception("Unknown EXE accepted");
                 File.Delete(Path.Combine(d,"ACE.exe"));bool failed=false;try{Core.Validate(d);}catch(IOException){failed=true;}if(!failed)throw new Exception("Validation failed");Core.Log("SELF-TEST PASS");
             } finally {Directory.Delete(d,true);}
