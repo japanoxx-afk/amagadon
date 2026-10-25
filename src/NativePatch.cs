@@ -14,7 +14,7 @@ namespace Amagadon {
     }
     public static class NativePatch {
         public const string InputHash="34f0bf9ed99fbf3ab88c410a3a52a2f6904e7bc7f5b88fb4ebadc935c2e9b466";
-        public const string RecipeHash="1198535dfa3c9441d66706261c0aa56875376e50353cd516f862d3a113fcc00c";
+        public const string RecipeHash="3e6606b4ef15bfe24df8851755100a7d921f5b89f33a879a158b3f75dfd00be4";
         public const string FileName="Armageddon.HD-preview.exe";
         public const string PreviousOutputHash="2e5d6c572858167e1190d1948375f25d8a90abbb3bded3a585fa8fc88904f579";
         public const string PriorOutputHash="98223eeeb25c1a57860acdbfbab4cd06e445e96f831bd92cc9d150fe9a670921";
@@ -72,7 +72,7 @@ namespace Amagadon {
                 while(pos<output.Length && (n=unzip.Read(output,pos,output.Length-pos))>0)pos+=n;
                 if(pos!=output.Length || unzip.ReadByte()!=-1)throw new IOException("추가 코드 크기 오류");
             }
-            if(Digest(output)!=r.OutputHash)throw new IOException("완성된 시험본의 SHA-256 검증 실패");
+            if(Digest(output)!=r.OutputHash)throw new IOException("완성된 HD 실행 파일의 SHA-256 검증 실패");
             return output;
         }
         public static PatchRecipe Load(string recipe) {
@@ -93,13 +93,13 @@ namespace Amagadon {
             if(File.Exists(dest)) {
                 string current=Core.Hash(dest);
                 if(current==r.OutputHash)return dest;
-                if(!IsPrevious(current))throw new IOException("기존 HD 시험본의 해시가 다릅니다. 파일을 별도 보관한 뒤 다시 실행해주세요.");
+                if(!IsPrevious(current))throw new IOException("기존 HD 실행 파일의 해시가 다릅니다. 파일을 별도 보관한 뒤 다시 실행해주세요.");
                 upgrade=true;
             }
             string temporary=dest+"."+Guid.NewGuid().ToString("N")+".tmp";
             try {
                 File.WriteAllBytes(temporary,output);
-                if(Core.Hash(temporary)!=r.OutputHash)throw new IOException("시험본 파일 쓰기 검증 실패");
+                if(Core.Hash(temporary)!=r.OutputHash)throw new IOException("HD 실행 파일 쓰기 검증 실패");
                 if(upgrade) {
                     string backupFolder=Path.Combine(folder,"LauncherBackups");Directory.CreateDirectory(backupFolder);
                     string backup=Path.Combine(backupFolder,"Armageddon.HD-preview-prior-"+Guid.NewGuid().ToString("N")+".exe");
@@ -113,7 +113,7 @@ namespace Amagadon {
             Core.EnsureIdle(folder);string file=Path.Combine(folder,FileName);
             if(!File.Exists(file))return;
             string hash=Core.Hash(file);
-            if(hash!=Load(recipe).OutputHash && !IsPrevious(hash))throw new IOException("시험본의 해시가 달라 자동 제거하지 않았습니다.");
+            if(hash!=Load(recipe).OutputHash && !IsPrevious(hash))throw new IOException("HD 실행 파일의 해시가 달라 자동 제거하지 않았습니다.");
             File.Delete(file);
         }
     }

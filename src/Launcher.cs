@@ -12,8 +12,8 @@ using System.Threading.Tasks;
 using System.Web.Script.Serialization;
 using System.Windows.Forms;
 
-[assembly: System.Reflection.AssemblyVersion("0.3.5.0")]
-[assembly: System.Reflection.AssemblyInformationalVersion("0.3.5-preview")]
+[assembly: System.Reflection.AssemblyVersion("0.3.6.0")]
+[assembly: System.Reflection.AssemblyInformationalVersion("0.3.6")]
 namespace Amagadon {
     public class Settings {
         public string GamePath="";
@@ -24,8 +24,8 @@ namespace Amagadon {
     }
     public class Backup { public string Directory; public string[] Existing; }
     public static class Core {
-        public const string Version = "0.3.5";
-        public const string DisplayVersion = "0.3.5-preview";
+        public const string Version = "0.3.6";
+        public const string DisplayVersion = "0.3.6";
         public static readonly string Home = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "AmagadonLauncher");
         public static readonly JavaScriptSerializer Json = new JavaScriptSerializer();
         public static string Hash(string path) { using(var h=SHA256.Create()) using(var f=File.OpenRead(path)) return BitConverter.ToString(h.ComputeHash(f)).Replace("-", "").ToLowerInvariant(); }
@@ -90,14 +90,14 @@ namespace Amagadon {
             Label title=new Label {Text="ARMAGEDDON",Font=new Font("Segoe UI",28,FontStyle.Bold),AutoSize=true,Location=new Point(30,22)}; Controls.Add(title);
             AddLabel("아마게돈  /  LAUNCHER v"+Core.DisplayVersion,32,85);
             AddLabel("게임 설치 폴더",32,118); path.SetBounds(32,145,570,30); Controls.Add(path); Button browse=Button("찾아보기",614,142,112,36); browse.Click+=delegate { using(var d=new FolderBrowserDialog()) { d.SelectedPath=path.Text; if(d.ShowDialog()==DialogResult.OK) path.Text=d.SelectedPath; } };
-            AddLabel("내부 해상도 · 지도 표시 영역",32,205); resolution.DropDownStyle=ComboBoxStyle.DropDownList; resolution.Items.AddRange(new object[]{"800 × 600 · 원본","1024 × 768 · 실제 영역 확장 · 시험"}); resolution.SetBounds(32,232,338,34); Controls.Add(resolution);
+            AddLabel("내부 해상도 · 지도 표시 영역",32,205); resolution.DropDownStyle=ComboBoxStyle.DropDownList; resolution.Items.AddRange(new object[]{"800 × 600 · 원본","1024 × 768 · 실제 영역 확장"}); resolution.SetBounds(32,232,338,34); Controls.Add(resolution);
             AddLabel("출력 크기 · 화면 확대",388,205); output.DropDownStyle=ComboBoxStyle.DropDownList; output.Items.AddRange(new object[]{"내부 해상도와 동일","1024 × 768 출력"}); output.SetBounds(388,232,338,34); Controls.Add(output);
             fullscreen.Text="전체 화면 채우기 (Alt+Enter로 전환)";fullscreen.SetBounds(32,282,338,36);Controls.Add(fullscreen);
             aspect.DropDownStyle=ComboBoxStyle.DropDownList;aspect.Items.AddRange(new object[]{"비율 유지 · 여백 허용","화면 채우기 · 비율이 다르면 늘어남"});aspect.SetBounds(388,283,338,34);Controls.Add(aspect);
             AddLabel("그래픽 렌더러",32,329);renderer.DropDownStyle=ComboBoxStyle.DropDownList;renderer.Items.AddRange(new object[]{"자동","GDI","Direct3D 9","OpenGL"});renderer.SetBounds(32,356,338,34);Controls.Add(renderer);
             confine.Text="게임에 포커스가 있을 때 마우스 가두기";confine.SetBounds(388,351,338,44);Controls.Add(confine);
             compat.Text="그래픽 호환성 적용 (원본 DLL/설정 백업)"; compat.SetBounds(32,401,680,36); Controls.Add(compat);
-            Controls.Add(new Label{Text="1024×768 내부 해상도는 개발 시험 기능입니다. 4:3 시야를 사용합니다. 전투·저장·멀티플레이 검증이 남아 있습니다.\r\n원본 EXE를 유지하고 별도 HD 시험본으로 실행합니다. ACE는 원본 그래픽으로 실행합니다.",Location=new Point(32,447),Size=new Size(694,46),Font=new Font("맑은 고딕",9)});
+            Controls.Add(new Label{Text="1024×768 내부 해상도는 4:3 시야를 사용합니다. 화면 늘리기로 모니터를 채울 수 있습니다.\r\n원본 EXE를 유지하고 별도 HD 실행 파일을 사용합니다. ACE는 원본 그래픽으로 실행합니다.",Location=new Point(32,447),Size=new Size(694,46),Font=new Font("맑은 고딕",9)});
             game=Button("게임 실행",32,506,338,60); game.BackColor=Color.FromArgb(169,66,39); editor=Button("맵 에디터 실행",388,506,338,60);
             update=Button("업데이트",32,585,160,40); var notes=Button("패치노트",208,585,160,40); var restore=Button("원본 설정 복원",388,585,160,40); var logs=Button("진단 로그",564,585,162,40);
             autoReplay.Text="싱글플레이 리플레이 자동 기록 · 실험 (AI 동기화 검증 중)";autoReplay.SetBounds(32,636,694,34);Controls.Add(autoReplay);
@@ -115,7 +115,7 @@ namespace Amagadon {
             resolution.SelectedIndexChanged+=delegate {output.Enabled=resolution.SelectedIndex==0;autoReplay.Enabled=resolution.SelectedIndex==1;};output.Enabled=!settings.NativeHD;autoReplay.Enabled=settings.NativeHD;
             status.Text=String.IsNullOrEmpty(path.Text)?"게임 설치 폴더를 선택해주세요.":"설치 경로를 확인한 뒤 실행해주세요.";
             game.Click+=async delegate { await Launch("Armageddon.exe"); }; editor.Click+=async delegate { await Launch("ACE.exe"); }; update.Click+=async delegate { await CheckUpdate(); };
-            notes.Click+=delegate { ShowNotes(); }; restore.Click+=delegate { try { NativePatch.Remove(path.Text,Path.Combine(Base,"compat","hd-preview.json"));Core.Restore(path.Text); status.Text="원본 그래픽 설정을 복원하고 생성한 HD 시험본을 제거했습니다."; } catch(Exception ex) { Error(ex); } };
+            notes.Click+=delegate { ShowNotes(); }; restore.Click+=delegate { try { NativePatch.Remove(path.Text,Path.Combine(Base,"compat","hd-preview.json"));Core.Restore(path.Text); status.Text="원본 그래픽 설정을 복원하고 생성한 HD 실행 파일을 제거했습니다."; } catch(Exception ex) { Error(ex); } };
             logs.Click+=delegate { Directory.CreateDirectory(Core.Home); Process.Start("explorer.exe",Core.Home); }; FormClosing+=delegate(object sender,FormClosingEventArgs args) {if(gameRunning) {args.Cancel=true;status.Text="리플레이 기록을 마치려면 게임을 먼저 종료해주세요.";return;}try { Save(); } catch(Exception ex) { Core.Log(ex.Message); } };
         }
         void AddLabel(string text,int x,int y) { Controls.Add(new Label{Text=text,AutoSize=true,Location=new Point(x,y)}); }
@@ -134,7 +134,7 @@ namespace Amagadon {
                 if(exe=="ACE.exe") Core.Restore(settings.GamePath);
                 else {
                     if(settings.NativeHD) {
-                        if(!settings.Compatibility)throw new IOException("HD 시험본은 그래픽 호환성 적용이 필요합니다.");
+                        if(!settings.Compatibility)throw new IOException("HD 실행 파일은 그래픽 호환성 적용이 필요합니다.");
                         file=replaySource==null?NativePatch.Prepare(settings.GamePath,Path.Combine(Base,"compat","hd-preview.json")):NativePatch.PrepareReplay(settings.GamePath,replaySource);
                     }
                     if(settings.Compatibility) {
