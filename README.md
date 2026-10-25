@@ -4,7 +4,7 @@
 
 ## 실행
 
-`dist/0.3.3-preview/AmagadonLauncher-0.3.3-preview.exe`를 실행하고 게임 설치 폴더를 지정합니다.
+`dist/0.3.4-preview/AmagadonLauncher-0.3.4-preview.exe`를 실행하고 게임 설치 폴더를 지정합니다.
 기본 경로: `C:\Users\seo\Downloads\armaggeddon\armaggeddon`.
 배포 ZIP은 전체를 풀어 사용합니다. `compat`, `apply-update.ps1` 파일도 필요합니다.
 
@@ -14,6 +14,7 @@
 - **그래픽 호환성**: cnc-ddraw 7.1.0, 단일 CPU, 프레임 제한, 비독점 창 모드. 모든 크래시 해결을 보장하지 않습니다.
 - **호환성 복원**: 원래 DLL/설정을 복원합니다. 백업은 게임 폴더 `LauncherBackups`에 유지됩니다.
 - **업데이트**: 이 저장소의 최신 GitHub Release를 확인합니다. ZIP과 SHA-256 검증 파일이 있어야 설치됩니다. 기존 파일을 백업한 뒤 런처를 교체합니다.
+- **생산 랠리**: 랠리포인트 방향의 건물 측면에서 출구를 먼저 탐색하고, 막히면 원본 충돌 검사로 다른 출구를 찾습니다.
 - **패치노트**: 동봉한 PATCHNOTES.md를 표시합니다.
 
 설정/로그: `%LOCALAPPDATA%\AmagadonLauncher`. 게임과 에디터는 동시에 실행하지 않습니다.

@@ -6,7 +6,7 @@ It does not substitute for visual gameplay or multiplayer validation.
 import pathlib, sys, struct, json
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent / '.tools'))
 import pefile
-from unicorn import Uc, UC_ARCH_X86, UC_MODE_32, UC_HOOK_MEM_WRITE
+from unicorn import Uc, UC_ARCH_X86, UC_MODE_32, UC_HOOK_MEM_WRITE, UC_HOOK_CODE
 from unicorn.x86_const import *
 from keystone import Ks, KS_ARCH_X86, KS_MODE_32
 
@@ -505,17 +505,48 @@ if '--rally' in manifest['stages']:
     checks.append('Exact ore rally: ore1/ore2 variants, sprite-edge target versus nearer decoy, changed-rally cache invalidation')
     checks.append('Ore rally: original worker classifier, three HQs and ore types, gather target/state, inactive/non-ore/distant targets excluded, stack/register preservation')
     for dx,dy,side,position in ((200,10,1,(21,31)),(-200,10,3,(9,19)),(10,-200,2,(21,19)),(10,200,0,(9,31))):
-        for production in (False,True):
-            u=fresh();dword(u,0x504a10,manager);dword(u,manager+8,parent)
+        for producer_id,production in ((0,False),(1,True),(17,True),(257,True),(1699,True)):
+            u=fresh();dword(u,0x504a10,manager);dword(u,manager+8+producer_id*4,parent)
             dword(u,parent+0x14,500);dword(u,parent+0x18,500);dword(u,parent+0x1398,500+dx);dword(u,parent+0x139c,500+dy)
-            dword(u,STACK+92,0x41f97b if production else RETURN);dword(u,STACK+100,0)
+            dword(u,STACK+92,0x41f97b if production else RETURN);dword(u,STACK+100,producer_id)
+            # Execute the real argument reuse before the exit hook. The old
+            # hook incorrectly read this overwritten byte as the building ID.
+            u.reg_write(UC_X86_REG_EAX,2);u.reg_write(UC_X86_REG_ECX,0)
+            run(u,0x44cf0a,0x44cf10)
+            assert read(u,STACK+28)==producer_id and read(u,STACK+100)!=producer_id
             dword(u,STACK+60,21);dword(u,STACK+64,19);u.mem_write(STACK+19,b'\0')
             u.reg_write(UC_X86_REG_ECX,9);u.reg_write(UC_X86_REG_EBX,32);u.reg_write(UC_X86_REG_EDI,9);u.reg_write(UC_X86_REG_ESI,31)
             run(u,0x44cf5b,0x44cf63)
             assert bytes(u.mem_read(STACK+19,1))==bytes([side if production else 0])
             assert (u.reg_read(UC_X86_REG_EDI),u.reg_read(UC_X86_REG_ESI))==(position if production else (9,31))
             assert u.reg_read(UC_X86_REG_ESP)==STACK and u.reg_read(UC_X86_REG_EBX)==32
-    checks.append('Rally production exit: four directions, original perimeter-search locals, non-production callers preserved')
+            # Continue through the original airborne exit scan and epilogue,
+            # checking the actual coordinates returned to unit creation.
+            out=CONTEXT+0x2e000;dword(u,STACK+96,out)
+            u.mem_write(STACK+0x70,b'\x01');u.mem_write(STACK+0x68,b'\0')
+            saved_context=u.context_save();saved_stack=bytes(u.mem_read(STACK,0x80))
+            run(u,0x44cf63,0x41f97b if production else RETURN)
+            expected=position if production else (9,31)
+            assert (read(u,out),read(u,out+4))==tuple(v*8 for v in expected)
+            assert u.reg_read(UC_X86_REG_ESP)==STACK+116
+            if production:
+                u.context_restore(saved_context);u.mem_write(STACK,saved_stack)
+                u.mem_write(STACK+0x70,b'\0')
+                # Keep the original perimeter loops and rectangle construction;
+                # bound only world occupancy leaves. Block the entire chosen
+                # side, allowing the next native side to find a free exit.
+                for address,cleanup in ((0x4a26f0,24),(0x4a2600,20),(0x4a25a0,16),(0x4a28c0,20)):
+                    u.mem_write(address,bytes(ks.asm(('' if address==0x4a26f0 else 'xor eax,eax; ')+f'ret {cleanup}')[0]))
+                seen=[]
+                def occupancy(emu,address,size,user):
+                    current=bytes(emu.mem_read(STACK+19,1))[0];seen.append(current)
+                    emu.reg_write(UC_X86_REG_EAX,1 if current==side else 0)
+                u.hook_add(UC_HOOK_CODE,occupancy,begin=0x4a26f0,end=0x4a26f0)
+                run(u,0x44cf63,0x41f97b)
+                assert seen[0]==side and any(v!=side for v in seen)
+                assert (read(u,out),read(u,out+4))!=tuple(v*8 for v in expected)
+                assert u.reg_read(UC_X86_REG_ESP)==STACK+116
+    checks.append('Rally production exit: real argument reuse and original four-side scan/return, nonzero IDs 1/17/257/1699, non-production callers preserved')
     assert (255-238)*32 < 558
     checks.append('Bottom camera: last map row projects above HUD at y=544; full 24-row raster remains guarded')
 

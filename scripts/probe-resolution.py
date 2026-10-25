@@ -736,6 +736,18 @@ if '--replay' in sys.argv:
 # Gameplay additions are optional and excluded from the archived replay recipe.
 if '--rally' in sys.argv:
     code_cursor=max(code_cursor,0x23000)
+    # The original finder reuses argument +0x64 for the child's width before
+    # choosing an exit. Preserve the producer ID in unused local +0x1c first.
+    # Stack-local storage also keeps nested calls independent.
+    hook(0x44cf0a,bytes.fromhex('884424648ac1'),"""
+        push eax
+        mov eax, dword ptr [esp+0x68]
+        mov dword ptr [esp+0x20], eax
+        pop eax
+        mov byte ptr [esp+0x64], al
+        mov al, cl
+        jmp 0x44cf10
+    """,'Preserve producer ID before spawn finder overwrites argument with child width')
     # Retain the original collision-aware perimeter search; only choose its
     # initial side. Other callers (placement, loading, etc.) remain unchanged.
     hook(0x44cf5b,bytes.fromhex('894c2444895c2448'),"""
@@ -745,7 +757,7 @@ if '--rally' in sys.argv:
         pushad
         cmp dword ptr [esp+128], 0x41f97b
         jne spawn_done
-        mov eax, dword ptr [esp+136]
+        mov eax, dword ptr [esp+64]
         cmp eax, 1700
         jae spawn_done
         mov ecx, dword ptr [0x504a10]

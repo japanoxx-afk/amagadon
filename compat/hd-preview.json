@@ -1,9 +1,9 @@
 {
-  "Version": "0.3.3-preview",
+  "Version": "0.3.4-preview",
   "ReleaseCandidate": false,
   "InputHash": "34f0bf9ed99fbf3ab88c410a3a52a2f6904e7bc7f5b88fb4ebadc935c2e9b466",
   "InputLength": 1032192,
-  "OutputHash": "3fc4e5c50663432eafaa328e400b6344fcf9585250eb707662e29524c7e78421",
+  "OutputHash": "6ead8757422c9af9fabb1a2001f2bcf1169a37f671a5b07d8b3a92a9c98525ab",
   "OutputLength": 1196032,
   "Edits": [
     {
@@ -124,7 +124,7 @@
     {
       "Offset": 34608,
       "Before": "89869c130000",
-      "After": "e99be9f20190"
+      "After": "e9abe9f20190"
     },
     {
       "Offset": 55046,
@@ -189,12 +189,17 @@
     {
       "Offset": 200265,
       "Before": "bf93f7ffff",
-      "After": "e91263f001"
+      "After": "e92263f001"
+    },
+    {
+      "Offset": 315146,
+      "Before": "884424648ac1",
+      "After": "e9f1a0ee0190"
     },
     {
       "Offset": 315227,
       "Before": "894c2444895c2448",
-      "After": "e9a0a0ee01909090"
+      "After": "e9c0a0ee01909090"
     },
     {
       "Offset": 340679,
@@ -702,7 +707,7 @@
       "After": "0003"
     }
   ],
-  "AppendGzip": "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",
+  "AppendGzip": "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",
   "Stages": [
     "--terrain",
     "--guard",
@@ -740,7 +745,7 @@
     "Production ore rally: original destination setters and movement setup run before gather state, pathfinder ABI and stack preserved",
     "Exact ore rally: ore1/ore2 variants, sprite-edge target versus nearer decoy, changed-rally cache invalidation",
     "Ore rally: original worker classifier, three HQs and ore types, gather target/state, inactive/non-ore/distant targets excluded, stack/register preservation",
-    "Rally production exit: four directions, original perimeter-search locals, non-production callers preserved",
+    "Rally production exit: real argument reuse and original four-side scan/return, nonzero IDs 1/17/257/1699, non-production callers preserved",
     "Bottom camera: last map row projects above HUD at y=544; full 24-row raster remains guarded",
     "Replay post-input compatibility: original UI helper retained, final packet replay for players 0/1/9, bounds and stack/registers preserved",
     "Replay snapshot loader: fresh references restored immediately per unit, null/save-state preservation, fread failure, original arguments and callee-saved registers"
