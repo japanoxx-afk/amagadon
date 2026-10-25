@@ -211,7 +211,7 @@ namespace Amagadon {
                 try {
                     // Verify our mailbox belongs to the exact known patch before activating.
                     if(fixture) {if(Encoding.ASCII.GetString(Read(Box+64,8))!="AGRTEST1")throw new IOException("리플레이 테스트 프로세스 서명이 다릅니다: "+BitConverter.ToString(Read(Box+64,8)));}
-                    else if(Core.Hash(executable)!=NativePatch.Replay033FinalHash && Core.Hash(executable)!=NativePatch.LegacyOutputHash && Core.Hash(executable)!=NativePatch.Replay032Hash && Core.Hash(executable)!=NativePatch.Replay033Hash && Core.Hash(executable)!=NativePatch.Load(Path.Combine(AppDomain.CurrentDomain.BaseDirectory,"compat","hd-preview.json")).OutputHash)throw new IOException("지원하지 않는 리플레이 실행 파일입니다.");
+                    else if(Core.Hash(executable)!=NativePatch.Replay034Hash && Core.Hash(executable)!=NativePatch.Replay033FinalHash && Core.Hash(executable)!=NativePatch.LegacyOutputHash && Core.Hash(executable)!=NativePatch.Replay032Hash && Core.Hash(executable)!=NativePatch.Replay033Hash && Core.Hash(executable)!=NativePatch.Load(Path.Combine(AppDomain.CurrentDomain.BaseDirectory,"compat","hd-preview.json")).OutputHash)throw new IOException("지원하지 않는 리플레이 실행 파일입니다.");
                     if(eventsEnabled && Core.Hash(executable)!=NativePatch.LegacyOutputHash)SetupEvents();
                     if(playback && !fixture) {
                         if(BitConverter.ToString(Read(0x454436,5))!="E8-95-3D-FB-FF")throw new IOException("지원하지 않는 리플레이 명령 생성 코드입니다.");

@@ -305,6 +305,55 @@ for entry in (0x4a8720,0x4a8790):
         assert u.reg_read(UC_X86_REG_ESP)==STACK+4
 checks.append('HUD detail text: 24 audited callers, actual foreground/shadow helpers, HP/shield/production text, world labels preserved')
 
+# Capture the real draw arguments at the graphics boundary; the caller's
+# RECT must remain untouched because it feeds later progress arithmetic.
+progress_calls=((0x4a727b,0x48f540),(0x4a7548,0x48f110),
+    (0x4a761d,0x48f540),(0x4a7696,0x48f110),
+    (0x4a7a26,0x48f540),(0x4a7aa9,0x48f110))
+for call,target in progress_calls:
+    for width in (0,25,100):
+        u=fresh();outline=target==0x48f540;seen=[]
+        rect=CONTEXT+0x2d000;original=(354,463,354+width,466)
+        u.mem_write(rect,struct.pack('<4i',*original))
+        arguments=[0x1234,COM,rect,0xab] if outline else [COM,rect,0xab]
+        before=struct.pack('<'+'I'*len(arguments),*arguments)
+        u.mem_write(STACK,before)
+        u.reg_write(UC_X86_REG_EBX,0x11223344)
+        u.reg_write(UC_X86_REG_ESI,0x55667788)
+        def draw_backend(emu,address,size,user):
+            sp=emu.reg_read(UC_X86_REG_ESP)
+            values=[read(emu,sp+4+i*4) for i in range(len(arguments))]
+            pointer=values[2 if outline else 1]
+            seen.append((values,struct.unpack('<4i',emu.mem_read(pointer,16))))
+        u.hook_add(UC_HOOK_CODE,draw_backend,begin=target,end=target)
+        u.mem_write(target,bytes(ks.asm('mov eax, 123; ret')[0]))
+        for frame in range(2):
+            run(u,call,call+5)
+            values,moved=seen[-1]
+            assert moved==tuple(v+(112 if i%2==0 else 168) for i,v in enumerate(original))
+            values[2 if outline else 1]=rect
+            assert values==arguments and u.reg_read(UC_X86_REG_EAX)==123
+            assert bytes(u.mem_read(rect,16))==struct.pack('<4i',*original)
+            assert bytes(u.mem_read(STACK,len(before)))==before
+            assert u.reg_read(UC_X86_REG_ESP)==STACK
+            assert u.reg_read(UC_X86_REG_EBX)==0x11223344 and u.reg_read(UC_X86_REG_ESI)==0x55667788
+# Execute the actual production-rate divide and fill caller, not a duplicate
+# formula in the hook. Half/full completion must retain the original width.
+for elapsed,expected_right in ((0,466),(50,521),(100,576)):
+    u=fresh();seen=[];unit=CONTEXT+0x2c000
+    dword(u,unit+0x7f4,100);u.reg_write(UC_X86_REG_ESI,unit);u.reg_write(UC_X86_REG_EBX,elapsed)
+    for i,v in enumerate((354,463,464,466)):dword(u,STACK+0x24+i*4,v)
+    u.mem_write(0x48faf0,bytes(ks.asm('mov eax,128; ret')[0]))
+    def production_fill(emu,address,size,user):
+        pointer=read(emu,emu.reg_read(UC_X86_REG_ESP)+8)
+        seen.append(struct.unpack('<4i',emu.mem_read(pointer,16)))
+    u.hook_add(UC_HOOK_CODE,production_fill,begin=0x48f110,end=0x48f110)
+    u.mem_write(0x48f110,b'\xc3')
+    run(u,0x4a7a74,0x4a7ab1)
+    assert seen==[(466,631,expected_right,634)],seen
+    assert u.reg_read(UC_X86_REG_ESP)==STACK
+checks.append('HUD production progress: six outline/fill callers move +112/+168 exactly once, private RECT and ABI preserved; original rate arithmetic at 0/50/100 percent')
+
 # Actual start/live/release selection code, using the game's existing packet
 # fields and world-to-screen offsets. Cover all player-slot indexing and both
 # drag directions beyond the old 800x600 region, without changing unit limits.

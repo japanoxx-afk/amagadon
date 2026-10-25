@@ -1,3 +1,4 @@
 # The launcher verifies this resource byte for byte.
 compat/hd-preview.json -text whitespace=cr-at-eol
 compat/replay-0.3.3.json -text whitespace=cr-at-eol
+compat/replay-0.3.4.json -text whitespace=cr-at-eol

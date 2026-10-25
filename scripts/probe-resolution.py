@@ -488,6 +488,31 @@ if '--hud' in sys.argv:
             jmp {entry+8}
         ''','Move HUD health/shield numbers and detail text, including both shadow passes')
 
+    # Production/research rectangles bypass the generic HUD containers. Move
+    # a private RECT copy at each audited draw call so the original rectangle
+    # remains available for progress width calculations and later frames.
+    progress_calls=((0x4a727b,0x48f540),(0x4a7548,0x48f110),
+        (0x4a761d,0x48f540),(0x4a7696,0x48f110),
+        (0x4a7a26,0x48f540),(0x4a7aa9,0x48f110))
+    for call,target in progress_calls:
+        outline=target==0x48f540
+        count=4 if outline else 3
+        rect_index=2 if outline else 1
+        copy=';'.join(f'mov ecx, dword ptr [eax+{i*4}]; add ecx, {112 if i%2==0 else 168}; mov dword ptr [ebx-16+{i*4}],ecx' for i in range(4))
+        arguments=';'.join('lea eax,[ebx-16]; push eax' if i==rect_index else f'push dword ptr [ebx+{4+i*4}]' for i in reversed(range(count)))
+        hook(call,b'\xe8'+struct.pack('<i',target-call-5),f"""
+            push ebx
+            mov ebx, esp
+            sub esp, 16
+            mov eax, dword ptr [ebx+{4+rect_index*4}]
+            {copy}
+            {arguments}
+            call {target}
+            add esp, {16+count*4}
+            pop ebx
+            jmp {call+5}
+        """,'Move production progress outline/fill with HUD, preserve source rectangle and progress arithmetic')
+
     # Read the engine's saved elapsed-seconds counter, not wall-clock time.
     # Format without CRT allocation; preserve all registers and flags around HUD draw.
     timer_buffer=section_va+0x1f00

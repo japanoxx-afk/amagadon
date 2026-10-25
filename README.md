@@ -4,7 +4,7 @@
 
 ## 실행
 
-`dist/0.3.4-preview/AmagadonLauncher-0.3.4-preview.exe`를 실행하고 게임 설치 폴더를 지정합니다.
+`dist/0.3.5-preview/AmagadonLauncher-0.3.5-preview.exe`를 실행하고 게임 설치 폴더를 지정합니다.
 기본 경로: `C:\Users\seo\Downloads\armaggeddon\armaggeddon`.
 배포 ZIP은 전체를 풀어 사용합니다. `compat`, `apply-update.ps1` 파일도 필요합니다.
 
