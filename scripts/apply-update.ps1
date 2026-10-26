@@ -1,7 +1,8 @@
-param([int]$LauncherPid, [string]$Package, [string]$Target, [switch]$NoRestart, [string]$CurrentEntrypoint = '')
+﻿param([int]$LauncherPid, [string]$Package, [string]$Target, [switch]$NoRestart, [string]$CurrentEntrypoint = '', [string]$ReadyFile = '')
 $ErrorActionPreference = 'Stop'
+$resultLog = Join-Path ([IO.Path]::GetDirectoryName($Package)) 'update-result.log'
+try {
 if ($CurrentEntrypoint -and $CurrentEntrypoint -ne 'AmagadonLauncher.exe' -and $CurrentEntrypoint -notmatch '^AmagadonLauncher-\d+\.\d+\.\d+(-preview)?\.exe$') { throw 'Invalid current entrypoint' }
-if ($LauncherPid -gt 0) { Wait-Process -Id $LauncherPid -ErrorAction SilentlyContinue }
 $stage = Join-Path ([IO.Path]::GetDirectoryName($Package)) ('expanded-' + [Guid]::NewGuid().ToString('N'))
 Add-Type -AssemblyName System.IO.Compression.FileSystem
 $archive = [IO.Compression.ZipFile]::OpenRead($Package)
@@ -21,6 +22,19 @@ foreach ($file in $manifest.Files) {
 }
 if (@($manifest.Files).Count -ne 7 -or @($manifest.Files.Path | Select-Object -Unique).Count -ne 7) { throw 'Incomplete update manifest' }
 if ((Get-FileHash -LiteralPath (Join-Path $stage 'AmagadonLauncher.exe')).Hash -ne (Get-FileHash -LiteralPath (Join-Path $stage $manifest.Entrypoint)).Hash) { throw 'Launcher alias mismatch' }
+# Signal readiness only after every archive/file hash has passed validation.
+if ($ReadyFile) {
+    [IO.File]::WriteAllText($ReadyFile,'ready')
+    $deadline=[DateTime]::UtcNow.AddSeconds(60)
+    while (!(Test-Path -LiteralPath ($ReadyFile+'.commit'))) {
+        if([DateTime]::UtcNow -gt $deadline){throw 'Launcher did not authorize installation'}
+        Start-Sleep -Milliseconds 100
+    }
+}
+if ($LauncherPid -gt 0) {
+    $parentProcess=Get-Process -Id $LauncherPid -ErrorAction SilentlyContinue
+    if ($parentProcess -and !$parentProcess.WaitForExit(120000)) {throw 'Launcher did not exit within 120 seconds'}
+}
 $backup = Join-Path $Target ('update-backup-' + (Get-Date -Format 'yyyyMMddHHmmssfff'))
 New-Item -ItemType Directory -Path $backup | Out-Null
 $changed = @()
@@ -55,3 +69,15 @@ try {
     throw $failure
 }
 if (!$NoRestart) { Start-Process -FilePath (Join-Path $Target $manifest.Entrypoint) -WorkingDirectory $Target -WindowStyle Normal }
+
+'Installed and restart requested successfully' | Out-File -LiteralPath $resultLog
+} catch {
+    $message=$_.Exception.Message
+    $_ | Out-File -LiteralPath $resultLog
+    if($ReadyFile) {[IO.File]::WriteAllText($ReadyFile,'failed: '+$message)}
+    if(!$NoRestart -and (!$ReadyFile -or (Test-Path -LiteralPath ($ReadyFile+'.commit')))) {
+        Add-Type -AssemblyName System.Windows.Forms
+        [System.Windows.Forms.MessageBox]::Show("Update failed. Files were restored where possible. Log: $resultLog`r`n$message",'Amagadon update error') | Out-Null
+    }
+    throw
+}

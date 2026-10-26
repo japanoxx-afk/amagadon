@@ -51,6 +51,29 @@ try {
     for($i=0;$i -lt 50 -and !(Test-Path (Join-Path $restartTarget 'restarted.txt'));$i++){Start-Sleep -Milliseconds 100}
     if(!(Test-Path (Join-Path $restartTarget 'restarted.txt'))){throw 'Updated launcher not restarted'}
     if((Get-Content (Join-Path $restartTarget 'restarted.txt')) -ne $restartTarget){throw 'Restart working directory mismatch'}
+    # Run the same x86 C# client and installer handoff used by both UI paths.
+    $clientSource=Join-Path $PSScriptRoot 'update-client-fixture.cs'
+    $packageLauncher=Join-Path $target 'AmagadonLauncher.exe'
+    & $csc /nologo /target:winexe /platform:x86 /reference:$packageLauncher /reference:System.Net.Http.dll /reference:System.Web.Extensions.dll /out:"$target\AmagadonLauncher-0.3.9.exe" $clientSource
+    if($LASTEXITCODE -ne 0){throw 'Client fixture compile failed'}
+    $client=Join-Path $target 'AmagadonLauncher-0.3.9.exe'
+    $p=Start-Process $client -ArgumentList @('client',('"'+$fixture+'"')) -WindowStyle Hidden -Wait -PassThru
+    if($p.ExitCode -ne 0){throw 'Update client regression test failed; see TEMP/Amagadon-update-fixture-error.txt'}
+    Get-Content (Join-Path $fixture 'client-pass.txt')
+    $corrupt=Join-Path $fixture 'corrupt.zip'
+    Set-Content $corrupt 'not a zip'
+    $p=Start-Process $client -ArgumentList @('preflight-failure',('"'+$corrupt+'"'),('"'+$target+'"')) -WindowStyle Hidden -Wait -PassThru
+    if($p.ExitCode -ne 0 -or !(Test-Path (Join-Path $target 'preflight-rejected.txt'))){throw 'Failed installer closed its parent'}
+    $oldHash=(Get-FileHash $client).Hash
+    $p=Start-Process $client -ArgumentList @('handoff',('"'+$restartPackage+'"'),('"'+$target+'"')) -WindowStyle Hidden -PassThru
+    for($i=0;$i -lt 300 -and !(Test-Path (Join-Path $target 'parent-ready.txt'));$i++){Start-Sleep -Milliseconds 100}
+    if(!(Test-Path (Join-Path $target 'parent-ready.txt'))){throw 'Production handoff never became ready'}
+    if((Get-FileHash $client).Hash -ne $oldHash){throw 'Installer changed running launcher before exit'}
+    if(!$p.WaitForExit(15000) -or $p.ExitCode -ne 0){throw 'Handoff parent failed'}
+    for($i=0;$i -lt 300 -and !(Test-Path (Join-Path $target 'restarted.txt'));$i++){Start-Sleep -Milliseconds 100}
+    if(!(Test-Path (Join-Path $target 'restarted.txt'))){throw 'Production handoff failed to restart'}
+    if((Get-FileHash $client).Hash -ne (Get-FileHash (Join-Path $target 'AmagadonLauncher.exe')).Hash){throw '0.3.9 entrypoint not replaced'}
+    Write-Output 'HANDOFF PASS: x86 parent, embedded installer, preflight failure keeps parent alive, readiness handshake, wait for exit, old entrypoint update, restarted executable'
     Write-Output 'UPDATE TEST PASS: install hashes, settings preservation, old entrypoint replacement, locked-file rollback, updated launcher restart'
 } finally {
     $resolved = [IO.Path]::GetFullPath($fixture)

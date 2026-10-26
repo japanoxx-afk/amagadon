@@ -12,8 +12,8 @@ using System.Threading.Tasks;
 using System.Web.Script.Serialization;
 using System.Windows.Forms;
 
-[assembly: System.Reflection.AssemblyVersion("0.3.11.0")]
-[assembly: System.Reflection.AssemblyInformationalVersion("0.3.11")]
+[assembly: System.Reflection.AssemblyVersion("0.3.12.0")]
+[assembly: System.Reflection.AssemblyInformationalVersion("0.3.12")]
 namespace Amagadon {
     public class Settings {
         public string GamePath="";
@@ -26,8 +26,8 @@ namespace Amagadon {
     }
     public class Backup { public string Directory; public string[] Existing; }
     public static class Core {
-        public const string Version = "0.3.11";
-        public const string DisplayVersion = "0.3.11";
+        public const string Version = "0.3.12";
+        public const string DisplayVersion = "0.3.12";
         public static readonly string Home = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "AmagadonLauncher");
         public static readonly JavaScriptSerializer Json = new JavaScriptSerializer();
         public static string Hash(string path) { using(var h=SHA256.Create()) using(var f=File.OpenRead(path)) return BitConverter.ToString(h.ComputeHash(f)).Replace("-", "").ToLowerInvariant(); }
@@ -192,33 +192,14 @@ namespace Amagadon {
                 status.Text="GitHub에서 최신 버전을 확인하는 중…"; ServicePointManager.SecurityProtocol=SecurityProtocolType.Tls12;
                 using(var client=new HttpClient()) {
                     client.DefaultRequestHeaders.UserAgent.ParseAdd("AmagadonLauncher/"+Core.Version); client.Timeout=TimeSpan.FromSeconds(90);
-                    HttpResponseMessage response;
-                    using(var timeout=System.Threading.CancellationTokenSource.CreateLinkedTokenSource(updateCancellation.Token)) {
-                        timeout.CancelAfter(TimeSpan.FromSeconds(15));
-                        response=await client.GetAsync("https://api.github.com/repos/japanoxx-afk/amagadon/releases/latest",timeout.Token);
-                    }
-                    if(IsDisposed || updateCancellation.IsCancellationRequested)return;
-                    if(response.StatusCode==HttpStatusCode.NotFound) {status.Text="아직 배포된 업데이트가 없습니다.";return;} response.EnsureSuccessStatusCode();
-                    var release=Core.Json.Deserialize<Dictionary<string,object>>(await response.Content.ReadAsStringAsync()); string tag=(string)release["tag_name"]; Version latest;
-                    if(!System.Version.TryParse(tag.TrimStart('v').Split('-')[0],out latest)) throw new IOException("올바르지 않은 릴리스 버전입니다.");
-                    if(latest<=new Version(Core.Version)) {status.Text="최신 버전입니다.";return;}
-                    if(MessageBox.Show(this,"새 버전 "+tag+"이 있습니다. (현재 "+Core.DisplayVersion+")\r\n\r\n확인을 누르면 업데이트를 설치한 뒤 런처를 다시 실행합니다.","런처 업데이트",MessageBoxButtons.OKCancel,MessageBoxIcon.Information)!=DialogResult.OK) {
-                        status.Text="업데이트를 취소했습니다. 업데이트 버튼으로 다시 진행할 수 있습니다.";return;
-                    }
-                    var assets=((System.Collections.IEnumerable)release["assets"]).Cast<Dictionary<string,object>>().ToArray();
-                    var zip=assets.Single(a=>(string)a["name"]=="AmagadonLauncher.zip"); var sha=assets.Single(a=>(string)a["name"]=="AmagadonLauncher.zip.sha256");
-                    string dir=Path.Combine(Core.Home,"updates",Guid.NewGuid().ToString("N")); Directory.CreateDirectory(dir); string package=Path.Combine(dir,"AmagadonLauncher.zip");
-                    foreach(var a in new[]{zip,sha}) {var uri=new Uri((string)a["browser_download_url"]); if(uri.Scheme!="https" || uri.Host!="github.com" || !uri.AbsolutePath.StartsWith("/japanoxx-afk/amagadon/releases/download/",StringComparison.Ordinal)) throw new IOException("신뢰할 수 없는 업데이트 주소입니다.");}
-                    status.Text="업데이트 다운로드 중…";
-                    using(var download=await client.GetAsync((string)zip["browser_download_url"],updateCancellation.Token)) {download.EnsureSuccessStatusCode();File.WriteAllBytes(package,await download.Content.ReadAsByteArrayAsync());}
-                    string hash;using(var checksum=await client.GetAsync((string)sha["browser_download_url"],updateCancellation.Token)) {checksum.EnsureSuccessStatusCode();hash=(await checksum.Content.ReadAsStringAsync()).Trim();}
-                    updateCancellation.Token.ThrowIfCancellationRequested();
-                    if(!String.Equals(hash,Core.Hash(package),StringComparison.OrdinalIgnoreCase)) throw new IOException("업데이트 SHA-256 검증 실패");
-                    Core.EnsureIdle(settings.GamePath); string helper=Path.Combine(dir,"apply-update.ps1"); File.Copy(Path.Combine(Base,"apply-update.ps1"),helper);
-                    string args="-NoProfile -ExecutionPolicy Bypass -File \""+helper+"\" -LauncherPid "+Process.GetCurrentProcess().Id+" -Package \""+package+"\" -Target \""+Base.TrimEnd(Path.DirectorySeparatorChar)+"\"";
-                    args+=" -CurrentEntrypoint \""+Path.GetFileName(Application.ExecutablePath)+"\"";
-                    Save();
-                    Process.Start(new ProcessStartInfo("powershell.exe",args){UseShellExecute=false,CreateNoWindow=true,WindowStyle=ProcessWindowStyle.Hidden}); Close();
+                    string directory=Path.Combine(Core.Home,"updates",Guid.NewGuid().ToString("N"));
+                    string package=await Updates.Prepare(client,Core.Version,directory,
+                        release=>MessageBox.Show(this,"새 버전 "+release.tag_name+"이 있습니다. (현재 "+Core.DisplayVersion+")\r\n\r\n확인을 누르면 업데이트를 설치한 뒤 런처를 다시 실행합니다.","런처 업데이트",MessageBoxButtons.OKCancel,MessageBoxIcon.Information)==DialogResult.OK,
+                        message=>{if(!IsDisposed)status.Text=message;},updateCancellation.Token);
+                    if(package==null)return;
+                    Core.EnsureIdle(settings.GamePath);Save();status.Text="업데이트 파일 검증 및 설치 준비 중…";
+                    await Updates.StartInstaller(package,Base,Path.GetFileName(Application.ExecutablePath),Process.GetCurrentProcess().Id,updateCancellation.Token);
+                    Close();
                 }
             } catch(Exception ex) {
                 Core.Log("Update check/install: "+ex);

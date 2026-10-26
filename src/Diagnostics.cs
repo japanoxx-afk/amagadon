@@ -168,6 +168,7 @@ namespace Amagadon {
             try {using(var zip=ZipFile.Open(temp,ZipArchiveMode.Create)) {
                 var files=new List<string>();
                 foreach(string name in new[]{"launcher.log","launcher.log.1","settings.json"}) {string f=Path.Combine(Core.Home,name);if(File.Exists(f))files.Add(f);}
+                string updates=Path.Combine(Core.Home,"updates");if(Directory.Exists(updates))files.AddRange(Directory.GetFiles(updates,"update-result.log",SearchOption.AllDirectories));
                 foreach(string directory in new[]{Home,Path.Combine(Core.Home,"ReplayDiagnostics"),Path.Combine(Core.Home,"CrashDumps")})if(Directory.Exists(directory))files.AddRange(Directory.GetFiles(directory,"*",SearchOption.AllDirectories).Where(f=>new[]{".jsonl",".log",".json",".txt",".dmp",".ini",".dat",".1"}.Contains(Path.GetExtension(f).ToLowerInvariant())));
                 foreach(string file in files.OrderByDescending(f=>File.GetLastWriteTimeUtc(f))) {
                     string relative=file.Substring(Core.Home.Length+1).Replace('\\','/');

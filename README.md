@@ -4,7 +4,7 @@
 
 ## 실행
 
-`dist/0.3.11-release/AmagadonLauncher-0.3.11.exe`를 실행하고 게임 설치 폴더를 지정합니다.
+`dist/0.3.12-release/AmagadonLauncher-0.3.12.exe`를 실행하고 게임 설치 폴더를 지정합니다.
 기본 경로: `C:\Users\seo\Downloads\armaggeddon\armaggeddon`.
 배포 ZIP은 전체를 풀어 사용합니다. `compat`, `apply-update.ps1` 파일도 필요합니다.
 
@@ -59,3 +59,10 @@ if ($test.ExitCode -ne 0) { throw 'Self-test failed' }
 참고 프로젝트: [FunkyFr3sh/cnc-ddraw](https://github.com/FunkyFr3sh/cnc-ddraw), MIT 라이선스. 바이너리는 버전과 SHA-256을 고정해 가져옵니다. 원본 게임 실행 파일은 보존하며 배포하지 않습니다. HD 레시피는 해당 EXE를 직접 분석한 것입니다. main 푸시는 빌드 아티팩트를 만들며 preview의 안정판 Release는 게시하지 않았습니다.
 
 런처 시작 시 최신 정식 버전을 확인합니다. 새 버전 안내에서 **확인**을 누르면 다운로드·검증·설치 후 최신 런처를 다시 실행합니다. **취소**하면 현재 버전을 계속 사용합니다. 네트워크 확인 실패 시 **업데이트** 버튼으로 재시도할 수 있습니다.
+
+
+## 업데이트 복구 (0.3.9 이하)
+
+`System.Collections.ArrayList` 변환 오류는 구버전 자체의 업데이트 처리 오류입니다. 서버의 배포 파일만 변경해 고칠 수 없습니다. [최신 ZIP](https://github.com/japanoxx-afk/amagadon/releases/latest/download/AmagadonLauncher.zip) 전체를 새 폴더에 풀고 `AmagadonLauncher.exe` 또는 동봉한 최신 버전명 EXE를 실행하세요. 기존 0.3.9 EXE 바로가기도 새 파일로 바꿉니다. 사용자 설정은 LocalAppData에 저장되어 유지됩니다.
+
+0.3.12부터 자동/수동 확인은 `Updates.Prepare`를 공유하며 설치 도구의 검증 완료 응답을 받은 후 종료합니다. 설치 결과 로그는 LocalAppData/AmagadonLauncher/updates/각 다운로드 폴더/update-result.log에 남고 로깅 리포트 ZIP에 포함됩니다. `scripts/test-update.ps1 -PackagePath <ZIP>`는 공통 클라이언트 회귀 검사와 x86 부모 프로세스 종료 대기·교체·재실행을 실제 프로세스로 검사합니다.
