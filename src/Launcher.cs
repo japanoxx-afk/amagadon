@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Drawing;
@@ -12,21 +12,22 @@ using System.Threading.Tasks;
 using System.Web.Script.Serialization;
 using System.Windows.Forms;
 
-[assembly: System.Reflection.AssemblyVersion("0.3.10.0")]
-[assembly: System.Reflection.AssemblyInformationalVersion("0.3.10")]
+[assembly: System.Reflection.AssemblyVersion("0.3.11.0")]
+[assembly: System.Reflection.AssemblyInformationalVersion("0.3.11")]
 namespace Amagadon {
     public class Settings {
         public string GamePath="";
         public bool NativeHD=false, OutputHD=false, Fullscreen=true, MaintainAspect=false, ConfineMouse=true, Compatibility=true;
         public string Renderer="auto";
         public bool AutoReplay=true;
-        public bool DiagnosticLogging=true, MouseCompatibility=false;
+        public bool DiagnosticLogging=true, MouseCompatibility=true;
+        public int InputProfile=0;
         public int ScreenProfile=0;
     }
     public class Backup { public string Directory; public string[] Existing; }
     public static class Core {
-        public const string Version = "0.3.10";
-        public const string DisplayVersion = "0.3.10";
+        public const string Version = "0.3.11";
+        public const string DisplayVersion = "0.3.11";
         public static readonly string Home = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "AmagadonLauncher");
         public static readonly JavaScriptSerializer Json = new JavaScriptSerializer();
         public static string Hash(string path) { using(var h=SHA256.Create()) using(var f=File.OpenRead(path)) return BitConverter.ToString(h.ComputeHash(f)).Replace("-", "").ToLowerInvariant(); }
@@ -46,6 +47,11 @@ namespace Amagadon {
         }
         public static void MigrateScreen(Settings s) {
             if(s.ScreenProfile<1) {s.NativeHD=true;s.Fullscreen=true;s.MaintainAspect=false;s.Compatibility=true;s.ScreenProfile=1;}
+        }
+        public static void MigrateInput(Settings s) {
+            // Older profiles enabled a wrapper hook that can discard mouse input.
+            // Migrate once; subsequent explicit choices remain user controlled.
+            if(s.InputProfile<1) {s.MouseCompatibility=true;s.InputProfile=1;}
         }
         public static string Profile(Settings s) {
             if(!new[]{"auto","gdi","direct3d9","opengl"}.Contains(s.Renderer))throw new IOException("지원하지 않는 렌더러 설정입니다.");
@@ -113,6 +119,7 @@ namespace Amagadon {
             status.SetBounds(32,823,694,55); status.ForeColor=Color.FromArgb(158,174,194); Controls.Add(status);
             settings=new Settings(); try { string f=Path.Combine(Core.Home,"settings.json"); if(File.Exists(f)) settings=Core.Json.Deserialize<Settings>(File.ReadAllText(f)); } catch(Exception ex) { Core.Log(ex.Message); }
             Core.MigrateScreen(settings);
+            Core.MigrateInput(settings);
             if(String.IsNullOrWhiteSpace(settings.GamePath))settings.GamePath=Core.FindGame();
             autoReplay.Checked=settings.AutoReplay;diagnostic.Checked=settings.DiagnosticLogging;mouseCompatibility.Checked=settings.MouseCompatibility;
             path.Text=settings.GamePath; resolution.SelectedIndex=settings.NativeHD?1:0; output.SelectedIndex=settings.OutputHD?1:0; compat.Checked=settings.Compatibility;

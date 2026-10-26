@@ -66,7 +66,28 @@ namespace Amagadon {
                 }
             } catch(Exception ex) {Core.Log("Diagnostic start failed: "+ex.Message);}
         }
-        static void Snapshot(Process p,string folder,bool recover,bool engineMouse) {
+        public sealed class StallDetector {
+            bool previous;int gx,gy,cx,cy,suspect;long movement;
+            public bool Observe(bool valid,int gameX,int gameY,int cursorX,int cursorY,bool hung) {
+                if(!valid) {previous=false;suspect=0;movement=0;return false;}
+                bool stationary=previous && gx==gameX && gy==gameY && (gameX!=0 || gameY!=0);
+                if(hung || stationary) {suspect++;if(previous)movement+=Math.Abs((long)cursorX-cx)+Math.Abs((long)cursorY-cy);}
+                else {suspect=0;movement=0;}
+                previous=true;gx=gameX;gy=gameY;cx=cursorX;cy=cursorY;
+                return suspect>=2 && (hung || movement>=64);
+            }
+        }
+        public static void CaptureStall(Process p,string folder) {
+            // A live-process dump has no exception stream. This is evidence of a
+            // suspected stall, not proof of a crash; never terminate the child.
+            string dest=Path.Combine(folder,"stall-"+DateTime.Now.ToString("HHmmss-fff")+".dmp");
+            using(var file=new FileStream(dest,FileMode.CreateNew,FileAccess.Write,FileShare.Read)) {
+                if(!MiniDumpWriteDump(p.Handle,(uint)p.Id,file.SafeFileHandle.DangerousGetHandle(),0x1000,IntPtr.Zero,IntPtr.Zero,IntPtr.Zero))throw new IOException("Stall dump error "+Marshal.GetLastWin32Error());
+            }
+            Write(folder,"suspected-stall-dump",Path.GetFileName(dest));
+            try {Write(folder,"loaded-modules",p.Modules.Cast<ProcessModule>().Select(m=>new {name=m.ModuleName,path=m.FileName,address=m.BaseAddress.ToInt64(),bytes=m.ModuleMemorySize}).ToArray());}catch(Exception ex) {Write(folder,"module-error",ex.Message);}
+        }
+        static void Snapshot(Process p,string folder,bool recover,bool engineMouse,StallDetector detector,ref bool captured) {
             try {
                 p.Refresh();Point cursor;Rect clip,client;uint foreground;GetWindowThreadProcessId(GetForegroundWindow(),out foreground);
                 bool haveCursor=GetCursorPos(out cursor),haveClip=GetClipCursor(out clip);GetClientRect(p.MainWindowHandle,out client);
@@ -74,9 +95,15 @@ namespace Amagadon {
                 // Repair only a collapsed clip owned by our foreground game.
                 // Never constrain the cursor or alter another application's clip.
                 if(recover && foreground==(uint)p.Id && degenerate)Write(folder,"mouse-clip-recovery",new {success=ClipCursor(IntPtr.Zero),previous=clip});
-                object gameInput=null;
-                if(engineMouse) {byte[] bytes=new byte[8];IntPtr read;if(ReadProcessMemory(p.Handle,new IntPtr(0x504d70),bytes,8,out read) && read.ToInt64()==8)gameInput=new {x=BitConverter.ToInt32(bytes,0),y=BitConverter.ToInt32(bytes,4)};}
-                Write(folder,"sample",new {gameInput=gameInput,foreground=foreground==(uint)p.Id,window=p.MainWindowHandle.ToInt64(),hungWindow=IsHungAppWindow(p.MainWindowHandle),cursorAvailable=haveCursor,cursor=cursor,clipAvailable=haveClip,clip=clip,client=client,workingSet=p.WorkingSet64,privateBytes=p.PrivateMemorySize64,handles=p.HandleCount,threads=p.Threads.Count,cpuMs=p.TotalProcessorTime.TotalMilliseconds});
+                object gameInput=null;int gx=0,gy=0;
+                if(engineMouse) {byte[] bytes=new byte[8];IntPtr read;if(ReadProcessMemory(p.Handle,new IntPtr(0x504d70),bytes,8,out read) && read.ToInt64()==8) {gx=BitConverter.ToInt32(bytes,0);gy=BitConverter.ToInt32(bytes,4);gameInput=new {x=gx,y=gy};}}
+                bool hung=IsHungAppWindow(p.MainWindowHandle);
+                Write(folder,"sample",new {gameInput=gameInput,foreground=foreground==(uint)p.Id,window=p.MainWindowHandle.ToInt64(),hungWindow=hung,cursorAvailable=haveCursor,cursor=cursor,clipAvailable=haveClip,clip=clip,client=client,workingSet=p.WorkingSet64,privateBytes=p.PrivateMemorySize64,handles=p.HandleCount,threads=p.Threads.Count,cpuMs=p.TotalProcessorTime.TotalMilliseconds});
+                bool suspected=detector.Observe(engineMouse && gameInput!=null && haveCursor && foreground==(uint)p.Id,gx,gy,cursor.x,cursor.y,hung);
+                if(suspected && !captured) {
+                    captured=true;Write(folder,"suspected-input-stall",new {hungWindow=hung,gameInput=gameInput,note="Two consecutive foreground samples: hung window or unchanged engine mouse despite OS cursor movement. May include menus/pause; not a confirmed crash."});
+                    try {CaptureStall(p,folder);}catch(Exception ex) {Write(folder,"stall-dump-error",ex.Message);}
+                }
             } catch(Exception ex) {Write(folder,"sample-error",ex.Message);}
         }
         static void Dump(Process p,uint tid,IntPtr debugEvent,string folder) {
@@ -111,9 +138,9 @@ namespace Amagadon {
                 if(attached && !DebugSetProcessKillOnExit(false)) {DebugActiveProcessStop((uint)pid);attached=false;}
                 Write(folder,"crash-monitor",new {attached=attached,error=attached?0:Marshal.GetLastWin32Error()});
                 File.WriteAllText(Path.Combine(folder,"ready.txt"),attached?"attached":"telemetry-only");
-                bool initialBreak=true;int exceptions=0;var sampleClock=Stopwatch.StartNew();long lastSample=-5000;
+                bool initialBreak=true,captured=false;var detector=new StallDetector();int exceptions=0;var sampleClock=Stopwatch.StartNew();long lastSample=-5000;
                 while(true) {
-                    if(sampleClock.ElapsedMilliseconds-lastSample>=5000) {lastSample=sampleClock.ElapsedMilliseconds;Snapshot(p,folder,!EditorPatch.IsEditor(name),engineMouse);}
+                    if(sampleClock.ElapsedMilliseconds-lastSample>=5000) {lastSample=sampleClock.ElapsedMilliseconds;Snapshot(p,folder,!EditorPatch.IsEditor(name),engineMouse,detector,ref captured);}
                     if(!attached) {if(p.HasExited)break;Thread.Sleep(1000);continue;}
                     if(!WaitForDebugEvent(buffer,1000)) {if(p.HasExited)break;continue;}
                     uint kind=unchecked((uint)Marshal.ReadInt32(buffer)),tid=unchecked((uint)Marshal.ReadInt32(buffer,8)),status=0x10002;

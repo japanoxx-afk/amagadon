@@ -1,4 +1,4 @@
-
+﻿
 using System;using System.IO;using System.IO.Compression;using System.Linq;using System.Diagnostics;using System.Threading;using System.Runtime.InteropServices;using Amagadon;
 class Test {
  [DllImport("kernel32.dll")]static extern uint SetErrorMode(uint flags);
@@ -26,7 +26,10 @@ class Test {
  var changed=new EditorCompatibility(temp);File.WriteAllText(Path.Combine(temp,"ddraw.dll"),"changed during editor");bool refused=false;try{changed.Dispose();}catch(IOException){refused=true;}Require(refused && File.Exists(Path.Combine(temp,".amagadon-editor.json")),"editor changed-file protection failed");
  File.WriteAllBytes(Path.Combine(temp,"ddraw.dll"),EditorCompatibility.WrapperBytes());EditorCompatibility.Recover(temp);
  Require(File.ReadAllText(Path.Combine(temp,"ddraw.dll"))=="foreign wrapper","editor recovery after conflict failed");
- string profile=Core.Profile(new Settings{MouseCompatibility=true});Require(profile.Contains("no_dinput_hook=true"),"mouse compatibility profile missing");Require(Core.Profile(new Settings()).Contains("no_dinput_hook=false"),"default mouse hook changed");
+ string profile=Core.Profile(new Settings{MouseCompatibility=true});Require(profile.Contains("no_dinput_hook=true"),"mouse compatibility profile missing");Require(Core.Profile(new Settings()).Contains("no_dinput_hook=true"),"default input bypass missing");
+ var legacy=Core.Json.Deserialize<Settings>("{\"MouseCompatibility\":false,\"ScreenProfile\":1}");Core.MigrateInput(legacy);Require(legacy.MouseCompatibility && legacy.InputProfile==1,"old input profile not migrated");legacy.MouseCompatibility=false;Core.MigrateInput(legacy);Require(!legacy.MouseCompatibility,"explicit input choice overwritten");
+ var detector=new Diagnostics.StallDetector();Require(!detector.Observe(true,367,338,1203,915,false),"initial sample flagged");Require(!detector.Observe(true,367,338,1195,915,false),"single sample flagged");Require(detector.Observe(true,367,338,1956,1025,false),"reported frozen input not detected");Require(!detector.Observe(false,367,338,2000,1000,false),"background flagged");Require(!detector.Observe(true,368,339,2010,1010,false),"moving input flagged");
+ string live=Path.Combine(temp,"live-stall");Directory.CreateDirectory(live);using(var self=Process.GetCurrentProcess()){Diagnostics.CaptureStall(self,live);}Require(Directory.GetFiles(live,"stall-*.dmp").Length==1,"live stall dump missing");
  string report=Path.Combine(temp,"report.zip");Diagnostics.Report(temp,report);using(var z=ZipFile.OpenRead(report)){Require(z.GetEntry("report.json")!=null,"report index missing");Require(z.Entries.Any(e=>e.FullName.EndsWith(".dmp")),"report excludes dump");Require(!z.Entries.Any(e=>e.FullName.StartsWith("Replays/")),"report includes replays");}
  File.WriteAllText(Path.Combine(Path.GetDirectoryName(executable),"diagnostic-test-result.txt"),"PASS: crash second-chance exception and minidump exception stream, clean exit, telemetry, ZIP contents, ACE isolation/restore/interruption recovery, input profiles");return 0;
  }catch(Exception ex){File.WriteAllText(Path.Combine(Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location),"diagnostic-test-result.txt"),ex.ToString());return 1;}}
