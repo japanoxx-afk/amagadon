@@ -1,0 +1,60 @@
+{
+  "Version": "0.3.9",
+  "InputHash": "a1b1b0464ce5b9af1841973184adb8c9852ed78fbc922b182a1d90933877d507",
+  "InputLength": 544768,
+  "OutputHash": "37ba22c6aa857d65588a2c6c7e7959e4c441196faaf8641bb3f3588cb3fcc51b",
+  "OutputLength": 548864,
+  "Edits": [
+    {
+      "Offset": 246,
+      "Before": "04",
+      "After": "05"
+    },
+    {
+      "Offset": 321,
+      "Before": "80",
+      "After": "90"
+    },
+    {
+      "Offset": 648,
+      "Before": "00000000000000",
+      "After": "2e616365666978"
+    },
+    {
+      "Offset": 657,
+      "Before": "00",
+      "After": "10"
+    },
+    {
+      "Offset": 661,
+      "Before": "0000",
+      "After": "8021"
+    },
+    {
+      "Offset": 665,
+      "Before": "00",
+      "After": "10"
+    },
+    {
+      "Offset": 669,
+      "Before": "0000",
+      "After": "5008"
+    },
+    {
+      "Offset": 684,
+      "Before": "00",
+      "After": "60"
+    },
+    {
+      "Offset": 687,
+      "Before": "00",
+      "After": "e0"
+    },
+    {
+      "Offset": 129920,
+      "Before": "568bf18b4618",
+      "After": "e97b841f0090"
+    }
+  ],
+  "AppendGzip": "H4sIAAAAAAACCgsNDgtvfqPRea47TqH1Nn/LJQYGhoU9dW4MrQf4W44COb0iKkEB3Rz/AwWAIq2bgSLdNiqt//lbVoAkXVQ4AsL/i+oEuYA1TAGKHXdRkWCA0DIMEDUSIDUMQDVANktAcDfz/wCX1gOlmUDRkkAXhs6jrW9LghYydCQCDSlVyRAAMv6LpgSCzCwxylAAcgP+i3oA+YshakpkOx9mKDCcYfhfKPO/UOJ/Icv/QpH/hQJZDFkMof8vhALNLQCq/l+iwgK2LMPwQPMRjfi46NjDDKNgFIyCUTAKRsEowADpKZnGRnopOTlQvlNmiVNOyWi4jIJRMApGwSgYBcMJAAC30OsfABAAAA=="
+}

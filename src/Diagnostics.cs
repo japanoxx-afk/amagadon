@@ -41,7 +41,7 @@ namespace Amagadon {
         public static ProcessStartInfo StartInfo(string executable,string folder) {
             var info=new ProcessStartInfo(executable){WorkingDirectory=folder,UseShellExecute=false};
             string layer=info.EnvironmentVariables["__COMPAT_LAYER"]??"";
-            if(Path.GetFileName(executable).Equals("ACE.exe",StringComparison.OrdinalIgnoreCase)) {
+            if(EditorPatch.IsEditor(Path.GetFileName(executable))) {
                 // ACE's GDI controls and DirectDraw surfaces need one legacy DPI
                 // coordinate space. Let its dedicated wrapper set awareness.
                 info.EnvironmentVariables.Remove("__COMPAT_LAYER");
@@ -55,11 +55,11 @@ namespace Amagadon {
                     string session=Path.Combine(Home,DateTime.Now.ToString("yyyyMMdd-HHmmss-fff")+"-"+pid);Directory.CreateDirectory(session);
                     Write(session,"start",new {pid=pid,version=Core.DisplayVersion,executable=executable,sha256=Core.Hash(executable),settings=settings,os=Environment.OSVersion.ToString(),processors=Environment.ProcessorCount,systemDpiAware=IsProcessDPIAware(),screens=System.Windows.Forms.Screen.AllScreens.Select(screen=>new {bounds=screen.Bounds,primary=screen.Primary}).ToArray()});
                     try {using(var key=Microsoft.Win32.Registry.LocalMachine.OpenSubKey(@"SOFTWARE\Microsoft\Windows NT\CurrentVersion"))Write(session,"windows-build",new {product=key.GetValue("ProductName"),build=key.GetValue("CurrentBuildNumber"),revision=key.GetValue("UBR"),release=key.GetValue("DisplayVersion")});}catch(Exception ex) {Write(session,"windows-build-error",ex.Message);}
-                    foreach(string n in new[]{"Armageddon.exe","ACE.exe","ddraw.dll","binkw32.dll","Mss32.dll","dinput.dll","dinput8.dll"}) {
+                    foreach(string n in new[]{"Armageddon.exe","ACE.exe","ACE.Compat.exe","ddraw.dll","binkw32.dll","Mss32.dll","dinput.dll","dinput8.dll"}) {
                         string candidate=Path.Combine(folder,n);if(!File.Exists(candidate))continue;
                         try {var version=FileVersionInfo.GetVersionInfo(candidate);Write(session,"binary",new {name=n,sha256=Core.Hash(candidate),bytes=new FileInfo(candidate).Length,version=version.FileVersion});}catch(Exception ex) {Write(session,"binary-error",new {name=n,error=ex.Message});}
                     }
-                    foreach(string n in new[]{"ddraw.ini","DDrawCompat.ini","DDrawCompat-ACE.ini","option.dat"}) if(File.Exists(Path.Combine(folder,n)))File.Copy(Path.Combine(folder,n),Path.Combine(session,n));
+                    foreach(string n in new[]{"ddraw.ini","DDrawCompat.ini","DDrawCompat-ACE.ini","DDrawCompat-ACE.Compat.ini","option.dat"}) if(File.Exists(Path.Combine(folder,n)))File.Copy(Path.Combine(folder,n),Path.Combine(session,n));
                     var info=new ProcessStartInfo(System.Reflection.Assembly.GetExecutingAssembly().Location,"--watch-process "+pid+" "+p.StartTime.ToUniversalTime().Ticks+" \""+session+"\""){UseShellExecute=false,CreateNoWindow=true,WindowStyle=ProcessWindowStyle.Hidden};
                     using(var helper=Process.Start(info)) { }
                     Core.Log("Diagnostic session="+session+" pid="+pid);
@@ -104,7 +104,7 @@ namespace Amagadon {
                 IntPtr retainedHandle=p.Handle;
                 string binaryFolder=Path.GetDirectoryName(p.MainModule.FileName);
                 string name=Path.GetFileName(p.MainModule.FileName);
-                if(!name.StartsWith("Armageddon",StringComparison.OrdinalIgnoreCase) && !name.Equals("ACE.exe",StringComparison.OrdinalIgnoreCase) && !name.Equals("Amagadon.DiagnosticFixture.exe",StringComparison.OrdinalIgnoreCase))return 4;
+                if(!name.StartsWith("Armageddon",StringComparison.OrdinalIgnoreCase) && !EditorPatch.IsEditor(name) && !name.Equals("Amagadon.DiagnosticFixture.exe",StringComparison.OrdinalIgnoreCase))return 4;
                 string hash=Core.Hash(p.MainModule.FileName);
                 bool engineMouse=name.StartsWith("Armageddon",StringComparison.OrdinalIgnoreCase) && (hash==NativePatch.InputHash || NativePatch.IsPrevious(hash) || hash==NativePatch.Load(Path.Combine(AppDomain.CurrentDomain.BaseDirectory,"compat","hd-preview.json")).OutputHash);
                 attached=DebugActiveProcess((uint)pid);
@@ -113,7 +113,7 @@ namespace Amagadon {
                 File.WriteAllText(Path.Combine(folder,"ready.txt"),attached?"attached":"telemetry-only");
                 bool initialBreak=true;int exceptions=0;var sampleClock=Stopwatch.StartNew();long lastSample=-5000;
                 while(true) {
-                    if(sampleClock.ElapsedMilliseconds-lastSample>=5000) {lastSample=sampleClock.ElapsedMilliseconds;Snapshot(p,folder,!name.Equals("ACE.exe",StringComparison.OrdinalIgnoreCase),engineMouse);}
+                    if(sampleClock.ElapsedMilliseconds-lastSample>=5000) {lastSample=sampleClock.ElapsedMilliseconds;Snapshot(p,folder,!EditorPatch.IsEditor(name),engineMouse);}
                     if(!attached) {if(p.HasExited)break;Thread.Sleep(1000);continue;}
                     if(!WaitForDebugEvent(buffer,1000)) {if(p.HasExited)break;continue;}
                     uint kind=unchecked((uint)Marshal.ReadInt32(buffer)),tid=unchecked((uint)Marshal.ReadInt32(buffer,8)),status=0x10002;
@@ -131,7 +131,7 @@ namespace Amagadon {
                     if(exited)break;
                 }
                 p.WaitForExit();
-                try {string log=Path.Combine(binaryFolder,"DDrawCompat-ACE.log");if(name.Equals("ACE.exe",StringComparison.OrdinalIgnoreCase) && File.Exists(log) && new FileInfo(log).Length<=8*1024*1024)File.Copy(log,Path.Combine(folder,"DDrawCompat-ACE.log"),true);}catch(Exception ex) {Write(folder,"editor-log-copy-error",ex.Message);}
+                try {string logName="DDrawCompat-"+Path.GetFileNameWithoutExtension(name)+".log";string log=Path.Combine(binaryFolder,logName);if(EditorPatch.IsEditor(name) && File.Exists(log) && new FileInfo(log).Length<=8*1024*1024)File.Copy(log,Path.Combine(folder,logName),true);}catch(Exception ex) {Write(folder,"editor-log-copy-error",ex.Message);}
                 Write(folder,"process-end",new {exit="0x"+p.ExitCode.ToString("X8")});
             }return 0;}catch(Exception ex) {Write(folder,"monitor-error",ex.ToString());return 1;}
             finally {if(attached)DebugActiveProcessStop((uint)pid);Marshal.FreeHGlobal(buffer);}
@@ -154,7 +154,7 @@ namespace Amagadon {
                         }
                     }catch(Exception ex) {index.Add(new {file=relative,status="failed",error=ex.Message});}
                 }
-                foreach(string n in new[]{"ddraw.ini","DDrawCompat.ini","DDrawCompat-ACE.ini","DDrawCompat-ACE.log","cnc-ddraw.log","ddraw.log",".amagadon-editor.json"}) {
+                foreach(string n in new[]{"ddraw.ini","DDrawCompat.ini","DDrawCompat-ACE.ini","DDrawCompat-ACE.Compat.ini","DDrawCompat-ACE.log","DDrawCompat-ACE.Compat.log","cnc-ddraw.log","ddraw.log",".amagadon-editor.json"}) {
                     string f=Path.Combine(game??"",n);if(String.IsNullOrWhiteSpace(game) || !File.Exists(f))continue;
                     try {if(new FileInfo(f).Length<=8*1024*1024) {using(var input=new FileStream(f,FileMode.Open,FileAccess.Read,FileShare.ReadWrite|FileShare.Delete))using(var output=zip.CreateEntry("game/"+n).Open())input.CopyTo(output);}}catch(Exception ex) {index.Add(new {file=n,status="failed",error=ex.Message});}
                 }

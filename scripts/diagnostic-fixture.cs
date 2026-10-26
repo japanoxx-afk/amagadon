@@ -16,13 +16,13 @@ class Test {
  else Require(Directory.GetFiles(session,"*.dmp").Length==0,"clean exit produced dump");
  }}
  string wrapper=Path.Combine(Path.GetDirectoryName(executable),"compat","ddraw.dll");foreach(string f in Core.RequiredFiles)File.WriteAllText(Path.Combine(temp,f),"fixture");File.Copy(wrapper,Path.Combine(temp,"ddraw.dll"));File.WriteAllText(Path.Combine(temp,"ddraw.ini"),"fixture ini");
- using(var lease=new EditorCompatibility(temp)){Require(Core.Hash(Path.Combine(temp,"ddraw.dll"))==EditorCompatibility.WrapperHash,"ACE dedicated wrapper not applied");Require(File.ReadAllText(Path.Combine(temp,"DDrawCompat-ACE.ini")).Contains("GdiInterops=all"),"ACE GDI interop profile missing");}Require(Core.Hash(Path.Combine(temp,"ddraw.dll"))==Core.Hash(wrapper),"ACE wrapper restore mismatch");
+ using(var lease=new EditorCompatibility(temp)){Require(Core.Hash(Path.Combine(temp,"ddraw.dll"))==EditorCompatibility.WrapperHash,"ACE dedicated wrapper not applied");Require(File.ReadAllText(Path.Combine(temp,"DDrawCompat-ACE.Compat.ini")).Contains("GdiInterops=none"),"ACE GDI interop profile missing");}Require(Core.Hash(Path.Combine(temp,"ddraw.dll"))==Core.Hash(wrapper),"ACE wrapper restore mismatch");
  var interrupted=new EditorCompatibility(temp);EditorCompatibility.Recover(temp);interrupted.Dispose();Require(File.Exists(Path.Combine(temp,"ddraw.dll")),"ACE interruption recovery failed");
  Require(!Diagnostics.StartInfo(Path.Combine(temp,"ACE.exe"),temp).EnvironmentVariables.ContainsKey("__COMPAT_LAYER"),"ACE inherits game DPI flags");
  Require(Diagnostics.StartInfo(Path.Combine(temp,"Armageddon.exe"),temp).EnvironmentVariables["__COMPAT_LAYER"].Contains("HIGHDPIAWARE"),"game DPI profile lost");
- File.WriteAllText(Path.Combine(temp,"ddraw.dll"),"foreign wrapper");File.WriteAllText(Path.Combine(temp,"DDrawCompat-ACE.ini"),"user editor config");
+ File.WriteAllText(Path.Combine(temp,"ddraw.dll"),"foreign wrapper");File.WriteAllText(Path.Combine(temp,"DDrawCompat-ACE.Compat.ini"),"user editor config");
  using(var lease=new EditorCompatibility(temp)){Require(Core.Hash(Path.Combine(temp,"ddraw.dll"))==EditorCompatibility.WrapperHash,"foreign wrapper swap failed");}
- Require(File.ReadAllText(Path.Combine(temp,"ddraw.dll"))=="foreign wrapper" && File.ReadAllText(Path.Combine(temp,"DDrawCompat-ACE.ini"))=="user editor config","foreign wrapper/config not restored");
+ Require(File.ReadAllText(Path.Combine(temp,"ddraw.dll"))=="foreign wrapper" && File.ReadAllText(Path.Combine(temp,"DDrawCompat-ACE.Compat.ini"))=="user editor config","foreign wrapper/config not restored");
  var changed=new EditorCompatibility(temp);File.WriteAllText(Path.Combine(temp,"ddraw.dll"),"changed during editor");bool refused=false;try{changed.Dispose();}catch(IOException){refused=true;}Require(refused && File.Exists(Path.Combine(temp,".amagadon-editor.json")),"editor changed-file protection failed");
  File.WriteAllBytes(Path.Combine(temp,"ddraw.dll"),EditorCompatibility.WrapperBytes());EditorCompatibility.Recover(temp);
  Require(File.ReadAllText(Path.Combine(temp,"ddraw.dll"))=="foreign wrapper","editor recovery after conflict failed");

@@ -9,8 +9,8 @@ namespace Amagadon {
         public class Lease {public string Backup;public string[] Files;public Dictionary<string,string> Installed;}
         readonly string folder;
         public const string WrapperHash="94895cf6ede8fd0f74ee1447fdc08b7044a9c65a1a25a49a4df893a0370975a3";
-        public const string Profile="GdiInterops=all\r\nDpiAwareness=unaware\r\nPresentDelay=on(10)\r\nDisplayResolution=app\r\nLogLevel=info\r\n";
-        static readonly string[] Names={"ddraw.dll","ddraw.ini","DDrawCompat-ACE.ini"};
+        public const string Profile="GdiInterops=none\r\nDesktopColorDepth=8\r\nDpiAwareness=unaware\r\nPresentDelay=on(10)\r\nDisplayResolution=app\r\nLogLevel=info\r\n";
+        static readonly string[] Names={"ddraw.dll","ddraw.ini","DDrawCompat-ACE.ini","DDrawCompat-ACE.Compat.ini"};
         static string Marker(string folder) {return Path.Combine(folder,".amagadon-editor.json");}
         public static void Recover(string folder) {
             if(!File.Exists(Marker(folder)))return;
@@ -47,7 +47,7 @@ namespace Amagadon {
             Recover(folder);Core.Restore(folder);
             string backup=Path.Combine(folder,"LauncherBackups","ACE-"+DateTime.Now.ToString("yyyyMMdd-HHmmss-fff")+"-"+Guid.NewGuid().ToString("N"));Directory.CreateDirectory(backup);
             string[] files=Names.Where(n=>File.Exists(Path.Combine(folder,n))).ToArray();
-            var installed=new Dictionary<string,string>{{"ddraw.dll",WrapperHash},{"DDrawCompat-ACE.ini",NativePatch.Digest(Encoding.ASCII.GetBytes(Profile))}};
+            var installed=new Dictionary<string,string>{{"ddraw.dll",WrapperHash},{"DDrawCompat-ACE.Compat.ini",NativePatch.Digest(Encoding.ASCII.GetBytes(Profile))}};
             // Finish writes before touching the originals. Atomic renames then
             // prevent a partial DLL/config from blocking interrupted recovery.
             string nextDll=Path.Combine(backup,"next-ddraw.dll"),nextConfig=Path.Combine(backup,"next-config.ini");
@@ -57,9 +57,9 @@ namespace Amagadon {
             try {
                 foreach(string name in files)File.Move(Path.Combine(folder,name),Path.Combine(backup,name));
                 File.Move(nextDll,Path.Combine(folder,"ddraw.dll"));
-                File.Move(nextConfig,Path.Combine(folder,"DDrawCompat-ACE.ini"));
+                File.Move(nextConfig,Path.Combine(folder,"DDrawCompat-ACE.Compat.ini"));
             } catch {Recover(folder);throw;}
-            Core.Log("ACE: DDrawCompat 0.7.2; GDI interop, unaware DPI and deferred partial presentation; game profile suspended");
+            Core.Log("ACE: DDrawCompat 0.7.2; window-scoped GDI presenter, 8-bit offscreen palette, unaware DPI; game profile suspended");
         }
         public void Dispose() {Recover(folder);}
     }

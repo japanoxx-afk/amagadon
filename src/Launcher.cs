@@ -12,8 +12,8 @@ using System.Threading.Tasks;
 using System.Web.Script.Serialization;
 using System.Windows.Forms;
 
-[assembly: System.Reflection.AssemblyVersion("0.3.8.0")]
-[assembly: System.Reflection.AssemblyInformationalVersion("0.3.8")]
+[assembly: System.Reflection.AssemblyVersion("0.3.9.0")]
+[assembly: System.Reflection.AssemblyInformationalVersion("0.3.9")]
 namespace Amagadon {
     public class Settings {
         public string GamePath="";
@@ -25,8 +25,8 @@ namespace Amagadon {
     }
     public class Backup { public string Directory; public string[] Existing; }
     public static class Core {
-        public const string Version = "0.3.8";
-        public const string DisplayVersion = "0.3.8";
+        public const string Version = "0.3.9";
+        public const string DisplayVersion = "0.3.9";
         public static readonly string Home = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "AmagadonLauncher");
         public static readonly JavaScriptSerializer Json = new JavaScriptSerializer();
         public static string Hash(string path) { using(var h=SHA256.Create()) using(var f=File.OpenRead(path)) return BitConverter.ToString(h.ComputeHash(f)).Replace("-", "").ToLowerInvariant(); }
@@ -54,7 +54,7 @@ namespace Amagadon {
         }
         public static void EnsureIdle(string folder) {
             string target=Path.GetFullPath(folder).TrimEnd(Path.DirectorySeparatorChar);
-            foreach(var name in new[]{"Armageddon","Armageddon.HD-preview","Armageddon.Replay","Armageddon.Replay032","Armageddon.Replay033","Armageddon.Replay033Final","Armageddon.Replay034","ACE"}) foreach(var p in Process.GetProcessesByName(name)) { using(p) {
+            foreach(var name in new[]{"Armageddon","Armageddon.HD-preview","Armageddon.Replay","Armageddon.Replay032","Armageddon.Replay033","Armageddon.Replay033Final","Armageddon.Replay034","ACE","ACE.Compat"}) foreach(var p in Process.GetProcessesByName(name)) { using(p) {
                 string running;
                 try {running=Path.GetDirectoryName(p.MainModule.FileName).TrimEnd(Path.DirectorySeparatorChar);}
                 catch(Exception) {if(p.HasExited)continue;throw new IOException("실행 중인 게임 경로를 확인할 수 없습니다. 게임 또는 맵 에디터를 종료해주세요.");}
@@ -87,7 +87,8 @@ namespace Amagadon {
         bool gameRunning; Button replay; ReplaySession activeReplay; Label status=new Label(); Button game,editor,update; Settings settings;
         string Base { get { return AppDomain.CurrentDomain.BaseDirectory; } }
         public Launcher() {
-            Text="아마게돈 런처 · "+Core.DisplayVersion; ClientSize=new Size(760,880); MinimumSize=new Size(776,700); MaximumSize=new Size(776,919); AutoScroll=true;AutoScrollMinSize=new Size(740,870); StartPosition=FormStartPosition.CenterScreen;
+            AutoScaleMode=AutoScaleMode.None;
+            Text="아마게돈 런처 · "+Core.DisplayVersion; ClientSize=new Size(760,900); AutoScroll=true;AutoScrollMinSize=new Size(740,890); StartPosition=FormStartPosition.CenterScreen;
             BackColor=Color.FromArgb(17,22,30); ForeColor=Color.FromArgb(226,231,239); Font=new Font("맑은 고딕",10);
             Label title=new Label {Text="ARMAGEDDON",Font=new Font("Segoe UI",28,FontStyle.Bold),AutoSize=true,Location=new Point(30,22)}; Controls.Add(title);
             AddLabel("아마게돈  /  LAUNCHER v"+Core.DisplayVersion,32,85);
@@ -118,7 +119,13 @@ namespace Amagadon {
             fullscreen.Checked=settings.Fullscreen;aspect.SelectedIndex=settings.MaintainAspect?0:1;confine.Checked=settings.ConfineMouse;
             renderer.SelectedIndex=Math.Max(0,Array.IndexOf(new[]{"auto","gdi","direct3d9","opengl"},settings.Renderer));
             resolution.SelectedIndexChanged+=delegate {output.Enabled=resolution.SelectedIndex==0;autoReplay.Enabled=resolution.SelectedIndex==1;};output.Enabled=!settings.NativeHD;autoReplay.Enabled=settings.NativeHD;
-            if(Height>Screen.FromControl(this).WorkingArea.Height)Height=Screen.FromControl(this).WorkingArea.Height;
+            // Coordinates above are 96-DPI design units. SetProcessDPIAware alone
+            // leaves the whole UI tiny on high-DPI monitors; scale controls too.
+            float uiScale;using(var graphics=CreateGraphics())uiScale=Math.Max(1.15f,graphics.DpiX/96f);
+            Scale(new SizeF(uiScale,uiScale));
+            var workArea=Screen.FromControl(this).WorkingArea;
+            MinimumSize=new Size(Math.Min((int)(776*uiScale),workArea.Width),Math.Min((int)(600*uiScale),workArea.Height));
+            Size=new Size(Math.Min(Width,workArea.Width),Math.Min(Height,workArea.Height));
             status.Text=String.IsNullOrEmpty(path.Text)?"게임 설치 폴더를 선택해주세요.":"설치 경로를 확인한 뒤 실행해주세요.";
             game.Click+=async delegate { await Launch("Armageddon.exe"); }; editor.Click+=async delegate { await Launch("ACE.exe"); }; update.Click+=async delegate { await CheckUpdate(); };
             notes.Click+=delegate { ShowNotes(); }; restore.Click+=delegate { try { NativePatch.Remove(path.Text,Path.Combine(Base,"compat","hd-preview.json"));Core.Restore(path.Text); status.Text="원본 그래픽 설정을 복원하고 생성한 HD 실행 파일을 제거했습니다."; } catch(Exception ex) { Error(ex); } };
@@ -137,7 +144,7 @@ namespace Amagadon {
             try {
                 Save(); Core.Validate(settings.GamePath); Core.EnsureIdle(settings.GamePath);EditorCompatibility.Recover(settings.GamePath);
                 string file=Path.Combine(settings.GamePath,exe);
-                if(exe=="ACE.exe") editorLease=new EditorCompatibility(settings.GamePath);
+                if(exe=="ACE.exe") {file=EditorPatch.Prepare(settings.GamePath);editorLease=new EditorCompatibility(settings.GamePath);}
                 else {
                     if(settings.NativeHD) {
                         if(!settings.Compatibility)throw new IOException("HD 실행 파일은 그래픽 호환성 적용이 필요합니다.");

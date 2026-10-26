@@ -48,3 +48,14 @@ ZIP에는 누적 launcher 로그, 설정, 진단 세션, 기존 ReplayDiagnostic
 DLL SHA-256은 `94895cf6ede8fd0f74ee1447fdc08b7044a9c65a1a25a49a4df893a0370975a3`이며 DLL을 런처 리소스에 포함합니다. 배포 7개 파일 매니페스트를 유지하므로 기존 업데이트 도우미와 호환됩니다. 원본 ddraw.dll/ddraw.ini 및 DDrawCompat-ACE.ini가 있으면 세션 전용 LauncherBackups 폴더에 보존한 뒤 적용합니다. 전용 프로세스 설정을 사용해 다른 DDrawCompat 설정 파일을 덮어쓰지 않습니다. 종료/다음 실행 복구는 직접 설치한 해시와 일치하는 파일만 지우고 원본을 되돌립니다. 기존 0.3.7 복구 마커도 읽을 수 있습니다.
 
 `DDrawCompat-ACE.log`는 ACE 종료 시 진단 세션으로 복사되고 ZIP에도 포함됩니다. 편집기 DLL은 0BSD이며 원문 라이선스와 원본 출처는 third-party/ddrawcompat 및 배포 라이선스 파일에 보관합니다.
+
+
+## 0.3.9 ACE 출력 패치와 시각 검증
+
+0.3.8의 GdiInterops=all 설정은 실제로 제목줄 색상 변형, 검은 도구 영역, 지도/미니맵의 번갈아 덮어쓰기를 재현했습니다. 단순 설정 변경으로 해결되지 않아 ACE 0x41fb80의 전체 primary surface Blt를 창별 GDI 출력으로 교체했습니다. 0x467e8c의 현재 clipper에서 HWND를 가져오고 GetClientRect/ClientToScreen으로 클라이언트 크기·원본 화면 좌표를 구합니다. 기존 8비트 back buffer GetDC → 해당 HWND의 GetDC → BitBlt(SRCCOPY) → 양쪽 DC 해제를 수행합니다. 0x4258d0의 기존 clipper 대상 선택은 유지합니다. palette/index 데이터와 게임 로직을 바꾸지 않습니다.
+
+DDrawCompat 0.7.2는 8비트 offscreen 표면을 유지하며 GdiInterops=none, DesktopColorDepth=8, DpiAwareness=unaware를 사용합니다. [공식 설정 설명](https://github.com/narzoul/DDrawCompat/wiki/Configuration#gdiinterops)을 참고했습니다. process 설정은 DDrawCompat-ACE.Compat.ini, 로그는 DDrawCompat-ACE.Compat.log이며 리포트에 포함됩니다. DLL/프로필은 실행 동안 백업 후 복원합니다.
+
+`scripts/probe-editor.py <원본 ACE.exe> <검사 출력.exe>`가 검증된 원본에서 패치와 compat/editor-gdi.json 레시피를 생성합니다. 레시피는 런처에 내장되고 입력/레시피/출력 해시를 검증합니다. 바이너리 원본·게임 자산은 배포하지 않습니다. `scripts/verify-editor.py <검사 출력.exe>`는 실제 패치 기계어를 Unicorn으로 실행해 지도/미니맵 크기, 음수 화면 좌표, stack/callee-saved 레지스터, 각 API 실패 경로와 DC 정리를 검사합니다.
+
+로컬 시각 검증: 원본 + 0.3.8 프로필의 색상/검은 UI 문제를 재현했고, 패치 후 지도·미니맵·도구 트리·하단 상태 표시줄을 동시에 확인했습니다. 창 복원 후 갱신과 0.3.9 런처 버튼을 통한 실제 설치 경로 실행도 확인했습니다. 장시간 사용이나 모든 편집/저장 동작을 검증한 것은 아닙니다. 런처 확대 화면은 실제 실행으로 버튼·설정·진단 영역이 모두 표시되는지 확인했습니다.

@@ -53,8 +53,11 @@ namespace Amagadon {
             var b=new byte[s.Length/2];for(int i=0;i<b.Length;i++)b[i]=Convert.ToByte(s.Substring(i*2,2),16);return b;
         }
         public static byte[] Build(byte[] original,PatchRecipe r) {
-            if(r==null || r.InputHash!=InputHash || r.InputLength!=original.Length || Digest(original)!=InputHash)
-                throw new IOException("지원하지 않는 Armageddon.exe입니다. 원본 1.15 파일의 SHA-256이 필요합니다.");
+            return BuildVerified(original,r,InputHash);
+        }
+        internal static byte[] BuildVerified(byte[] original,PatchRecipe r,string inputHash) {
+            if(r==null || r.InputHash!=inputHash || r.InputLength!=original.Length || Digest(original)!=inputHash)
+                throw new IOException("지원하지 않는 실행 파일입니다. 검증된 원본 파일이 필요합니다.");
             if(r.OutputLength<original.Length || r.OutputLength>original.Length+4*1024*1024 || r.Edits==null)
                 throw new IOException("패치 크기 오류");
             var output=new byte[r.OutputLength];Buffer.BlockCopy(original,0,output,0,original.Length);
