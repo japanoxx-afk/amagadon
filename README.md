@@ -4,7 +4,7 @@
 
 ## 실행
 
-`dist/0.3.9-release/AmagadonLauncher-0.3.9.exe`를 실행하고 게임 설치 폴더를 지정합니다.
+`dist/0.3.10-release/AmagadonLauncher-0.3.10.exe`를 실행하고 게임 설치 폴더를 지정합니다.
 기본 경로: `C:\Users\seo\Downloads\armaggeddon\armaggeddon`.
 배포 ZIP은 전체를 풀어 사용합니다. `compat`, `apply-update.ps1` 파일도 필요합니다.
 
@@ -57,3 +57,5 @@ if ($test.ExitCode -ne 0) { throw 'Self-test failed' }
 버전은 `src/Launcher.cs`와 PATCHNOTES.md에서 변경합니다. `v0.1.1` 같은 버전 태그를 푸시하면 GitHub Actions가 빌드하고 ZIP/체크섬을 GitHub Release에 올립니다. 최초 0.1.0은 로컬 빌드로 제공됩니다.
 
 참고 프로젝트: [FunkyFr3sh/cnc-ddraw](https://github.com/FunkyFr3sh/cnc-ddraw), MIT 라이선스. 바이너리는 버전과 SHA-256을 고정해 가져옵니다. 원본 게임 실행 파일은 보존하며 배포하지 않습니다. HD 레시피는 해당 EXE를 직접 분석한 것입니다. main 푸시는 빌드 아티팩트를 만들며 preview의 안정판 Release는 게시하지 않았습니다.
+
+런처 시작 시 최신 정식 버전을 확인합니다. 새 버전 안내에서 **확인**을 누르면 다운로드·검증·설치 후 최신 런처를 다시 실행합니다. **취소**하면 현재 버전을 계속 사용합니다. 네트워크 확인 실패 시 **업데이트** 버튼으로 재시도할 수 있습니다.

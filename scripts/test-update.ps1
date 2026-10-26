@@ -10,12 +10,14 @@ try {
     $target = Join-Path $fixture 'success'
     New-Item -ItemType Directory -Path $target | Out-Null
     Set-Content (Join-Path $target 'user-settings.txt') 'keep'
-    & "$PSScriptRoot\apply-update.ps1" -Package $package -Target $target -NoRestart
+    Set-Content (Join-Path $target 'AmagadonLauncher-0.0.1.exe') 'old versioned entrypoint'
+    & "$PSScriptRoot\apply-update.ps1" -Package $package -Target $target -NoRestart -CurrentEntrypoint 'AmagadonLauncher-0.0.1.exe'
     $manifest = Get-Content (Join-Path $target 'package.json') -Raw | ConvertFrom-Json
     foreach ($file in $manifest.Files) {
         if ((Get-FileHash (Join-Path $target $file.Path)).Hash -ne $file.SHA256) { throw 'Installed file mismatch' }
     }
     if ((Get-Content (Join-Path $target 'user-settings.txt')) -ne 'keep') { throw 'Settings overwritten' }
+    if ((Get-FileHash (Join-Path $target 'AmagadonLauncher-0.0.1.exe')).Hash -ne (Get-FileHash (Join-Path $target 'AmagadonLauncher.exe')).Hash) {throw 'Old entrypoint not upgraded'}
     $rollback = Join-Path $fixture 'rollback'
     New-Item -ItemType Directory -Path $rollback | Out-Null
     Set-Content (Join-Path $rollback 'AmagadonLauncher.exe') 'original'
@@ -30,7 +32,26 @@ try {
     if ((Get-Content (Join-Path $rollback 'AmagadonLauncher.exe')) -ne 'original') { throw 'Original launcher not restored' }
     if (Test-Path (Join-Path $rollback $manifest.Entrypoint)) { throw 'New launcher not rolled back' }
     if ((Get-Content $locked) -ne 'original notes') { throw 'Locked file changed' }
-    Write-Output 'UPDATE TEST PASS: install hashes, settings preservation, locked-file rollback'
+    # A headless stand-in for the new launcher proves the real restart path.
+    $restartStage=Join-Path $fixture 'restart-stage'
+    Expand-Archive -LiteralPath $package -DestinationPath $restartStage
+    $testSource=Join-Path $fixture 'restart.cs'
+    Set-Content -LiteralPath $testSource -Value 'using System;using System.IO;class Fixture{static void Main(){File.WriteAllText(Path.Combine(AppDomain.CurrentDomain.BaseDirectory,"restarted.txt"),Environment.CurrentDirectory);}}'
+    $csc=Join-Path $env:WINDIR 'Microsoft.NET\Framework\v4.0.30319\csc.exe'
+    & $csc /nologo /target:winexe /out:"$restartStage\AmagadonLauncher.exe" $testSource
+    if($LASTEXITCODE -ne 0){throw 'Restart fixture build failed'}
+    Copy-Item -LiteralPath (Join-Path $restartStage 'AmagadonLauncher.exe') -Destination (Join-Path $restartStage $manifest.Entrypoint) -Force
+    foreach($file in $manifest.Files){$file.SHA256=(Get-FileHash (Join-Path $restartStage $file.Path)).Hash}
+    $manifest | ConvertTo-Json -Depth 5 | Set-Content (Join-Path $restartStage 'package.json') -Encoding UTF8
+    $restartPackage=Join-Path $fixture 'restart.zip'
+    Compress-Archive -Path "$restartStage\*" -DestinationPath $restartPackage
+    $restartTarget=Join-Path $fixture 'restart-target'
+    New-Item -ItemType Directory -Path $restartTarget | Out-Null
+    & "$PSScriptRoot\apply-update.ps1" -Package $restartPackage -Target $restartTarget
+    for($i=0;$i -lt 50 -and !(Test-Path (Join-Path $restartTarget 'restarted.txt'));$i++){Start-Sleep -Milliseconds 100}
+    if(!(Test-Path (Join-Path $restartTarget 'restarted.txt'))){throw 'Updated launcher not restarted'}
+    if((Get-Content (Join-Path $restartTarget 'restarted.txt')) -ne $restartTarget){throw 'Restart working directory mismatch'}
+    Write-Output 'UPDATE TEST PASS: install hashes, settings preservation, old entrypoint replacement, locked-file rollback, updated launcher restart'
 } finally {
     $resolved = [IO.Path]::GetFullPath($fixture)
     $parent = [IO.Path]::GetFullPath([IO.Path]::GetTempPath())

@@ -1,5 +1,6 @@
-param([int]$LauncherPid, [string]$Package, [string]$Target, [switch]$NoRestart)
+param([int]$LauncherPid, [string]$Package, [string]$Target, [switch]$NoRestart, [string]$CurrentEntrypoint = '')
 $ErrorActionPreference = 'Stop'
+if ($CurrentEntrypoint -and $CurrentEntrypoint -ne 'AmagadonLauncher.exe' -and $CurrentEntrypoint -notmatch '^AmagadonLauncher-\d+\.\d+\.\d+(-preview)?\.exe$') { throw 'Invalid current entrypoint' }
 if ($LauncherPid -gt 0) { Wait-Process -Id $LauncherPid -ErrorAction SilentlyContinue }
 $stage = Join-Path ([IO.Path]::GetDirectoryName($Package)) ('expanded-' + [Guid]::NewGuid().ToString('N'))
 Add-Type -AssemblyName System.IO.Compression.FileSystem
@@ -23,18 +24,21 @@ if ((Get-FileHash -LiteralPath (Join-Path $stage 'AmagadonLauncher.exe')).Hash -
 $backup = Join-Path $Target ('update-backup-' + (Get-Date -Format 'yyyyMMddHHmmssfff'))
 New-Item -ItemType Directory -Path $backup | Out-Null
 $changed = @()
+$installNames = @($allowed)
+if ($CurrentEntrypoint -and $CurrentEntrypoint -notin $installNames) { $installNames += $CurrentEntrypoint }
 try {
     foreach ($name in $allowed) {
         $source = Join-Path $stage $name
         if (!(Test-Path -LiteralPath $source -PathType Leaf)) { throw "Missing update file: $name" }
     }
-    foreach ($name in $allowed) {
+    foreach ($name in $installNames) {
         $dest = Join-Path $Target $name
         $old = Join-Path $backup $name
         New-Item -ItemType Directory -Force (Split-Path $dest),(Split-Path $old) | Out-Null
         if (Test-Path -LiteralPath $dest) { Copy-Item -LiteralPath $dest -Destination $old }
         $changed += $name
-        Copy-Item -LiteralPath (Join-Path $stage $name) -Destination $dest -Force
+        $sourceName = if ($name -eq $CurrentEntrypoint) { 'AmagadonLauncher.exe' } else { $name }
+        Copy-Item -LiteralPath (Join-Path $stage $sourceName) -Destination $dest -Force
     }
 } catch {
     $failure = $_
