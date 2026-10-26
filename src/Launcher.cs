@@ -12,24 +12,26 @@ using System.Threading.Tasks;
 using System.Web.Script.Serialization;
 using System.Windows.Forms;
 
-[assembly: System.Reflection.AssemblyVersion("0.3.6.0")]
-[assembly: System.Reflection.AssemblyInformationalVersion("0.3.6")]
+[assembly: System.Reflection.AssemblyVersion("0.3.7.0")]
+[assembly: System.Reflection.AssemblyInformationalVersion("0.3.7")]
 namespace Amagadon {
     public class Settings {
         public string GamePath="";
         public bool NativeHD=false, OutputHD=false, Fullscreen=true, MaintainAspect=false, ConfineMouse=true, Compatibility=true;
         public string Renderer="auto";
         public bool AutoReplay=true;
+        public bool DiagnosticLogging=true, MouseCompatibility=false;
         public int ScreenProfile=0;
     }
     public class Backup { public string Directory; public string[] Existing; }
     public static class Core {
-        public const string Version = "0.3.6";
-        public const string DisplayVersion = "0.3.6";
+        public const string Version = "0.3.7";
+        public const string DisplayVersion = "0.3.7";
         public static readonly string Home = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "AmagadonLauncher");
         public static readonly JavaScriptSerializer Json = new JavaScriptSerializer();
         public static string Hash(string path) { using(var h=SHA256.Create()) using(var f=File.OpenRead(path)) return BitConverter.ToString(h.ComputeHash(f)).Replace("-", "").ToLowerInvariant(); }
-        public static void Log(string s) { Directory.CreateDirectory(Home); File.AppendAllText(Path.Combine(Home,"launcher.log"), DateTime.Now.ToString("o")+" "+s+Environment.NewLine); }
+        static readonly object logGate=new object();
+        public static void Log(string s) {try {lock(logGate) {Directory.CreateDirectory(Home);string file=Path.Combine(Home,"launcher.log");if(File.Exists(file) && new FileInfo(file).Length>4*1024*1024) {File.Copy(file,file+".1",true);File.Delete(file);}File.AppendAllText(file,DateTime.Now.ToString("o")+" "+s+Environment.NewLine);}}catch {}}
         public static readonly string[] RequiredFiles={"Armageddon.exe","ACE.exe","Armageddon.HED","Armageddon.MFP","binkw32.dll","Mss32.dll"};
         public static void Validate(string folder) {
             var missing=RequiredFiles.Where(n=>!File.Exists(Path.Combine(folder,n))).ToArray();
@@ -48,7 +50,7 @@ namespace Amagadon {
         public static string Profile(Settings s) {
             if(!new[]{"auto","gdi","direct3d9","opengl"}.Contains(s.Renderer))throw new IOException("지원하지 않는 렌더러 설정입니다.");
             int width=s.NativeHD?0:(s.OutputHD?1024:800),height=s.NativeHD?0:(s.OutputHD?768:600);
-            return "[ddraw]\r\nwidth="+width+"\r\nheight="+height+"\r\nwindowed=true\r\nfullscreen="+s.Fullscreen.ToString().ToLowerInvariant()+"\r\nmaintas="+s.MaintainAspect.ToString().ToLowerInvariant()+"\r\naspect_ratio=\r\nboxing=false\r\nrenderer="+s.Renderer+"\r\ndevmode="+(!s.ConfineMouse).ToString().ToLowerInvariant()+"\r\nmaxfps=60\r\nmaxgameticks=-1\r\nsinglecpu=true\r\nnonexclusive=true\r\nadjmouse=true\r\nfixchilds=2\r\nsavesettings=0\r\nresizable=false\r\ntoggle_borderless=true\r\nkeytogglefullscreen=0x0D\r\nd3d9_filter=0\r\nshader=\r\n";
+            return "[ddraw]\r\nwidth="+width+"\r\nheight="+height+"\r\nwindowed=true\r\nfullscreen="+s.Fullscreen.ToString().ToLowerInvariant()+"\r\nmaintas="+s.MaintainAspect.ToString().ToLowerInvariant()+"\r\naspect_ratio=\r\nboxing=false\r\nrenderer="+s.Renderer+"\r\ndevmode="+(!s.ConfineMouse).ToString().ToLowerInvariant()+"\r\nmaxfps=60\r\nmaxgameticks=-1\r\nsinglecpu=true\r\nnonexclusive=true\r\nadjmouse=true\r\nno_dinput_hook="+s.MouseCompatibility.ToString().ToLowerInvariant()+"\r\ncenter_cursor_fix=false\r\nlock_mouse_top_left=false\r\nfixchilds=2\r\nsavesettings=0\r\nresizable=false\r\ntoggle_borderless=true\r\nkeytogglefullscreen=0x0D\r\nd3d9_filter=0\r\nshader=\r\n";
         }
         public static void EnsureIdle(string folder) {
             string target=Path.GetFullPath(folder).TrimEnd(Path.DirectorySeparatorChar);
@@ -81,11 +83,11 @@ namespace Amagadon {
     }
     public class Launcher : Form {
         TextBox path=new TextBox(); ComboBox resolution=new ComboBox(),output=new ComboBox(),aspect=new ComboBox(),renderer=new ComboBox();
-        CheckBox autoReplay=new CheckBox(),compat=new CheckBox(),fullscreen=new CheckBox(),confine=new CheckBox();
+        CheckBox diagnostic=new CheckBox(),mouseCompatibility=new CheckBox(),autoReplay=new CheckBox(),compat=new CheckBox(),fullscreen=new CheckBox(),confine=new CheckBox();
         bool gameRunning; Button replay; ReplaySession activeReplay; Label status=new Label(); Button game,editor,update; Settings settings;
         string Base { get { return AppDomain.CurrentDomain.BaseDirectory; } }
         public Launcher() {
-            Text="아마게돈 런처 · "+Core.DisplayVersion; ClientSize=new Size(760,800); MinimumSize=new Size(776,839); MaximumSize=MinimumSize; StartPosition=FormStartPosition.CenterScreen;
+            Text="아마게돈 런처 · "+Core.DisplayVersion; ClientSize=new Size(760,880); MinimumSize=new Size(776,700); MaximumSize=new Size(776,919); AutoScroll=true;AutoScrollMinSize=new Size(740,870); StartPosition=FormStartPosition.CenterScreen;
             BackColor=Color.FromArgb(17,22,30); ForeColor=Color.FromArgb(226,231,239); Font=new Font("맑은 고딕",10);
             Label title=new Label {Text="ARMAGEDDON",Font=new Font("Segoe UI",28,FontStyle.Bold),AutoSize=true,Location=new Point(30,22)}; Controls.Add(title);
             AddLabel("아마게돈  /  LAUNCHER v"+Core.DisplayVersion,32,85);
@@ -99,39 +101,43 @@ namespace Amagadon {
             compat.Text="그래픽 호환성 적용 (원본 DLL/설정 백업)"; compat.SetBounds(32,401,680,36); Controls.Add(compat);
             Controls.Add(new Label{Text="1024×768 내부 해상도는 4:3 시야를 사용합니다. 화면 늘리기로 모니터를 채울 수 있습니다.\r\n원본 EXE를 유지하고 별도 HD 실행 파일을 사용합니다. ACE는 원본 그래픽으로 실행합니다.",Location=new Point(32,447),Size=new Size(694,46),Font=new Font("맑은 고딕",9)});
             game=Button("게임 실행",32,506,338,60); game.BackColor=Color.FromArgb(169,66,39); editor=Button("맵 에디터 실행",388,506,338,60);
-            update=Button("업데이트",32,585,160,40); var notes=Button("패치노트",208,585,160,40); var restore=Button("원본 설정 복원",388,585,160,40); var logs=Button("진단 로그",564,585,162,40);
+            update=Button("업데이트",32,585,160,40); var notes=Button("패치노트",208,585,160,40); var restore=Button("원본 설정 복원",388,585,160,40); var logs=Button("로깅 리포트 ZIP",564,585,162,40);
             autoReplay.Text="싱글플레이 리플레이 자동 기록 · 실험 (AI 동기화 검증 중)";autoReplay.SetBounds(32,636,694,34);Controls.Add(autoReplay);
             replay=Button("리플레이 재생",32,681,338,40);var replayFolder=Button("리플레이 저장 폴더",388,681,338,40);
             replay.Click+=async delegate {if(activeReplay!=null && activeReplay.IsPlayback) {activeReplay.RequestStop();return;}using(var dialog=new ReplayBrowser()) {if(dialog.ShowDialog(this)==DialogResult.OK) {resolution.SelectedIndex=1;compat.Checked=true;await Launch("Armageddon.exe",dialog.SelectedReplay);}}};
             replayFolder.Click+=delegate {Directory.CreateDirectory(ReplayFiles.Home);Process.Start("explorer.exe",ReplayFiles.Home);};
-            status.SetBounds(32,740,694,55); status.ForeColor=Color.FromArgb(158,174,194); Controls.Add(status);
+            diagnostic.Text="진단 기록 및 충돌 덤프 수집";diagnostic.SetBounds(32,736,338,32);Controls.Add(diagnostic);
+            mouseCompatibility.Text="마우스 입력 호환 모드 (재실행 필요)";mouseCompatibility.SetBounds(388,736,338,32);Controls.Add(mouseCompatibility);
+            Controls.Add(new Label {Text="마우스가 멈추면 Ctrl+Tab으로 제한을 해제하거나 입력 호환 모드로 재실행하세요.\r\n진단은 로컬에 저장됩니다. ZIP에는 PC 경로와 충돌 메모리가 포함될 수 있습니다.",Location=new Point(32,775),Size=new Size(694,40),Font=new Font("맑은 고딕",9)});
+            status.SetBounds(32,823,694,55); status.ForeColor=Color.FromArgb(158,174,194); Controls.Add(status);
             settings=new Settings(); try { string f=Path.Combine(Core.Home,"settings.json"); if(File.Exists(f)) settings=Core.Json.Deserialize<Settings>(File.ReadAllText(f)); } catch(Exception ex) { Core.Log(ex.Message); }
             Core.MigrateScreen(settings);
             if(String.IsNullOrWhiteSpace(settings.GamePath))settings.GamePath=Core.FindGame();
-            autoReplay.Checked=settings.AutoReplay;
+            autoReplay.Checked=settings.AutoReplay;diagnostic.Checked=settings.DiagnosticLogging;mouseCompatibility.Checked=settings.MouseCompatibility;
             path.Text=settings.GamePath; resolution.SelectedIndex=settings.NativeHD?1:0; output.SelectedIndex=settings.OutputHD?1:0; compat.Checked=settings.Compatibility;
             fullscreen.Checked=settings.Fullscreen;aspect.SelectedIndex=settings.MaintainAspect?0:1;confine.Checked=settings.ConfineMouse;
             renderer.SelectedIndex=Math.Max(0,Array.IndexOf(new[]{"auto","gdi","direct3d9","opengl"},settings.Renderer));
             resolution.SelectedIndexChanged+=delegate {output.Enabled=resolution.SelectedIndex==0;autoReplay.Enabled=resolution.SelectedIndex==1;};output.Enabled=!settings.NativeHD;autoReplay.Enabled=settings.NativeHD;
+            if(Height>Screen.FromControl(this).WorkingArea.Height)Height=Screen.FromControl(this).WorkingArea.Height;
             status.Text=String.IsNullOrEmpty(path.Text)?"게임 설치 폴더를 선택해주세요.":"설치 경로를 확인한 뒤 실행해주세요.";
             game.Click+=async delegate { await Launch("Armageddon.exe"); }; editor.Click+=async delegate { await Launch("ACE.exe"); }; update.Click+=async delegate { await CheckUpdate(); };
             notes.Click+=delegate { ShowNotes(); }; restore.Click+=delegate { try { NativePatch.Remove(path.Text,Path.Combine(Base,"compat","hd-preview.json"));Core.Restore(path.Text); status.Text="원본 그래픽 설정을 복원하고 생성한 HD 실행 파일을 제거했습니다."; } catch(Exception ex) { Error(ex); } };
-            logs.Click+=delegate { Directory.CreateDirectory(Core.Home); Process.Start("explorer.exe",Core.Home); }; FormClosing+=delegate(object sender,FormClosingEventArgs args) {if(gameRunning) {args.Cancel=true;status.Text="리플레이 기록을 마치려면 게임을 먼저 종료해주세요.";return;}try { Save(); } catch(Exception ex) { Core.Log(ex.Message); } };
+            logs.Click+=async delegate {using(var dialog=new SaveFileDialog {Filter="진단 ZIP (*.zip)|*.zip",FileName="Amagadon-Report-"+DateTime.Now.ToString("yyyyMMdd-HHmmss")+".zip"}) {if(dialog.ShowDialog(this)!=DialogResult.OK)return;logs.Enabled=false;try {string gameFolder=path.Text;await Task.Run(()=>Diagnostics.Report(gameFolder,dialog.FileName));status.Text="진단 리포트를 저장했습니다: "+dialog.FileName;Process.Start("explorer.exe","/select,\""+dialog.FileName+"\"");}catch(Exception ex) {Error(ex);}finally {logs.Enabled=true;}}}; FormClosing+=delegate(object sender,FormClosingEventArgs args) {if(gameRunning) {args.Cancel=true;status.Text="실행 중인 게임 또는 에디터를 먼저 종료해주세요.";return;}try { Save(); } catch(Exception ex) { Core.Log(ex.Message); } };
         }
         void AddLabel(string text,int x,int y) { Controls.Add(new Label{Text=text,AutoSize=true,Location=new Point(x,y)}); }
         Button Button(string text,int x,int y,int w,int h) { var b=new Button{Text=text,BackColor=Color.FromArgb(33,43,57),ForeColor=ForeColor,FlatStyle=FlatStyle.Flat,Cursor=Cursors.Hand}; b.FlatAppearance.BorderSize=0; b.SetBounds(x,y,w,h); Controls.Add(b); return b; }
         void Save() {
             settings.GamePath=String.IsNullOrWhiteSpace(path.Text)?"":Path.GetFullPath(path.Text.Trim()); settings.NativeHD=resolution.SelectedIndex==1;settings.OutputHD=output.SelectedIndex==1; settings.Compatibility=compat.Checked;
-            settings.AutoReplay=autoReplay.Checked;settings.Fullscreen=fullscreen.Checked;settings.MaintainAspect=aspect.SelectedIndex==0;settings.ConfineMouse=confine.Checked;settings.Renderer=new[]{"auto","gdi","direct3d9","opengl"}[renderer.SelectedIndex];
+            settings.DiagnosticLogging=diagnostic.Checked;settings.MouseCompatibility=mouseCompatibility.Checked;settings.AutoReplay=autoReplay.Checked;settings.Fullscreen=fullscreen.Checked;settings.MaintainAspect=aspect.SelectedIndex==0;settings.ConfineMouse=confine.Checked;settings.Renderer=new[]{"auto","gdi","direct3d9","opengl"}[renderer.SelectedIndex];
             Directory.CreateDirectory(Core.Home); File.WriteAllText(Path.Combine(Core.Home,"settings.json"),Core.Json.Serialize(settings));
         }
         void Error(Exception ex) { status.Text=ex.Message; Core.Log(ex.ToString()); MessageBox.Show(this,ex.Message,"실행 오류",MessageBoxButtons.OK,MessageBoxIcon.Warning); }
         async Task Launch(string exe,string replaySource=null) {
-            gameRunning=true;game.Enabled=editor.Enabled=update.Enabled=replay.Enabled=false;
+            EditorCompatibility editorLease=null;gameRunning=true;game.Enabled=editor.Enabled=update.Enabled=replay.Enabled=false;
             try {
-                Save(); Core.Validate(settings.GamePath); Core.EnsureIdle(settings.GamePath);
+                Save(); Core.Validate(settings.GamePath); Core.EnsureIdle(settings.GamePath);EditorCompatibility.Recover(settings.GamePath);
                 string file=Path.Combine(settings.GamePath,exe);
-                if(exe=="ACE.exe") Core.Restore(settings.GamePath);
+                if(exe=="ACE.exe") editorLease=new EditorCompatibility(settings.GamePath);
                 else {
                     if(settings.NativeHD) {
                         if(!settings.Compatibility)throw new IOException("HD 실행 파일은 그래픽 호환성 적용이 필요합니다.");
@@ -148,12 +154,12 @@ namespace Amagadon {
                 Core.Log("Start version="+Core.DisplayVersion+" "+file+" SHA256="+Core.Hash(file)+" settings="+Core.Json.Serialize(settings));
                 if(exe=="Armageddon.exe" && settings.NativeHD && (settings.AutoReplay || replaySource!=null)) {
                     status.Text=replaySource!=null?"리플레이 시작 상태를 불러오는 중…":"게임 실행 중 · 싱글플레이 자동 기록 준비";
-                    using(var session=new ReplaySession(settings.GamePath,file,replaySource)) {activeReplay=session;session.Progress=delegate(string text) {if(!IsDisposed && IsHandleCreated)BeginInvoke((Action)delegate {status.Text=text;});};if(session.IsPlayback) {replay.Text="재생 중단";replay.Enabled=true;}await Task.Run(()=>session.Run());status.Text=session.Result;}
-                } else using(var p=Process.Start(new ProcessStartInfo(file){WorkingDirectory=settings.GamePath,UseShellExecute=false})) {
-                    status.Text=exe+" 실행 중"; await Task.Run(()=>p.WaitForExit());
+                    using(var session=new ReplaySession(settings.GamePath,file,replaySource)) {session.DiagnosticSettings=settings;activeReplay=session;session.Progress=delegate(string text) {if(!IsDisposed && IsHandleCreated)BeginInvoke((Action)delegate {status.Text=text;});};if(session.IsPlayback) {replay.Text="재생 중단";replay.Enabled=true;}await Task.Run(()=>session.Run());status.Text=session.Result;}
+                } else using(var p=Process.Start(Diagnostics.StartInfo(file,settings.GamePath))) {
+                    Diagnostics.Begin(p.Id,file,settings.GamePath,settings);status.Text=exe+" 실행 중"; await Task.Run(()=>p.WaitForExit());
                     Core.Log(exe+" exit=0x"+p.ExitCode.ToString("X8")); status.Text=p.ExitCode==0?"정상 종료했습니다.":"비정상 종료: 0x"+p.ExitCode.ToString("X8")+" · 실행 로그를 확인해주세요.";
                 }
-            } catch(Exception ex) { Error(ex); } finally { activeReplay=null;replay.Text="리플레이 재생";gameRunning=false;game.Enabled=editor.Enabled=update.Enabled=replay.Enabled=true; }
+            } catch(Exception ex) { Error(ex); } finally {if(editorLease!=null)try {editorLease.Dispose();}catch(Exception ex) {Error(ex);} activeReplay=null;replay.Text="리플레이 재생";gameRunning=false;game.Enabled=editor.Enabled=update.Enabled=replay.Enabled=true; }
         }
         void ShowNotes() {
             var f=new Form{Text="패치노트",Size=new Size(650,500),StartPosition=FormStartPosition.CenterParent}; var t=new TextBox{Multiline=true,ReadOnly=true,Dock=DockStyle.Fill,ScrollBars=ScrollBars.Vertical,Font=Font};
@@ -183,6 +189,11 @@ namespace Amagadon {
             } catch(Exception ex) {Error(ex);} finally {update.Enabled=game.Enabled=editor.Enabled=replay.Enabled=true;}
         }
         [STAThread] public static int Main(string[] args) {
+            Diagnostics.SetProcessDPIAware();
+            if(args.Length==4 && args[0]=="--watch-process")return Diagnostics.Watch(Int32.Parse(args[1]),Int64.Parse(args[2]),args[3]);
+            if(args.Length==3 && args[0]=="--diagnostic-report") {try {Diagnostics.Report(args[1],args[2]);return 0;}catch(Exception ex) {Core.Log(ex.ToString());return 1;}}
+            AppDomain.CurrentDomain.UnhandledException+=delegate(object sender,UnhandledExceptionEventArgs e) {Core.Log("Launcher unhandled: "+e.ExceptionObject);};
+            Application.ThreadException+=delegate(object sender,System.Threading.ThreadExceptionEventArgs e) {Core.Log("Launcher UI exception: "+e.Exception);MessageBox.Show(e.Exception.Message,"런처 오류");};
             if(args.Length==4 && args[0]=="--capture-replay-scenario") {try {Core.EnsureIdle(args[2]);string exe=NativePatch.Prepare(args[2],Path.Combine(AppDomain.CurrentDomain.BaseDirectory,"compat","hd-preview.json"));using(var session=new ReplaySession(args[2],exe,args[1])) {session.CaptureDiagnostic=args[3];session.Run();return File.Exists(args[3])?0:1;}}catch(Exception ex){Core.Log(ex.ToString());return 1;}}
             if(args.Length==3 && args[0]=="--diagnose-replay") {try {Core.EnsureIdle(args[2]);string exe=NativePatch.PrepareReplay(args[2],args[1]);using(var session=new ReplaySession(args[2],exe,args[1])) {session.Run();Core.Log("REAL REPLAY DIAGNOSTIC "+session.Result);return session.Result=="리플레이 재생을 완료했습니다."?0:1;}}catch(Exception ex){Core.Log(ex.ToString());return 1;}}
             if(args.Length==3 && args[0]=="--verify-replay") {try {ReplayTests.ArchiveRun(args[1],args[2]);return 0;}catch(Exception ex) {Core.Log(ex.ToString());return 1;}}

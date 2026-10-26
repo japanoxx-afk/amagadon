@@ -147,6 +147,7 @@ namespace Amagadon {
         public string CreatedReplay {get;private set;}
         internal string CaptureDiagnostic;BinaryWriter scenarioWriter;string scenarioDirectory;
         public int ChildExitCode {get;private set;}
+        public Settings DiagnosticSettings;
         [StructLayout(LayoutKind.Sequential,CharSet=CharSet.Unicode)] struct Startup {
             public int cb;public string reserved,desktop,title;public int x,y,cx,cy,xchars,ychars,fill,flags;public short show,reserved2;public IntPtr bytes,input,output,error;
         }
@@ -205,8 +206,13 @@ namespace Amagadon {
                     }
                 }
                 var startup=new Startup {cb=Marshal.SizeOf(typeof(Startup))};ProcessInfo pi;
-                if(!CreateProcess(executable,new StringBuilder("\""+executable+"\""),IntPtr.Zero,IntPtr.Zero,false,4,IntPtr.Zero,game,ref startup,out pi))throw new IOException("게임을 실행할 수 없습니다. 오류 "+Marshal.GetLastWin32Error());
+                var environment=new System.Collections.Generic.SortedDictionary<string,string>(StringComparer.OrdinalIgnoreCase);
+                foreach(System.Collections.DictionaryEntry item in Environment.GetEnvironmentVariables())environment[(string)item.Key]=(string)item.Value;
+                environment["__COMPAT_LAYER"]=(environment.ContainsKey("__COMPAT_LAYER")?environment["__COMPAT_LAYER"]:"")+" HIGHDPIAWARE DISABLEDXMAXIMIZEDWINDOWEDMODE";
+                IntPtr environmentBlock=Marshal.StringToHGlobalUni(String.Join("\0",environment.Select(item=>item.Key+"="+item.Value))+"\0\0");
+                try {if(!CreateProcess(executable,new StringBuilder("\""+executable+"\""),IntPtr.Zero,IntPtr.Zero,false,4|0x400,environmentBlock,game,ref startup,out pi))throw new IOException("게임을 실행할 수 없습니다. 오류 "+Marshal.GetLastWin32Error());}finally {Marshal.FreeHGlobal(environmentBlock);}
                 handle=pi.process;
+                if(!fixture)Diagnostics.Begin((int)pi.pid,executable,game,DiagnosticSettings);
                 Core.Log("Replay start pid="+pi.pid+" mode="+(playback?"play":"record")+" executable="+executable+" mailbox=0x"+Box.ToString("X8"));
                 try {
                     // Verify our mailbox belongs to the exact known patch before activating.

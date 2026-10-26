@@ -26,3 +26,17 @@ Armageddon은 DirectInput, Miles Sound System, Bink를 사용합니다. ACE는 D
 비정상 종료 시 런처 로그에 종료 코드/실행 파일 해시가 기록됩니다. 재현 맵과 조작 순서, Windows Application Error 이벤트 및 크래시 덤프가 확보되면 후속 바이너리 분석이 가능합니다.
 
 게임 데이터와 개인 실행 로그는 저장소에 포함하지 않습니다.
+
+## 0.3.7 진단 수집과 제보 방법
+
+1. 런처의 **진단 기록 및 충돌 덤프 수집**을 켠 상태로 게임/ACE를 실행합니다(기본 켜짐).
+2. 마우스 정지 시 Ctrl+Tab으로 커서 제한을 해제해 보고, 다음 실행에서는 **마우스 입력 호환 모드**를 켜서 비교합니다. 이 옵션은 cnc-ddraw 7.1.0의 `no_dinput_hook`을 사용합니다. 해당 버전의 [DirectInput 코드](https://github.com/FunkyFr3sh/cnc-ddraw/blob/v7.1.0.0/src/directinput.c)는 커서 잠금 상태가 풀린 경우 입력 데이터를 비울 수 있으므로, 이 경로를 우회하는 선택지를 제공합니다. 제보 환경의 실제 원인은 미확정입니다.
+3. 문제 직후 런처의 **로깅 리포트 ZIP**을 눌러 파일을 저장하고 재현 순서와 함께 전달합니다. 외부 전송은 사용자가 합니다.
+
+저장 위치는 `%LOCALAPPDATA%\AmagadonLauncher\Diagnostics\날짜-PID`입니다. 별도 x86 helper가 런처가 새로 실행한 PID와 시작 시간을 확인하고 관찰합니다. 매 5초 커서/클립 영역/전경 여부/클라이언트 영역/OS의 hung 플래그/자원 사용량을 기록합니다. 확인된 원본·HD 게임 해시에 대해서만 `504d70/504d74` 내부 마우스 좌표를 읽으며 키 입력 내용은 기록하지 않습니다. 정상 동작하는 다른 앱의 커서 제한을 변경하지 않습니다. 전경 게임의 클립 영역이 한 축이라도 1픽셀 이하로 무너졌을 때만 제한을 해제합니다.
+
+크래시 helper는 Windows DebugActiveProcess를 사용합니다. 첫 연결용 breakpoint 이외에는 예외를 처리하지 않고 원래 프로세스로 전달하며, second-chance 미처리 예외에서 MiniDumpWriteDump를 호출합니다. 예외 스레드의 x86 CONTEXT/EXCEPTION_RECORD를 포함하고, 전체 힙 덤프는 만들지 않습니다. helper 종료가 게임을 종료시키지 않도록 DebugSetProcessKillOnExit(false)를 적용합니다. 연결 실패 시 텔레메트리로 대체하고 실패 이유를 기록합니다. 진단을 끄면 helper가 실행되지 않습니다.
+
+ZIP에는 누적 launcher 로그, 설정, 진단 세션, 기존 ReplayDiagnostics의 텍스트/JSON 및 CrashDumps 자료를 포함합니다. 게임 데이터·실행 파일·리플레이 아카이브는 넣지 않습니다. 파일별 64MiB, 진단 합계 512MiB 제한에서 최신 자료를 우선 포함하며 누락/읽기 실패는 report.json에 기록합니다. 로컬 PC 경로와 스레드 메모리가 포함될 수 있습니다. 자체 로그는 launcher 4MiB/세션 8MiB마다 1개 이전 파일을 보관합니다. 오래된 세션 자체는 자동 삭제하지 않습니다.
+
+검사: `scripts/test-diagnostics.ps1 -Launcher <정식 런처 경로>`는 별도 프로세스의 정상 종료/의도적 충돌과 실제 미니덤프 예외 스트림, ZIP 내용, ACE 그래픽 분리/복원/중단 복원, 입력 프로필을 검사합니다. 진단으로 게임의 내부 메모리 결함을 수정한 것은 아니며 확보된 덤프로 후속 분석이 필요합니다.
