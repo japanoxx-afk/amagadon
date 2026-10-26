@@ -1,0 +1,5 @@
+DDrawCompat v0.7.2 (unmodified x86 release) by narzoul
+https://github.com/narzoul/DDrawCompat/releases/tag/v0.7.2
+Source: https://github.com/narzoul/DDrawCompat/tree/v0.7.2
+License: 0BSD (see LICENSE.txt)
+DLL SHA256: 94895cf6ede8fd0f74ee1447fdc08b7044a9c65a1a25a49a4df893a0370975a3

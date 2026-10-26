@@ -41,7 +41,11 @@ namespace Amagadon {
         public static ProcessStartInfo StartInfo(string executable,string folder) {
             var info=new ProcessStartInfo(executable){WorkingDirectory=folder,UseShellExecute=false};
             string layer=info.EnvironmentVariables["__COMPAT_LAYER"]??"";
-            info.EnvironmentVariables["__COMPAT_LAYER"]=layer+" HIGHDPIAWARE DISABLEDXMAXIMIZEDWINDOWEDMODE";
+            if(Path.GetFileName(executable).Equals("ACE.exe",StringComparison.OrdinalIgnoreCase)) {
+                // ACE's GDI controls and DirectDraw surfaces need one legacy DPI
+                // coordinate space. Let its dedicated wrapper set awareness.
+                info.EnvironmentVariables.Remove("__COMPAT_LAYER");
+            } else info.EnvironmentVariables["__COMPAT_LAYER"]=layer+" HIGHDPIAWARE DISABLEDXMAXIMIZEDWINDOWEDMODE";
             return info;
         }
         public static void Begin(int pid,string executable,string folder,Settings settings) {
@@ -55,7 +59,7 @@ namespace Amagadon {
                         string candidate=Path.Combine(folder,n);if(!File.Exists(candidate))continue;
                         try {var version=FileVersionInfo.GetVersionInfo(candidate);Write(session,"binary",new {name=n,sha256=Core.Hash(candidate),bytes=new FileInfo(candidate).Length,version=version.FileVersion});}catch(Exception ex) {Write(session,"binary-error",new {name=n,error=ex.Message});}
                     }
-                    foreach(string n in new[]{"ddraw.ini","option.dat"}) if(File.Exists(Path.Combine(folder,n)))File.Copy(Path.Combine(folder,n),Path.Combine(session,n));
+                    foreach(string n in new[]{"ddraw.ini","DDrawCompat.ini","DDrawCompat-ACE.ini","option.dat"}) if(File.Exists(Path.Combine(folder,n)))File.Copy(Path.Combine(folder,n),Path.Combine(session,n));
                     var info=new ProcessStartInfo(System.Reflection.Assembly.GetExecutingAssembly().Location,"--watch-process "+pid+" "+p.StartTime.ToUniversalTime().Ticks+" \""+session+"\""){UseShellExecute=false,CreateNoWindow=true,WindowStyle=ProcessWindowStyle.Hidden};
                     using(var helper=Process.Start(info)) { }
                     Core.Log("Diagnostic session="+session+" pid="+pid);
@@ -98,6 +102,7 @@ namespace Amagadon {
             try {using(var p=Process.GetProcessById(pid)) {
                 if(p.StartTime.ToUniversalTime().Ticks!=ticks)return 3;
                 IntPtr retainedHandle=p.Handle;
+                string binaryFolder=Path.GetDirectoryName(p.MainModule.FileName);
                 string name=Path.GetFileName(p.MainModule.FileName);
                 if(!name.StartsWith("Armageddon",StringComparison.OrdinalIgnoreCase) && !name.Equals("ACE.exe",StringComparison.OrdinalIgnoreCase) && !name.Equals("Amagadon.DiagnosticFixture.exe",StringComparison.OrdinalIgnoreCase))return 4;
                 string hash=Core.Hash(p.MainModule.FileName);
@@ -125,7 +130,9 @@ namespace Amagadon {
                     } finally {if(!ContinueDebugEvent((uint)pid,tid,status))Write(folder,"continue-error",Marshal.GetLastWin32Error());}
                     if(exited)break;
                 }
-                p.WaitForExit();Write(folder,"process-end",new {exit="0x"+p.ExitCode.ToString("X8")});
+                p.WaitForExit();
+                try {string log=Path.Combine(binaryFolder,"DDrawCompat-ACE.log");if(name.Equals("ACE.exe",StringComparison.OrdinalIgnoreCase) && File.Exists(log) && new FileInfo(log).Length<=8*1024*1024)File.Copy(log,Path.Combine(folder,"DDrawCompat-ACE.log"),true);}catch(Exception ex) {Write(folder,"editor-log-copy-error",ex.Message);}
+                Write(folder,"process-end",new {exit="0x"+p.ExitCode.ToString("X8")});
             }return 0;}catch(Exception ex) {Write(folder,"monitor-error",ex.ToString());return 1;}
             finally {if(attached)DebugActiveProcessStop((uint)pid);Marshal.FreeHGlobal(buffer);}
         }
@@ -147,7 +154,7 @@ namespace Amagadon {
                         }
                     }catch(Exception ex) {index.Add(new {file=relative,status="failed",error=ex.Message});}
                 }
-                foreach(string n in new[]{"ddraw.ini","cnc-ddraw.log","ddraw.log",".amagadon-editor.json"}) {
+                foreach(string n in new[]{"ddraw.ini","DDrawCompat.ini","DDrawCompat-ACE.ini","DDrawCompat-ACE.log","cnc-ddraw.log","ddraw.log",".amagadon-editor.json"}) {
                     string f=Path.Combine(game??"",n);if(String.IsNullOrWhiteSpace(game) || !File.Exists(f))continue;
                     try {if(new FileInfo(f).Length<=8*1024*1024) {using(var input=new FileStream(f,FileMode.Open,FileAccess.Read,FileShare.ReadWrite|FileShare.Delete))using(var output=zip.CreateEntry("game/"+n).Open())input.CopyTo(output);}}catch(Exception ex) {index.Add(new {file=n,status="failed",error=ex.Message});}
                 }

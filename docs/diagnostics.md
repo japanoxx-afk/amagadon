@@ -40,3 +40,11 @@ Armageddon은 DirectInput, Miles Sound System, Bink를 사용합니다. ACE는 D
 ZIP에는 누적 launcher 로그, 설정, 진단 세션, 기존 ReplayDiagnostics의 텍스트/JSON 및 CrashDumps 자료를 포함합니다. 게임 데이터·실행 파일·리플레이 아카이브는 넣지 않습니다. 파일별 64MiB, 진단 합계 512MiB 제한에서 최신 자료를 우선 포함하며 누락/읽기 실패는 report.json에 기록합니다. 로컬 PC 경로와 스레드 메모리가 포함될 수 있습니다. 자체 로그는 launcher 4MiB/세션 8MiB마다 1개 이전 파일을 보관합니다. 오래된 세션 자체는 자동 삭제하지 않습니다.
 
 검사: `scripts/test-diagnostics.ps1 -Launcher <정식 런처 경로>`는 별도 프로세스의 정상 종료/의도적 충돌과 실제 미니덤프 예외 스트림, ZIP 내용, ACE 그래픽 분리/복원/중단 복원, 입력 프로필을 검사합니다. 진단으로 게임의 내부 메모리 결함을 수정한 것은 아니며 확보된 덤프로 후속 분석이 필요합니다.
+
+## 0.3.8 ACE 하단 깜빡임·왼쪽 UI 대응
+
+기존 0.3.7 검사는 창이 열리는지만 확인했으며 그래픽 정상 여부를 입증하지 못했습니다. ACE는 DirectDraw 8비트 표면과 일반 Windows/GDI 컨트롤을 함께 사용하므로, 게임용 HIGHDPIAWARE 강제 환경을 분리하고 DDrawCompat 0.7.2를 ACE 실행에만 적용합니다. [공식 GdiInterops/PresentDelay 설명](https://github.com/narzoul/DDrawCompat/wiki/Configuration)에 근거해 GDI 연동을 all로 켜고, DPI unaware 단일 좌표 공간 및 최대 10ms 부분 갱신 지연을 사용합니다. 실제 ACE 로그에서 DPI 설정 성공과 GDI hook 설치를 확인했습니다. 픽셀/색상과 하단 깜빡임의 시각 검증은 남아 있습니다.
+
+DLL SHA-256은 `94895cf6ede8fd0f74ee1447fdc08b7044a9c65a1a25a49a4df893a0370975a3`이며 DLL을 런처 리소스에 포함합니다. 배포 7개 파일 매니페스트를 유지하므로 기존 업데이트 도우미와 호환됩니다. 원본 ddraw.dll/ddraw.ini 및 DDrawCompat-ACE.ini가 있으면 세션 전용 LauncherBackups 폴더에 보존한 뒤 적용합니다. 전용 프로세스 설정을 사용해 다른 DDrawCompat 설정 파일을 덮어쓰지 않습니다. 종료/다음 실행 복구는 직접 설치한 해시와 일치하는 파일만 지우고 원본을 되돌립니다. 기존 0.3.7 복구 마커도 읽을 수 있습니다.
+
+`DDrawCompat-ACE.log`는 ACE 종료 시 진단 세션으로 복사되고 ZIP에도 포함됩니다. 편집기 DLL은 0BSD이며 원문 라이선스와 원본 출처는 third-party/ddrawcompat 및 배포 라이선스 파일에 보관합니다.

@@ -1,4 +1,16 @@
-# 아마게돈 런처 0.3.7 정식 버전
+# 아마게돈 런처 0.3.8 정식 버전
+
+- ACE 하단 깜빡임·왼쪽 검은 UI 제보에 대응하여 에디터 전용 DirectDraw/GDI 호환 경로로 변경
+- ACE 실행 시 게임용 HIGHDPIAWARE 환경 설정을 분리하고, 에디터 전용 DDrawCompat 0.7.2의 GdiInterops=all/DpiAwareness=unaware/PresentDelay=on(10) 적용
+- 기존 ddraw.dll/ddraw.ini/ACE 전용 설정을 백업하고 종료 또는 다음 실행에서 복원. 실행 중 사용자가 바꾼 파일은 덮어쓰지 않고 백업 위치 안내
+- ACE 그래픽 로그를 진단 세션과 리포트 ZIP에 포함
+- 에디터 DLL은 SHA-256으로 검증되는 런처 내장 자료로 배포하여 이전 런처의 업데이트 설치 형식 유지
+
+검증: 실제 ACE 복사본에서 전용 DLL 로딩, GDI 후킹, DPI unaware 적용 성공과 응답하는 편집기 창을 로그로 확인했습니다. 화면을 시각적으로 검증하지 못했으므로 제보된 깜빡임과 검은 UI가 모든 환경에서 해결됐다고 보장하지 않습니다. 리플레이 AI 동기화 문제는 기존과 같이 남아 있습니다.
+
+DDrawCompat 원본 배포: https://github.com/narzoul/DDrawCompat/releases/tag/v0.7.2 (0BSD, 변경하지 않은 x86 DLL). 라이선스와 출처는 동봉한 compat/LICENSE.cnc-ddraw에도 포함됩니다.
+
+## 0.3.7 정식 버전
 
 - 마우스 입력 대응: DPI 좌표 인식 및 자식 프로세스의 DPI/전체 화면 호환 옵션 적용
 - 비정상적으로 1픽셀 이하로 좁아진 커서 제한 영역을 전경 게임에서만 해제

@@ -14,7 +14,7 @@ namespace Amagadon {
     }
     public static class NativePatch {
         public const string InputHash="34f0bf9ed99fbf3ab88c410a3a52a2f6904e7bc7f5b88fb4ebadc935c2e9b466";
-        public const string RecipeHash="7669f7698a8a45554dbaa2690f4932075f209a4ddd9282ec3a42c594c9e0b9e0";
+        public const string RecipeHash="b9d35a3f6db84240e7bf4be41c1a0b148100f645a5e3e1536eff610e5e3aaefd";
         public const string FileName="Armageddon.HD-preview.exe";
         public const string PreviousOutputHash="2e5d6c572858167e1190d1948375f25d8a90abbb3bded3a585fa8fc88904f579";
         public const string PriorOutputHash="98223eeeb25c1a57860acdbfbab4cd06e445e96f831bd92cc9d150fe9a670921";

@@ -12,8 +12,8 @@ using System.Threading.Tasks;
 using System.Web.Script.Serialization;
 using System.Windows.Forms;
 
-[assembly: System.Reflection.AssemblyVersion("0.3.7.0")]
-[assembly: System.Reflection.AssemblyInformationalVersion("0.3.7")]
+[assembly: System.Reflection.AssemblyVersion("0.3.8.0")]
+[assembly: System.Reflection.AssemblyInformationalVersion("0.3.8")]
 namespace Amagadon {
     public class Settings {
         public string GamePath="";
@@ -25,8 +25,8 @@ namespace Amagadon {
     }
     public class Backup { public string Directory; public string[] Existing; }
     public static class Core {
-        public const string Version = "0.3.7";
-        public const string DisplayVersion = "0.3.7";
+        public const string Version = "0.3.8";
+        public const string DisplayVersion = "0.3.8";
         public static readonly string Home = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "AmagadonLauncher");
         public static readonly JavaScriptSerializer Json = new JavaScriptSerializer();
         public static string Hash(string path) { using(var h=SHA256.Create()) using(var f=File.OpenRead(path)) return BitConverter.ToString(h.ComputeHash(f)).Replace("-", "").ToLowerInvariant(); }
@@ -99,7 +99,7 @@ namespace Amagadon {
             AddLabel("그래픽 렌더러",32,329);renderer.DropDownStyle=ComboBoxStyle.DropDownList;renderer.Items.AddRange(new object[]{"자동","GDI","Direct3D 9","OpenGL"});renderer.SetBounds(32,356,338,34);Controls.Add(renderer);
             confine.Text="게임에 포커스가 있을 때 마우스 가두기";confine.SetBounds(388,351,338,44);Controls.Add(confine);
             compat.Text="그래픽 호환성 적용 (원본 DLL/설정 백업)"; compat.SetBounds(32,401,680,36); Controls.Add(compat);
-            Controls.Add(new Label{Text="1024×768 내부 해상도는 4:3 시야를 사용합니다. 화면 늘리기로 모니터를 채울 수 있습니다.\r\n원본 EXE를 유지하고 별도 HD 실행 파일을 사용합니다. ACE는 원본 그래픽으로 실행합니다.",Location=new Point(32,447),Size=new Size(694,46),Font=new Font("맑은 고딕",9)});
+            Controls.Add(new Label{Text="1024×768 내부 해상도는 4:3 시야를 사용합니다. 화면 늘리기로 모니터를 채울 수 있습니다.\r\n원본 EXE를 유지하고 별도 HD 실행 파일을 사용합니다. ACE는 전용 그래픽 호환 설정으로 실행합니다.",Location=new Point(32,447),Size=new Size(694,46),Font=new Font("맑은 고딕",9)});
             game=Button("게임 실행",32,506,338,60); game.BackColor=Color.FromArgb(169,66,39); editor=Button("맵 에디터 실행",388,506,338,60);
             update=Button("업데이트",32,585,160,40); var notes=Button("패치노트",208,585,160,40); var restore=Button("원본 설정 복원",388,585,160,40); var logs=Button("로깅 리포트 ZIP",564,585,162,40);
             autoReplay.Text="싱글플레이 리플레이 자동 기록 · 실험 (AI 동기화 검증 중)";autoReplay.SetBounds(32,636,694,34);Controls.Add(autoReplay);
