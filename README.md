@@ -4,7 +4,7 @@
 
 ## 실행
 
-`dist/0.3.12-release/AmagadonLauncher-0.3.12.exe`를 실행하고 게임 설치 폴더를 지정합니다.
+`dist/0.3.13-release/AmagadonLauncher-0.3.13.exe`를 실행하고 게임 설치 폴더를 지정합니다.
 기본 경로: `C:\Users\seo\Downloads\armaggeddon\armaggeddon`.
 배포 ZIP은 전체를 풀어 사용합니다. `compat`, `apply-update.ps1` 파일도 필요합니다.
 
@@ -66,3 +66,10 @@ if ($test.ExitCode -ne 0) { throw 'Self-test failed' }
 `System.Collections.ArrayList` 변환 오류는 구버전 자체의 업데이트 처리 오류입니다. 서버의 배포 파일만 변경해 고칠 수 없습니다. [최신 ZIP](https://github.com/japanoxx-afk/amagadon/releases/latest/download/AmagadonLauncher.zip) 전체를 새 폴더에 풀고 `AmagadonLauncher.exe` 또는 동봉한 최신 버전명 EXE를 실행하세요. 기존 0.3.9 EXE 바로가기도 새 파일로 바꿉니다. 사용자 설정은 LocalAppData에 저장되어 유지됩니다.
 
 0.3.12부터 자동/수동 확인은 `Updates.Prepare`를 공유하며 설치 도구의 검증 완료 응답을 받은 후 종료합니다. 설치 결과 로그는 LocalAppData/AmagadonLauncher/updates/각 다운로드 폴더/update-result.log에 남고 로깅 리포트 ZIP에 포함됩니다. `scripts/test-update.ps1 -PackagePath <ZIP>`는 공통 클라이언트 회귀 검사와 x86 부모 프로세스 종료 대기·교체·재실행을 실제 프로세스로 검사합니다.
+
+
+## IPX 보호 및 진단
+
+0.3.13은 IPX 연결 정보 없음과 초기화 실패 경로를 보호합니다. 성공 시 기존 다음 화면으로 진행하고 실패 시 안내 후 메뉴에 남습니다. 800×600/1024×768 및 리플레이 사용 여부와 무관하게 검증된 게임의 첫 스레드를 재개하기 전에 적용하며 게임 EXE를 덮어쓰지 않습니다. IPX 지원 자체를 설치하거나 TCP/IP로 몰래 전환하지 않습니다.
+
+로그에는 DirectPlay 등록/공급자 목록, 어댑터 상태(주소/MAC 제외), 로컬 네트워크 DLL, 네트워크 객체·공급자 포인터·실패 상태, 보호 횟수와 충돌 덤프가 포함됩니다. IPXWrapper가 설치된 환경의 `ipxwrapper.log`도 포함합니다. IPXWrapper 지원/설치 조건은 [공식 설명](https://github.com/solemnwarning/ipxwrapper/blob/master/readme.txt)을 참고할 수 있으며 이 배포에는 해당 라이브러리를 동봉하지 않습니다.

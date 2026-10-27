@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
@@ -48,6 +48,23 @@ namespace Amagadon {
             } else info.EnvironmentVariables["__COMPAT_LAYER"]=layer+" HIGHDPIAWARE DISABLEDXMAXIMIZEDWINDOWEDMODE";
             return info;
         }
+        static void NetworkEnvironment(string session,string folder) {
+            try {
+                Write(session,"network-adapters",System.Net.NetworkInformation.NetworkInterface.GetAllNetworkInterfaces().Select(n=>new {type=n.NetworkInterfaceType.ToString(),status=n.OperationalStatus.ToString(),multicast=n.SupportsMulticast}).ToArray());
+                using(var root=Microsoft.Win32.RegistryKey.OpenBaseKey(Microsoft.Win32.RegistryHive.LocalMachine,Microsoft.Win32.RegistryView.Registry32)) {
+                    using(var providers=root.OpenSubKey(@"SOFTWARE\Microsoft\DirectPlay\Service Providers"))Write(session,"directplay-providers",providers==null?new string[0]:providers.GetSubKeyNames());
+                    using(var cls=root.OpenSubKey(@"SOFTWARE\Classes\CLSID\{D1EB6D20-8923-11D0-9D97-00A0C90A43CB}\InprocServer32"))Write(session,"directplay-com",new {registered=cls!=null,server=cls==null?null:cls.GetValue("")});
+                }
+                foreach(string name in new[]{"dplayx.dll","dpnet.dll","dpwsockx.dll","ipxwrapper.dll","wsock32.dll","ws2_32.dll"}) {
+                    string file=Path.Combine(folder,name);if(File.Exists(file))Write(session,"network-local-dll",new {name=name,sha256=Core.Hash(file),version=FileVersionInfo.GetVersionInfo(file).FileVersion});
+                }
+            }catch(Exception ex) {Write(session,"network-environment-error",ex.Message);}
+        }
+        static object NetworkState(Process p) {
+            Func<int,int?> read=address=>{var b=new byte[4];IntPtr count;return ReadProcessMemory(p.Handle,new IntPtr(address),b,4,out count)&&count.ToInt64()==4?(int?)BitConverter.ToInt32(b,0):null;};
+            int? counter=read(NetworkGuard.Counter);
+            return new {directPlayObject=read(0x5140d0),ipxProvider=read(0x5140f4),tcpProvider=read(0x5140f8),initializationFailure=read(0x4d96f0),guardFailureCount=counter.HasValue?read(counter.Value):null};
+        }
         public static void Begin(int pid,string executable,string folder,Settings settings) {
             if(settings==null || !settings.DiagnosticLogging)return;
             try {
@@ -60,6 +77,7 @@ namespace Amagadon {
                         try {var version=FileVersionInfo.GetVersionInfo(candidate);Write(session,"binary",new {name=n,sha256=Core.Hash(candidate),bytes=new FileInfo(candidate).Length,version=version.FileVersion});}catch(Exception ex) {Write(session,"binary-error",new {name=n,error=ex.Message});}
                     }
                     foreach(string n in new[]{"ddraw.ini","DDrawCompat.ini","DDrawCompat-ACE.ini","DDrawCompat-ACE.Compat.ini","option.dat"}) if(File.Exists(Path.Combine(folder,n)))File.Copy(Path.Combine(folder,n),Path.Combine(session,n));
+                    NetworkEnvironment(session,folder);
                     var info=new ProcessStartInfo(System.Reflection.Assembly.GetExecutingAssembly().Location,"--watch-process "+pid+" "+p.StartTime.ToUniversalTime().Ticks+" \""+session+"\""){UseShellExecute=false,CreateNoWindow=true,WindowStyle=ProcessWindowStyle.Hidden};
                     using(var helper=Process.Start(info)) { }
                     Core.Log("Diagnostic session="+session+" pid="+pid);
@@ -98,6 +116,7 @@ namespace Amagadon {
                 object gameInput=null;int gx=0,gy=0;
                 if(engineMouse) {byte[] bytes=new byte[8];IntPtr read;if(ReadProcessMemory(p.Handle,new IntPtr(0x504d70),bytes,8,out read) && read.ToInt64()==8) {gx=BitConverter.ToInt32(bytes,0);gy=BitConverter.ToInt32(bytes,4);gameInput=new {x=gx,y=gy};}}
                 bool hung=IsHungAppWindow(p.MainWindowHandle);
+                if(engineMouse)Write(folder,"network-state",NetworkState(p));
                 Write(folder,"sample",new {gameInput=gameInput,foreground=foreground==(uint)p.Id,window=p.MainWindowHandle.ToInt64(),hungWindow=hung,cursorAvailable=haveCursor,cursor=cursor,clipAvailable=haveClip,clip=clip,client=client,workingSet=p.WorkingSet64,privateBytes=p.PrivateMemorySize64,handles=p.HandleCount,threads=p.Threads.Count,cpuMs=p.TotalProcessorTime.TotalMilliseconds});
                 bool suspected=detector.Observe(engineMouse && gameInput!=null && haveCursor && foreground==(uint)p.Id,gx,gy,cursor.x,cursor.y,hung);
                 if(suspected && !captured) {
@@ -151,7 +170,7 @@ namespace Amagadon {
                             bool bootstrap=initialBreak && first && code==0x80000003;if(bootstrap)initialBreak=false;
                             status=bootstrap?0x10002U:0x80010001U;
                             if(!bootstrap && (exceptions++<100 || !first))Write(folder,"exception",new {code="0x"+code.ToString("X8"),address="0x"+unchecked((uint)Marshal.ReadInt32(buffer,24)).ToString("X8"),thread=tid,firstChance=first});
-                            if(!first) {try {Dump(p,tid,buffer,folder);}catch(Exception ex) {Write(folder,"dump-error",ex.Message);}}
+                            if(!first) {if(engineMouse)Write(folder,"network-at-crash",NetworkState(p));try {Dump(p,tid,buffer,folder);}catch(Exception ex) {Write(folder,"dump-error",ex.Message);}}
                         } else if(kind==3 || kind==6) {IntPtr f=Marshal.ReadIntPtr(buffer,12);if(f!=IntPtr.Zero && f!=new IntPtr(-1))CloseHandle(f);}
                         else if(kind==5) {Write(folder,"exit",new {code="0x"+unchecked((uint)Marshal.ReadInt32(buffer,12)).ToString("X8")});exited=true;}
                     } finally {if(!ContinueDebugEvent((uint)pid,tid,status))Write(folder,"continue-error",Marshal.GetLastWin32Error());}
@@ -159,6 +178,7 @@ namespace Amagadon {
                 }
                 p.WaitForExit();
                 try {string logName="DDrawCompat-"+Path.GetFileNameWithoutExtension(name)+".log";string log=Path.Combine(binaryFolder,logName);if(EditorPatch.IsEditor(name) && File.Exists(log) && new FileInfo(log).Length<=8*1024*1024)File.Copy(log,Path.Combine(folder,logName),true);}catch(Exception ex) {Write(folder,"editor-log-copy-error",ex.Message);}
+                foreach(string logName in new[]{"ipxwrapper.log","dplayx.log","directplay.log"})try {string file=Path.Combine(binaryFolder,logName);if(File.Exists(file)&&new FileInfo(file).Length<=8*1024*1024)File.Copy(file,Path.Combine(folder,logName),true);}catch(Exception ex){Write(folder,"network-log-error",ex.Message);}
                 Write(folder,"process-end",new {exit="0x"+p.ExitCode.ToString("X8")});
             }return 0;}catch(Exception ex) {Write(folder,"monitor-error",ex.ToString());return 1;}
             finally {if(attached)DebugActiveProcessStop((uint)pid);Marshal.FreeHGlobal(buffer);}
@@ -182,7 +202,7 @@ namespace Amagadon {
                         }
                     }catch(Exception ex) {index.Add(new {file=relative,status="failed",error=ex.Message});}
                 }
-                foreach(string n in new[]{"ddraw.ini","DDrawCompat.ini","DDrawCompat-ACE.ini","DDrawCompat-ACE.Compat.ini","DDrawCompat-ACE.log","DDrawCompat-ACE.Compat.log","cnc-ddraw.log","ddraw.log",".amagadon-editor.json"}) {
+                foreach(string n in new[]{"ddraw.ini","DDrawCompat.ini","DDrawCompat-ACE.ini","DDrawCompat-ACE.Compat.ini","DDrawCompat-ACE.log","DDrawCompat-ACE.Compat.log","cnc-ddraw.log","ddraw.log","ipxwrapper.log","dplayx.log","directplay.log",".amagadon-editor.json"}) {
                     string f=Path.Combine(game??"",n);if(String.IsNullOrWhiteSpace(game) || !File.Exists(f))continue;
                     try {if(new FileInfo(f).Length<=8*1024*1024) {using(var input=new FileStream(f,FileMode.Open,FileAccess.Read,FileShare.ReadWrite|FileShare.Delete))using(var output=zip.CreateEntry("game/"+n).Open())input.CopyTo(output);}}catch(Exception ex) {index.Add(new {file=n,status="failed",error=ex.Message});}
                 }

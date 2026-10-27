@@ -5,13 +5,14 @@ class Test {
  static void Require(bool b,string s){if(!b)throw new Exception(s);}
  static int Main(string[] args){if(args.Length>0 && args[0]=="child"){SetErrorMode(3);while(!File.Exists(args[1]))Thread.Sleep(50);if(args[2]=="crash")throw new InvalidOperationException("Diagnostic fixture deliberate unhandled exception");return 0;}
  try {string executable=System.Reflection.Assembly.GetExecutingAssembly().Location;string temp=Path.Combine(Path.GetDirectoryName(executable),"diagnostic-fixture-"+Guid.NewGuid().ToString("N"));Directory.CreateDirectory(temp);
+ File.WriteAllText(Path.Combine(Path.GetDirectoryName(executable),"ipxwrapper.log"),"network fixture");
  foreach(string mode in new[]{"clean","crash"}){string gate=Path.Combine(temp,mode+".gate");DateTime start=DateTime.Now;
  using(var p=Process.Start(new ProcessStartInfo(executable,"child \""+gate+"\" "+mode){UseShellExecute=false,CreateNoWindow=true})) {
  Diagnostics.Begin(p.Id,executable,temp,new Settings{DiagnosticLogging=true});string session=null;
  for(int i=0;i<150;i++){session=Directory.GetDirectories(Diagnostics.Home).FirstOrDefault(d=>d.EndsWith("-"+p.Id) && File.Exists(Path.Combine(d,"ready.txt")));if(session!=null)break;Thread.Sleep(100);}
  Require(session!=null,"helper not ready");Require(File.ReadAllText(Path.Combine(session,"ready.txt"))=="attached","debug attach unavailable");File.WriteAllText(gate,"");
  if(!p.WaitForExit(15000)){p.Kill();throw new Exception("Fixture did not exit");}Thread.Sleep(500);
- string log=File.ReadAllText(Path.Combine(session,"events.jsonl"));Require(log.Contains("process-end"),"exit telemetry missing");
+ string log=File.ReadAllText(Path.Combine(session,"events.jsonl"));Require(log.Contains("process-end"),"exit telemetry missing");Require(log.Contains("network-adapters") && log.Contains("directplay-providers"),"network environment missing");Require(File.Exists(Path.Combine(session,"ipxwrapper.log")),"IPX log not copied");
  if(mode=="crash"){var dumps=Directory.GetFiles(session,"*.dmp");Require(dumps.Length==1,"dump missing: "+log);using(var r=new BinaryReader(File.OpenRead(dumps[0]))){Require(r.ReadUInt32()==0x504d444d,"bad dump");r.ReadUInt32();uint n=r.ReadUInt32(),dir=r.ReadUInt32();bool exception=false;for(int j=0;j<n;j++){r.BaseStream.Position=dir+j*12;uint kind=r.ReadUInt32();r.ReadUInt32();uint address=r.ReadUInt32();if(kind==6){r.BaseStream.Position=address+8;Require(r.ReadUInt32()==0xe0434352,"dump exception mismatch");exception=true;}}Require(exception,"exception stream missing");}}
  else Require(Directory.GetFiles(session,"*.dmp").Length==0,"clean exit produced dump");
  }}
