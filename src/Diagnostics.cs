@@ -55,7 +55,7 @@ namespace Amagadon {
                     using(var providers=root.OpenSubKey(@"SOFTWARE\Microsoft\DirectPlay\Service Providers"))Write(session,"directplay-providers",providers==null?new string[0]:providers.GetSubKeyNames());
                     using(var cls=root.OpenSubKey(@"SOFTWARE\Classes\CLSID\{D1EB6D20-8923-11D0-9D97-00A0C90A43CB}\InprocServer32"))Write(session,"directplay-com",new {registered=cls!=null,server=cls==null?null:cls.GetValue("")});
                 }
-                foreach(string name in new[]{"dplayx.dll","dpnet.dll","dpwsockx.dll","ipxwrapper.dll","wsock32.dll","ws2_32.dll"}) {
+                foreach(string name in new[]{"dplayx.dll","dpnet.dll","dpwsockx.dll","ipxwrapper.dll","wsock32.dll","mswsock.dll","ws2_32.dll"}) {
                     string file=Path.Combine(folder,name);if(File.Exists(file))Write(session,"network-local-dll",new {name=name,sha256=Core.Hash(file),version=FileVersionInfo.GetVersionInfo(file).FileVersion});
                 }
             }catch(Exception ex) {Write(session,"network-environment-error",ex.Message);}
@@ -189,7 +189,7 @@ namespace Amagadon {
                 var files=new List<string>();
                 foreach(string name in new[]{"launcher.log","launcher.log.1","settings.json"}) {string f=Path.Combine(Core.Home,name);if(File.Exists(f))files.Add(f);}
                 string updates=Path.Combine(Core.Home,"updates");if(Directory.Exists(updates))files.AddRange(Directory.GetFiles(updates,"update-result.log",SearchOption.AllDirectories));
-                foreach(string directory in new[]{Home,Path.Combine(Core.Home,"ReplayDiagnostics"),Path.Combine(Core.Home,"CrashDumps")})if(Directory.Exists(directory))files.AddRange(Directory.GetFiles(directory,"*",SearchOption.AllDirectories).Where(f=>new[]{".jsonl",".log",".json",".txt",".dmp",".ini",".dat",".1"}.Contains(Path.GetExtension(f).ToLowerInvariant())));
+                foreach(string directory in new[]{Home,Path.Combine(Core.Home,"NetworkSetup"),Path.Combine(Core.Home,"ReplayDiagnostics"),Path.Combine(Core.Home,"CrashDumps")})if(Directory.Exists(directory))files.AddRange(Directory.GetFiles(directory,"*",SearchOption.AllDirectories).Where(f=>new[]{".jsonl",".log",".json",".txt",".dmp",".ini",".dat",".1"}.Contains(Path.GetExtension(f).ToLowerInvariant())));
                 foreach(string file in files.OrderByDescending(f=>File.GetLastWriteTimeUtc(f))) {
                     string relative=file.Substring(Core.Home.Length+1).Replace('\\','/');
                     try {

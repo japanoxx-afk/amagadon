@@ -4,7 +4,7 @@
 
 ## 실행
 
-`dist/0.3.13-release/AmagadonLauncher-0.3.13.exe`를 실행하고 게임 설치 폴더를 지정합니다.
+`dist/0.3.14-release/AmagadonLauncher-0.3.14.exe`를 실행하고 게임 설치 폴더를 지정합니다.
 기본 경로: `C:\Users\seo\Downloads\armaggeddon\armaggeddon`.
 배포 ZIP은 전체를 풀어 사용합니다. `compat`, `apply-update.ps1` 파일도 필요합니다.
 
@@ -69,6 +69,8 @@ if ($test.ExitCode -ne 0) { throw 'Self-test failed' }
 
 
 ## IPX 보호 및 진단
+
+0.3.14에서는 실패 안내 이후의 복귀 오류를 수정했습니다. IPXWrapper DLL이 있지만 공급자 등록이 없는 경우 게임을 종료하고 **IPX 등록 복구 (관리자 권한)**를 누른 뒤 Windows 권한 요청을 승인하세요. 누락된 32비트 공급자/서비스 등록만 추가하며 DLL 교체나 방화벽 변경은 하지 않습니다. 등록 형식은 [IPXWrapper 공식 설정 코드](https://github.com/solemnwarning/ipxwrapper/blob/master/src/dplay-setup.c)를 따릅니다. 변경 내역은 NetworkSetup에 기록되어 진단 ZIP에 포함됩니다. 실제 두 PC 간 접속은 미검증입니다.
 
 0.3.13은 IPX 연결 정보 없음과 초기화 실패 경로를 보호합니다. 성공 시 기존 다음 화면으로 진행하고 실패 시 안내 후 메뉴에 남습니다. 800×600/1024×768 및 리플레이 사용 여부와 무관하게 검증된 게임의 첫 스레드를 재개하기 전에 적용하며 게임 EXE를 덮어쓰지 않습니다. IPX 지원 자체를 설치하거나 TCP/IP로 몰래 전환하지 않습니다.
 

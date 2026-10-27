@@ -12,8 +12,8 @@ using System.Threading.Tasks;
 using System.Web.Script.Serialization;
 using System.Windows.Forms;
 
-[assembly: System.Reflection.AssemblyVersion("0.3.13.0")]
-[assembly: System.Reflection.AssemblyInformationalVersion("0.3.13")]
+[assembly: System.Reflection.AssemblyVersion("0.3.14.0")]
+[assembly: System.Reflection.AssemblyInformationalVersion("0.3.14")]
 namespace Amagadon {
     public class Settings {
         public string GamePath="";
@@ -26,8 +26,8 @@ namespace Amagadon {
     }
     public class Backup { public string Directory; public string[] Existing; }
     public static class Core {
-        public const string Version = "0.3.13";
-        public const string DisplayVersion = "0.3.13";
+        public const string Version = "0.3.14";
+        public const string DisplayVersion = "0.3.14";
         public static readonly string Home = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "AmagadonLauncher");
         public static readonly JavaScriptSerializer Json = new JavaScriptSerializer();
         public static string Hash(string path) { using(var h=SHA256.Create()) using(var f=File.OpenRead(path)) return BitConverter.ToString(h.ComputeHash(f)).Replace("-", "").ToLowerInvariant(); }
@@ -94,7 +94,7 @@ namespace Amagadon {
         string Base { get { return AppDomain.CurrentDomain.BaseDirectory; } }
         public Launcher() {
             AutoScaleMode=AutoScaleMode.None;
-            Text="아마게돈 런처 · "+Core.DisplayVersion; ClientSize=new Size(760,900); AutoScroll=true;AutoScrollMinSize=new Size(740,890); StartPosition=FormStartPosition.CenterScreen;
+            Text="아마게돈 런처 · "+Core.DisplayVersion; ClientSize=new Size(760,950); AutoScroll=true;AutoScrollMinSize=new Size(740,940); StartPosition=FormStartPosition.CenterScreen;
             BackColor=Color.FromArgb(17,22,30); ForeColor=Color.FromArgb(226,231,239); Font=new Font("맑은 고딕",10);
             Label title=new Label {Text="ARMAGEDDON",Font=new Font("Segoe UI",28,FontStyle.Bold),AutoSize=true,Location=new Point(30,22)}; Controls.Add(title);
             AddLabel("아마게돈  /  LAUNCHER v"+Core.DisplayVersion,32,85);
@@ -116,7 +116,9 @@ namespace Amagadon {
             diagnostic.Text="진단 기록 및 충돌 덤프 수집";diagnostic.SetBounds(32,736,338,32);Controls.Add(diagnostic);
             mouseCompatibility.Text="마우스 입력 호환 모드 (재실행 필요)";mouseCompatibility.SetBounds(388,736,338,32);Controls.Add(mouseCompatibility);
             Controls.Add(new Label {Text="마우스가 멈추면 Ctrl+Tab으로 제한을 해제하거나 입력 호환 모드로 재실행하세요.\r\n진단은 로컬에 저장됩니다. ZIP에는 PC 경로와 충돌 메모리가 포함될 수 있습니다.",Location=new Point(32,775),Size=new Size(694,40),Font=new Font("맑은 고딕",9)});
-            status.SetBounds(32,823,694,55); status.ForeColor=Color.FromArgb(158,174,194); Controls.Add(status);
+            var ipxRepair=Button("IPX 등록 복구 (관리자 권한)",32,823,338,36);
+            ipxRepair.Click+=async delegate {if(gameRunning || checkingUpdate)return;gameRunning=true;ipxRepair.Enabled=game.Enabled=editor.Enabled=update.Enabled=replay.Enabled=false;try {Save();await IpxSetup.RunElevated(path.Text);status.Text="IPX 공급자 등록을 복구했습니다. 게임을 다시 실행해 IPX를 선택해주세요.";}catch(System.ComponentModel.Win32Exception ex){if(ex.NativeErrorCode==1223)status.Text="IPX 복구 권한 요청을 취소했습니다.";else Error(ex);}catch(Exception ex){Error(ex);}finally{gameRunning=false;ipxRepair.Enabled=game.Enabled=editor.Enabled=update.Enabled=replay.Enabled=true;}};
+            status.SetBounds(32,870,694,55); status.ForeColor=Color.FromArgb(158,174,194); Controls.Add(status);
             settings=new Settings(); try { string f=Path.Combine(Core.Home,"settings.json"); if(File.Exists(f)) settings=Core.Json.Deserialize<Settings>(File.ReadAllText(f)); } catch(Exception ex) { Core.Log(ex.Message); }
             Core.MigrateScreen(settings);
             Core.MigrateInput(settings);
@@ -211,6 +213,7 @@ namespace Amagadon {
         }
         [STAThread] public static int Main(string[] args) {
             Diagnostics.SetProcessDPIAware();
+            if(args.Length==2 && args[0]=="--repair-ipx")return IpxSetup.Repair(args[1]);
             if(args.Length==4 && args[0]=="--watch-process")return Diagnostics.Watch(Int32.Parse(args[1]),Int64.Parse(args[2]),args[3]);
             if(args.Length==3 && args[0]=="--diagnostic-report") {try {Diagnostics.Report(args[1],args[2]);return 0;}catch(Exception ex) {Core.Log(ex.ToString());return 1;}}
             AppDomain.CurrentDomain.UnhandledException+=delegate(object sender,UnhandledExceptionEventArgs e) {Core.Log("Launcher unhandled: "+e.ExceptionObject);};

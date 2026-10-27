@@ -40,12 +40,24 @@ else:raise AssertionError('Original missing-provider crash not reproduced')
 for tcp in (False,True):
  for present in (False,True):
   for stage in ('ok','address','create','initialize'):run(present,stage,tcp=tcp)
-for site,success,fail in [(0x45c08e,0x45c099,0x45c0a7),(0x45c100,0x45c10b,0x45c119)]:
+for site,success,fail in [(0x45c08e,0x45c099,0x45c0ae),(0x45c100,0x45c10b,0x45c120)]:
  for result in (0,1):
   u=machine();sp=0x2008000;u.reg_write(UC_X86_REG_ESP,sp);u.reg_write(UC_X86_REG_EAX,result);put(u,0x4cb258,0x590300);calls=[]
+  saved=[0x11111111,0x22222222,0x33333333,0x44444444]
+  for i,v in enumerate(saved):put(u,sp+4*i,v)
+  put(u,sp+16+0x1c,0x5f0000)
   def hook(u,a,size,data):
    if a==0x590300:calls.append('message');ret(u,16,1)
-  u.hook_add(UC_HOOK_CODE,hook);u.emu_start(site,success if result else fail,count=1000)
-  assert u.reg_read(UC_X86_REG_ESP)==sp and u.reg_read(UC_X86_REG_EAX)==result
+  u.hook_add(UC_HOOK_CODE,hook);u.emu_start(site,success if result else 0x5f0000,count=1000)
   assert calls==([] if result else ['message']) and get(u,get(u,0x475ba8))==(0 if result else 1)
-print('PASS: original null-provider crash reproduced; IPX/TCP null and initialization failures; released pointer cleared; successful next-screen path; failure menu return/message/count; stack/register preservation')
+  if result:assert u.reg_read(UC_X86_REG_ESP)==sp
+  else:
+   assert u.reg_read(UC_X86_REG_ESP)==sp+16+0x1c+4
+   assert [u.reg_read(r) for r in (UC_X86_REG_EDI,UC_X86_REG_EBP,UC_X86_REG_EBX,UC_X86_REG_ESI)]==saved
+# The 0.3.13 destination erroneously adds twelve bytes belonging to arguments
+# that the failure path never pushed. Execute through RET to catch this.
+u=machine();sp=0x2008000;u.reg_write(UC_X86_REG_ESP,sp);put(u,sp+16+0x1c,0x5f0000)
+try:u.emu_start(0x45c0a7,0x5f0000,count=100)
+except UcError:pass
+else:raise AssertionError('0.3.13 bad epilogue regression not reproduced')
+print('PASS: null provider and 16 initialization combinations; 0.3.13 bad epilogue reproduced; fixed IPX failure and retry return through caller with exact stack/register restoration')

@@ -19,9 +19,9 @@ namespace Amagadon {
   public static Dictionary<int,byte[]> Build(int cave) {
    var edits=new Dictionary<int,byte[]>();var payload=new byte[1024];
    byte[] release=Hex("8b0252ff5008c705d040510000000000c3");Buffer.BlockCopy(release,0,payload,0,release.Length);
-   byte[] title=Encoding.ASCII.GetBytes("Armageddon IPX\0"),message=Encoding.ASCII.GetBytes("IPX connection could not be initialized.\r\nDirectPlay or the IPX provider may be unavailable.\r\nThe game will stay in the menu.\r\nPlease send the launcher's logging report ZIP.\0");
+   byte[] title=Encoding.ASCII.GetBytes("Armageddon IPX\0"),message=Encoding.ASCII.GetBytes("IPX connection could not be initialized.\r\nDirectPlay or the IPX provider may be unavailable.\r\nThe game will stay in the menu.\r\nRun IPX registration repair in the launcher, then retry.\0");
    Buffer.BlockCopy(title,0,payload,256,title.Length);Buffer.BlockCopy(message,0,payload,320,message.Length);
-   int[] sites={0x45c092,0x45c104},returns={0x45c0a7,0x45c119};
+   int[] sites={0x45c092,0x45c104},returns={0x45c0ae,0x45c120};
    for(int i=0;i<sites.Length;i++) {
     int start=64+i*64;using(var m=new MemoryStream())using(var w=new BinaryWriter(m)) {
      w.Write((byte)0x60);w.Write(Hex("ff05"));w.Write(cave+4096);w.Write(Hex("6a3068"));w.Write(cave+256);w.Write((byte)0x68);w.Write(cave+320);w.Write(Hex("6a00ff1558b24c0061"));
