@@ -12,8 +12,8 @@ using System.Threading.Tasks;
 using System.Web.Script.Serialization;
 using System.Windows.Forms;
 
-[assembly: System.Reflection.AssemblyVersion("0.3.14.0")]
-[assembly: System.Reflection.AssemblyInformationalVersion("0.3.14")]
+[assembly: System.Reflection.AssemblyVersion("0.3.15.0")]
+[assembly: System.Reflection.AssemblyInformationalVersion("0.3.15")]
 namespace Amagadon {
     public class Settings {
         public string GamePath="";
@@ -23,11 +23,13 @@ namespace Amagadon {
         public bool DiagnosticLogging=true, MouseCompatibility=true;
         public int InputProfile=0;
         public int ScreenProfile=0;
+        public string ZoneAddress="127.0.0.1";
+        public int ZonePort=9000;
     }
     public class Backup { public string Directory; public string[] Existing; }
     public static class Core {
-        public const string Version = "0.3.14";
-        public const string DisplayVersion = "0.3.14";
+        public const string Version = "0.3.15";
+        public const string DisplayVersion = "0.3.15";
         public static readonly string Home = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "AmagadonLauncher");
         public static readonly JavaScriptSerializer Json = new JavaScriptSerializer();
         public static string Hash(string path) { using(var h=SHA256.Create()) using(var f=File.OpenRead(path)) return BitConverter.ToString(h.ComputeHash(f)).Replace("-", "").ToLowerInvariant(); }
@@ -91,6 +93,7 @@ namespace Amagadon {
         TextBox path=new TextBox(); ComboBox resolution=new ComboBox(),output=new ComboBox(),aspect=new ComboBox(),renderer=new ComboBox();
         CheckBox diagnostic=new CheckBox(),mouseCompatibility=new CheckBox(),autoReplay=new CheckBox(),compat=new CheckBox(),fullscreen=new CheckBox(),confine=new CheckBox();
         bool gameRunning; Button replay; ReplaySession activeReplay; Label status=new Label(); Button game,editor,update; Settings settings;
+        readonly CrazyZoneHost zoneHost=new CrazyZoneHost();
         string Base { get { return AppDomain.CurrentDomain.BaseDirectory; } }
         public Launcher() {
             AutoScaleMode=AutoScaleMode.None;
@@ -117,6 +120,9 @@ namespace Amagadon {
             mouseCompatibility.Text="마우스 입력 호환 모드 (재실행 필요)";mouseCompatibility.SetBounds(388,736,338,32);Controls.Add(mouseCompatibility);
             Controls.Add(new Label {Text="마우스가 멈추면 Ctrl+Tab으로 제한을 해제하거나 입력 호환 모드로 재실행하세요.\r\n진단은 로컬에 저장됩니다. ZIP에는 PC 경로와 충돌 메모리가 포함될 수 있습니다.",Location=new Point(32,775),Size=new Size(694,40),Font=new Font("맑은 고딕",9)});
             var ipxRepair=Button("IPX 등록 복구 (관리자 권한)",32,823,338,36);
+            var zone=Button("Crazy Zone 서버 / 접속",388,823,338,36);
+            zone.Click+=async delegate {if(gameRunning || checkingUpdate)return;using(var dialog=new CrazyZoneWindow(zoneHost,settings)) {if(dialog.ShowDialog(this)==DialogResult.OK) {settings.ZoneAddress=dialog.Address;settings.ZonePort=dialog.Port;Save();await Launch("Armageddon.exe",null,true);}}};
+            FormClosed+=delegate {zoneHost.Dispose();};
             ipxRepair.Click+=async delegate {if(gameRunning || checkingUpdate)return;gameRunning=true;ipxRepair.Enabled=game.Enabled=editor.Enabled=update.Enabled=replay.Enabled=false;try {Save();await IpxSetup.RunElevated(path.Text);status.Text="IPX 공급자 등록을 복구했습니다. 게임을 다시 실행해 IPX를 선택해주세요.";}catch(System.ComponentModel.Win32Exception ex){if(ex.NativeErrorCode==1223)status.Text="IPX 복구 권한 요청을 취소했습니다.";else Error(ex);}catch(Exception ex){Error(ex);}finally{gameRunning=false;ipxRepair.Enabled=game.Enabled=editor.Enabled=update.Enabled=replay.Enabled=true;}};
             status.SetBounds(32,870,694,55); status.ForeColor=Color.FromArgb(158,174,194); Controls.Add(status);
             settings=new Settings(); try { string f=Path.Combine(Core.Home,"settings.json"); if(File.Exists(f)) settings=Core.Json.Deserialize<Settings>(File.ReadAllText(f)); } catch(Exception ex) { Core.Log(ex.Message); }
@@ -148,10 +154,12 @@ namespace Amagadon {
             Directory.CreateDirectory(Core.Home); File.WriteAllText(Path.Combine(Core.Home,"settings.json"),Core.Json.Serialize(settings));
         }
         void Error(Exception ex) { status.Text=ex.Message; Core.Log(ex.ToString()); MessageBox.Show(this,ex.Message,"실행 오류",MessageBoxButtons.OK,MessageBoxIcon.Warning); }
-        async Task Launch(string exe,string replaySource=null) {
+        async Task Launch(string exe,string replaySource=null,bool privateZone=false) {
             EditorCompatibility editorLease=null;gameRunning=true;game.Enabled=editor.Enabled=update.Enabled=replay.Enabled=false;
             try {
                 Save(); Core.Validate(settings.GamePath); Core.EnsureIdle(settings.GamePath);EditorCompatibility.Recover(settings.GamePath);
+                CrazyZonePatch.Address=privateZone?settings.ZoneAddress:null;CrazyZonePatch.Port=settings.ZonePort;
+                if(privateZone)CrazyZonePatch.Validate(settings.ZoneAddress,settings.ZonePort);
                 string file=Path.Combine(settings.GamePath,exe);
                 if(exe=="ACE.exe") {file=EditorPatch.Prepare(settings.GamePath);editorLease=new EditorCompatibility(settings.GamePath);}
                 else {
@@ -168,14 +176,14 @@ namespace Amagadon {
                 }
                 Core.Log("Display internal="+(settings.NativeHD?"1024x768":"800x600")+" fullscreen="+settings.Fullscreen+" maintainAspect="+settings.MaintainAspect+" desktop="+Screen.FromControl(this).Bounds.Size);
                 Core.Log("Start version="+Core.DisplayVersion+" "+file+" SHA256="+Core.Hash(file)+" settings="+Core.Json.Serialize(settings));
-                if(exe=="Armageddon.exe" && settings.NativeHD && (settings.AutoReplay || replaySource!=null)) {
+                if(!privateZone && exe=="Armageddon.exe" && settings.NativeHD && (settings.AutoReplay || replaySource!=null)) {
                     status.Text=replaySource!=null?"리플레이 시작 상태를 불러오는 중…":"게임 실행 중 · 싱글플레이 자동 기록 준비";
                     using(var session=new ReplaySession(settings.GamePath,file,replaySource)) {session.DiagnosticSettings=settings;activeReplay=session;session.Progress=delegate(string text) {if(!IsDisposed && IsHandleCreated)BeginInvoke((Action)delegate {status.Text=text;});};if(session.IsPlayback) {replay.Text="재생 중단";replay.Enabled=true;}await Task.Run(()=>session.Run());status.Text=session.Result;}
                 } else using(var p=exe=="Armageddon.exe"?NetworkGuard.Start(file,settings.GamePath):Process.Start(Diagnostics.StartInfo(file,settings.GamePath))) {
                     Diagnostics.Begin(p.Id,file,settings.GamePath,settings);status.Text=exe+" 실행 중"; await Task.Run(()=>p.WaitForExit());
                     Core.Log(exe+" exit=0x"+p.ExitCode.ToString("X8")); status.Text=p.ExitCode==0?"정상 종료했습니다.":"비정상 종료: 0x"+p.ExitCode.ToString("X8")+" · 실행 로그를 확인해주세요.";
                 }
-            } catch(Exception ex) { Error(ex); } finally {if(editorLease!=null)try {editorLease.Dispose();}catch(Exception ex) {Error(ex);} activeReplay=null;replay.Text="리플레이 재생";gameRunning=false;game.Enabled=editor.Enabled=update.Enabled=replay.Enabled=true; }
+            } catch(Exception ex) { Error(ex); } finally {CrazyZonePatch.Address=null;if(editorLease!=null)try {editorLease.Dispose();}catch(Exception ex) {Error(ex);} activeReplay=null;replay.Text="리플레이 재생";gameRunning=false;game.Enabled=editor.Enabled=update.Enabled=replay.Enabled=true; }
         }
         void ShowNotes() {
             var f=new Form{Text="패치노트",Size=new Size(650,500),StartPosition=FormStartPosition.CenterParent}; var t=new TextBox{Multiline=true,ReadOnly=true,Dock=DockStyle.Fill,ScrollBars=ScrollBars.Vertical,Font=Font};

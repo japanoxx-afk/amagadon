@@ -63,7 +63,8 @@ namespace Amagadon {
         static object NetworkState(Process p) {
             Func<int,int?> read=address=>{var b=new byte[4];IntPtr count;return ReadProcessMemory(p.Handle,new IntPtr(address),b,4,out count)&&count.ToInt64()==4?(int?)BitConverter.ToInt32(b,0):null;};
             int? counter=read(NetworkGuard.Counter);
-            return new {directPlayObject=read(0x5140d0),ipxProvider=read(0x5140f4),tcpProvider=read(0x5140f8),initializationFailure=read(0x4d96f0),guardFailureCount=counter.HasValue?read(counter.Value):null};
+            return new {directPlayObject=read(0x5140d0),ipxProvider=read(0x5140f4),tcpProvider=read(0x5140f8),initializationFailure=read(0x4d96f0),guardFailureCount=counter.HasValue?read(counter.Value):null,
+                crazyZone=new {connected=read(0x57ca38),connectionEnded=read(0x57ca3c),welcome=read(0x57ca30),loginResult=read(0x4eaaac),channelResult=read(0x4eaaa8),roomCreateResult=read(0x57ca28),roomJoinResult=read(0x57ca6c),roomId=read(0x57b93c)}};
         }
         public static void Begin(int pid,string executable,string folder,Settings settings) {
             if(settings==null || !settings.DiagnosticLogging)return;
@@ -190,6 +191,7 @@ namespace Amagadon {
                 foreach(string name in new[]{"launcher.log","launcher.log.1","settings.json"}) {string f=Path.Combine(Core.Home,name);if(File.Exists(f))files.Add(f);}
                 string updates=Path.Combine(Core.Home,"updates");if(Directory.Exists(updates))files.AddRange(Directory.GetFiles(updates,"update-result.log",SearchOption.AllDirectories));
                 foreach(string directory in new[]{Home,Path.Combine(Core.Home,"NetworkSetup"),Path.Combine(Core.Home,"ReplayDiagnostics"),Path.Combine(Core.Home,"CrashDumps")})if(Directory.Exists(directory))files.AddRange(Directory.GetFiles(directory,"*",SearchOption.AllDirectories).Where(f=>new[]{".jsonl",".log",".json",".txt",".dmp",".ini",".dat",".1"}.Contains(Path.GetExtension(f).ToLowerInvariant())));
+                if(Directory.Exists(CrazyZoneServer.Home))files.AddRange(Directory.GetFiles(CrazyZoneServer.Home,"server-*.jsonl*",SearchOption.TopDirectoryOnly));
                 foreach(string file in files.OrderByDescending(f=>File.GetLastWriteTimeUtc(f))) {
                     string relative=file.Substring(Core.Home.Length+1).Replace('\\','/');
                     try {

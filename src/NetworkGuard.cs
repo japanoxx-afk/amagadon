@@ -34,7 +34,7 @@ namespace Amagadon {
    foreach(int site in new[]{0x475b3e,0x475bce})edits[site]=Branch(0xe8,site,cave,6);
    edits[Counter]=BitConverter.GetBytes(cave+4096);edits[cave+4096]=new byte[4];return edits;
   }
-  static void Write(IntPtr process,int address,byte[] bytes) {
+  internal static void Write(IntPtr process,int address,byte[] bytes) {
    uint old;IntPtr count;var size=new UIntPtr((uint)bytes.Length);
    if(!VirtualProtectEx(process,new IntPtr(address),size,0x40,out old))throw new IOException("Network guard protection failed");
    try {if(!WriteProcessMemory(process,new IntPtr(address),bytes,bytes.Length,out count) || count.ToInt64()!=bytes.Length || !FlushInstructionCache(process,new IntPtr(address),size))throw new IOException("Network guard write failed");}
@@ -48,6 +48,7 @@ namespace Amagadon {
    IntPtr memory=VirtualAllocEx(process,IntPtr.Zero,new UIntPtr(8192),0x3000,0x04);if(memory==IntPtr.Zero)throw new IOException("Network guard allocation failed");
    var edits=Build(memory.ToInt32());Write(process,memory.ToInt32(),edits[memory.ToInt32()]);uint previous;if(!VirtualProtectEx(process,memory,new UIntPtr(4096),0x20,out previous))throw new IOException("Network guard executable protection failed");
    foreach(var edit in edits)if(edit.Key!=memory.ToInt32())Write(process,edit.Key,edit.Value);
+   CrazyZonePatch.Apply(process);
    Core.Log("IPX guard applied before first thread resume: null provider, released pointer, failure menu return; original file unchanged");
   }
   public static Process Start(string executable,string folder) {
