@@ -66,6 +66,14 @@ namespace Amagadon {
             return new {directPlayObject=read(0x5140d0),ipxProvider=read(0x5140f4),tcpProvider=read(0x5140f8),initializationFailure=read(0x4d96f0),guardFailureCount=counter.HasValue?read(counter.Value):null,
                 crazyZone=new {connected=read(0x57ca38),connectionEnded=read(0x57ca3c),welcome=read(0x57ca30),loginResult=read(0x4eaaac),channelResult=read(0x4eaaa8),roomCreateResult=read(0x57ca28),roomJoinResult=read(0x57ca6c),roomId=read(0x57b93c)}};
         }
+        static object InputState(Process p) {
+            Func<int,int?> read=address=>{var b=new byte[4];IntPtr n;return ReadProcessMemory(p.Handle,new IntPtr(address),b,4,out n)&&n.ToInt64()==4?(int?)BitConverter.ToInt32(b,0):null;};
+            int? pointer=read(InputRecovery.CounterPointer);byte[] counters=new byte[44];IntPtr count;
+            object recovery=null;
+            if(pointer.HasValue && pointer.Value>0 && ReadProcessMemory(p.Handle,new IntPtr(pointer.Value),counters,44,out count) && count.ToInt64()==44)
+                recovery=new {reads=BitConverter.ToUInt32(counters,0),lastRead="0x"+BitConverter.ToUInt32(counters,4).ToString("X8"),acquireAttempts=BitConverter.ToUInt32(counters,8),lastAcquire="0x"+BitConverter.ToUInt32(counters,12).ToString("X8"),acquireSuccess=BitConverter.ToUInt32(counters,16),failedReads=BitConverter.ToUInt32(counters,20),activations=BitConverter.ToUInt32(counters,24),notificationTimeouts=BitConverter.ToUInt32(counters,28),backgroundSkips=BitConverter.ToUInt32(counters,36),focusResumes=BitConverter.ToUInt32(counters,40)};
+            return new {pausedForFocus=read(0x572b5c),mouseEnabled=read(0x5727d0),mouseDevice=read(0x5727e8),notificationEvent=read(0x5727f4),inputThread=read(0x5727f8),recovery=recovery};
+        }
         public static void Begin(int pid,string executable,string folder,Settings settings) {
             if(settings==null || !settings.DiagnosticLogging)return;
             try {
@@ -117,7 +125,7 @@ namespace Amagadon {
                 object gameInput=null;int gx=0,gy=0;
                 if(engineMouse) {byte[] bytes=new byte[8];IntPtr read;if(ReadProcessMemory(p.Handle,new IntPtr(0x504d70),bytes,8,out read) && read.ToInt64()==8) {gx=BitConverter.ToInt32(bytes,0);gy=BitConverter.ToInt32(bytes,4);gameInput=new {x=gx,y=gy};}}
                 bool hung=IsHungAppWindow(p.MainWindowHandle);
-                if(engineMouse)Write(folder,"network-state",NetworkState(p));
+                if(engineMouse) {Write(folder,"network-state",NetworkState(p));Write(folder,"input-state",InputState(p));}
                 Write(folder,"sample",new {gameInput=gameInput,foreground=foreground==(uint)p.Id,window=p.MainWindowHandle.ToInt64(),hungWindow=hung,cursorAvailable=haveCursor,cursor=cursor,clipAvailable=haveClip,clip=clip,client=client,workingSet=p.WorkingSet64,privateBytes=p.PrivateMemorySize64,handles=p.HandleCount,threads=p.Threads.Count,cpuMs=p.TotalProcessorTime.TotalMilliseconds});
                 bool suspected=detector.Observe(engineMouse && gameInput!=null && haveCursor && foreground==(uint)p.Id,gx,gy,cursor.x,cursor.y,hung);
                 if(suspected && !captured) {

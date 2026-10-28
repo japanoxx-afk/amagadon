@@ -48,6 +48,7 @@ namespace Amagadon {
    IntPtr memory=VirtualAllocEx(process,IntPtr.Zero,new UIntPtr(8192),0x3000,0x04);if(memory==IntPtr.Zero)throw new IOException("Network guard allocation failed");
    var edits=Build(memory.ToInt32());Write(process,memory.ToInt32(),edits[memory.ToInt32()]);uint previous;if(!VirtualProtectEx(process,memory,new UIntPtr(4096),0x20,out previous))throw new IOException("Network guard executable protection failed");
    foreach(var edit in edits)if(edit.Key!=memory.ToInt32())Write(process,edit.Key,edit.Value);
+   InputRecovery.Apply(process);
    CrazyZonePatch.Apply(process);
    Core.Log("IPX guard applied before first thread resume: null provider, released pointer, failure menu return; original file unchanged");
   }
