@@ -12,8 +12,8 @@ using System.Threading.Tasks;
 using System.Web.Script.Serialization;
 using System.Windows.Forms;
 
-[assembly: System.Reflection.AssemblyVersion("0.3.23.0")]
-[assembly: System.Reflection.AssemblyInformationalVersion("0.3.23")]
+[assembly: System.Reflection.AssemblyVersion("0.3.24.0")]
+[assembly: System.Reflection.AssemblyInformationalVersion("0.3.24")]
 namespace Amagadon {
     public class Settings {
         public string GamePath="";
@@ -28,8 +28,8 @@ namespace Amagadon {
     }
     public class Backup { public string Directory; public string[] Existing; }
     public static class Core {
-        public const string Version = "0.3.23";
-        public const string DisplayVersion = "0.3.23";
+        public const string Version = "0.3.24";
+        public const string DisplayVersion = "0.3.24";
         public static readonly string Home = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "AmagadonLauncher");
         public static readonly JavaScriptSerializer Json = new JavaScriptSerializer();
         public static string Hash(string path) { using(var h=SHA256.Create()) using(var f=File.OpenRead(path)) return BitConverter.ToString(h.ComputeHash(f)).Replace("-", "").ToLowerInvariant(); }
@@ -181,7 +181,7 @@ namespace Amagadon {
                     using(var session=new ReplaySession(settings.GamePath,file,replaySource)) {session.DiagnosticSettings=settings;activeReplay=session;session.Progress=delegate(string text) {if(!IsDisposed && IsHandleCreated)BeginInvoke((Action)delegate {status.Text=text;});};if(session.IsPlayback) {replay.Text="재생 중단";replay.Enabled=true;}await Task.Run(()=>session.Run());status.Text=session.Result;}
                 } else using(var p=exe=="Armageddon.exe"?NetworkGuard.Start(file,settings.GamePath):Process.Start(Diagnostics.StartInfo(file,settings.GamePath))) {
                     Diagnostics.Begin(p.Id,file,settings.GamePath,settings);status.Text=exe+" 실행 중"; await Task.Run(()=>p.WaitForExit());
-                    Core.Log(exe+" exit=0x"+p.ExitCode.ToString("X8")); status.Text=p.ExitCode==0?"정상 종료했습니다.":"비정상 종료: 0x"+p.ExitCode.ToString("X8")+" · 실행 로그를 확인해주세요.";
+                    int exitCode=p.ExitCode;Core.Log(exe+" exit=0x"+exitCode.ToString("X8")); status.Text=exitCode==0?"정상 종료했습니다.":"비정상 종료: 0x"+exitCode.ToString("X8")+" · 실행 로그를 확인해주세요.";
                 }
             } catch(Exception ex) { Error(ex); } finally {CrazyZonePatch.Address=null;if(editorLease!=null)try {editorLease.Dispose();}catch(Exception ex) {Error(ex);} activeReplay=null;replay.Text="리플레이 재생";gameRunning=false;game.Enabled=editor.Enabled=update.Enabled=replay.Enabled=true; }
         }

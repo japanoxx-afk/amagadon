@@ -54,11 +54,19 @@ namespace Amagadon {
    CrazyZonePatch.Apply(process);
    Core.Log("IPX guard applied before first thread resume: null provider, released pointer, failure menu return; original file unchanged");
   }
+  internal static Process TrackProcess(int pid) {
+   Process process=Process.GetProcessById(pid);
+   try {IntPtr retained=process.Handle;return process;}catch{process.Dispose();throw;}
+  }
   public static Process Start(string executable,string folder) {
    var values=new SortedDictionary<string,string>(StringComparer.OrdinalIgnoreCase);foreach(System.Collections.DictionaryEntry item in Diagnostics.StartInfo(executable,folder).EnvironmentVariables)values[(string)item.Key]=(string)item.Value;
    IntPtr env=Marshal.StringToHGlobalUni(String.Join("\0",values.Select(v=>v.Key+"="+v.Value))+"\0\0");var startup=new Startup{cb=Marshal.SizeOf(typeof(Startup))};Info info;
    try {if(!CreateProcess(executable,new StringBuilder("\""+executable+"\""),IntPtr.Zero,IntPtr.Zero,false,0x404,env,folder,ref startup,out info))throw new IOException("게임 시작 실패: "+Marshal.GetLastWin32Error());}finally{Marshal.FreeHGlobal(env);}
-   try {Apply(info.process,executable);if(ResumeThread(info.thread)==UInt32.MaxValue)throw new IOException("게임 재개 실패");return Process.GetProcessById((int)info.pid);}catch{TerminateProcess(info.process,1);throw;}finally{CloseHandle(info.thread);CloseHandle(info.process);}
+   Process tracked=null;
+   // Retain a managed handle while the native child is still suspended. A PID-only
+   // Process loses access to its exit code after WaitForExit closes its temporary
+   // handle; it can also race an immediately exiting child after ResumeThread.
+   try {Apply(info.process,executable);tracked=TrackProcess((int)info.pid);if(ResumeThread(info.thread)==UInt32.MaxValue)throw new IOException("게임 재개 실패");return tracked;}catch{if(tracked!=null)tracked.Dispose();TerminateProcess(info.process,1);throw;}finally{CloseHandle(info.thread);CloseHandle(info.process);}
   }
  }
 }
