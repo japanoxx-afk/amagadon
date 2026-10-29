@@ -277,7 +277,8 @@ namespace Amagadon {
             if(kind==98)throw new IOException("재생 중 저장·불러오기 명령은 지원하지 않습니다. 원본 저장 파일은 변경하지 않았습니다.");
             if(kind==99)throw new IOException("시작 상태를 게임에서 불러오지 못했습니다.");
             if(kind==10) {
-                if(writer!=null)FinishRecording();frames=0;
+                if(writer!=null)FinishRecording();frames=0;reportedScreen=false;
+                LogMatchState("before-start-snapshot");
                 recordDirectory=Path.Combine(work,"match-"+Guid.NewGuid().ToString("N"));Directory.CreateDirectory(recordDirectory);
                 SetSavePath(relative+"\\"+Path.GetFileName(recordDirectory)+"\\start.sav");
                 info=new ReplayInfo {Format=2,ExecutableHash=Core.Hash(executable),DataHash=Core.Hash(Path.Combine(game,"Armageddon.MFP")),IndexHash=Core.Hash(Path.Combine(game,"Armageddon.HED")),CreatedUtc=DateTime.UtcNow.ToString("o")};
@@ -287,6 +288,7 @@ namespace Amagadon {
                 return;
             }
             if(kind==11) {
+                LogMatchState("snapshot-saved-before-reload");
                 string save=Path.Combine(recordDirectory,"start.sav");
                 if(!File.Exists(save) || new FileInfo(save).Length<512 || new FileInfo(save).Length>ReplayFiles.MaxSave)throw new IOException("게임 시작 상태를 저장하지 못했습니다.");
                 using(var input=File.OpenRead(save)) {byte[] bytes=new byte[256];if(input.Read(bytes,0,256)!=256)throw new IOException("시작 상태가 잘렸습니다.");info.MapName=Encoding.Default.GetString(bytes).Split('\0')[0];}
@@ -294,10 +296,12 @@ namespace Amagadon {
                 return;
             }
             if(kind==4) {
+                LogMatchState("match-ended");
                 if(playback) {var end=reader.Next();if(end==null || end.Kind!=0)throw new IOException("기록보다 먼저 게임 장면이 종료되었습니다.");EndPlayback();return;}
                 if(writer!=null)FinishRecording();return;
             }
             if(kind==1 && !reportedScreen) {
+                LogMatchState("first-frame-after-reload");
                 if(playback)RestoreSnapshotReferences();
                 if(fixture) {reportedScreen=true;} else {
                 int width=(int)U32(0x4f75ec),height=(int)U32(0x4f75f0);
@@ -329,6 +333,16 @@ namespace Amagadon {
                 // leave a partial command that was already acknowledged.
                 writer.Flush();
             }
+        }
+        void LogMatchState(string phase) {
+            if(fixture || DiagnosticSettings==null || !DiagnosticSettings.DiagnosticLogging)return;
+            try {
+                int world=checked((int)U32(0x504a10));
+                Core.Log("Replay match-state "+Core.Json.Serialize(new {phase=phase,playback=playback,frames=frames,
+                    localPlayer=Read(0x4e7270,1)[0],slots=Read(0x513c80,8),
+                    alive=world==0?null:Read(world+0x7127,8),teams=world==0?null:Read(world+0x7134,32),
+                    playerTypes=world==0?null:Read(world+0x25138,8),endFlag=U32(0x507bf4),dialog=U32(0x507bf8),result=U32(0x51a668)}));
+            }catch(Exception ex) {Core.Log("Replay match-state unavailable: "+ex.Message);}
         }
         byte[] Capture(int kind) {
             byte[] raw=CaptureRaw(kind),result=new byte[raw.Length+8];Buffer.BlockCopy(raw,0,result,0,raw.Length);Buffer.BlockCopy(BitConverter.GetBytes((uint)Read(0x581158,1)[0]),0,result,raw.Length,4);Buffer.BlockCopy(Read((int)U32(Box+28),4),0,result,raw.Length+4,4);return result;

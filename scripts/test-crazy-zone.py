@@ -1,4 +1,4 @@
-"""Real TCP multi-client tests and original x86 Crazy Zone consumers/builders.
+﻿"""Real TCP multi-client tests and original x86 Crazy Zone consumers/builders.
 Only isolated test accounts/data and local loopback are used.
 """
 import base64,json,os,socket,struct,subprocess,sys,tempfile,time
@@ -65,6 +65,8 @@ def native_send(entry,args,wait=None,private=False):
 
 # Execute the original packet builders through the original opcode encoder.
 assert native_send(0x4960c0,['TestHost','testpass'],0x496170)==[request(3,'TestHost','testpass')]
+register_wire=native_send(0x4961d0,['RegisterUser','testpass','unused'],0x4963a0)[0]
+assert register_wire==request(5,'RegisterUser','testpass','unused')
 assert native_send(0x4962c0,['1.15'])==[request(2,'1.15')]
 assert native_send(0x496510,[])==[request(8)]
 assert native_send(0x496900,[])==[request(17)]
@@ -75,11 +77,11 @@ assert native_send(0x4973a0,['Room',''],0x4974d0)[0]==request(83,'Room',bytes(4)
 join_wire=native_send(0x4973a0,['Room',''],0x4974d0,private=True)[0]
 assert join_wire==request(83,'Room','')
 assert native_send(0x4973a0,['Room','secret'],0x4974d0,private=True)[0]==request(83,'Room','secret')
-mapinfo=bytearray(256);mapinfo[30:35]=b'Map1\0';struct.pack_into('<HH',mapinfo,0xe6,64,64);struct.pack_into('<H',mapinfo,0xee,0);mapinfo[0xf0]=1
+mapinfo=bytearray(256);mapinfo[30:35]=b'Map1\0';struct.pack_into('<HH',mapinfo,0xe6,128,128);struct.pack_into('<H',mapinfo,0xee,1);mapinfo[0xf0]=4
 create_wire=native_send(0x496f80,['Room','',bytes(mapinfo)],0x497210)[0]
 assert create_wire[:8]==request(74)+struct.pack('<I',88)
 assert create_wire[8:13]==b'Room\0' and create_wire[54:59]==b'Map1\0'
-assert create_wire[88:95]==struct.pack('<HHHB',64,64,0,1)
+assert create_wire[88:95]==struct.pack('<HHHB',128,128,1,4)
 locked_wire=native_send(0x496f80,['LockedRoom','secret',bytes(mapinfo)],0x497210)[0]
 locked_join=native_send(0x4973a0,['LockedRoom','secret'],0x4974d0,private=True)[0]
 
@@ -91,6 +93,13 @@ with tempfile.TemporaryDirectory(prefix='amagadon-zone-') as temp:
             if p.poll() is not None:raise AssertionError((d/'error.txt').read_text())
             time.sleep(.05)
         port=int((d/'port.txt').read_text());a=connect(port);b=connect(port)
+        registration=connect(port)
+        for byte in register_wire:registration.sendall(bytes([byte]))
+        assert exact(registration,2)==b'\x06\x00'
+        registration.sendall(register_wire);assert exact(registration,2)==b'\x06\x01'
+        assert login(registration,'RegisterUser','wrong')==b'\x04\x02'
+        assert login(registration,'RegisterUser')==b'\x04\x00';registration.close()
+        registration_parser=machine();consume(registration_parser,b'\x06\x00');assert get(registration_parser,0x4eaab0)==0
         # TCP fragmentation: each command-header/field byte may arrive separately.
         for byte in request(3,'TestHost','testpass'):a.sendall(bytes([byte]))
         assert exact(a,2)==b'\x04\x00';assert login(b,'TestGuest')==b'\x04\x00'
@@ -100,6 +109,11 @@ with tempfile.TemporaryDirectory(prefix='amagadon-zone-') as temp:
         u=machine();consume(u,b'\x5d');assert get(u,0x57ca30)==1
         consume(u,b'\x04\x00');assert get(u,0x4eaaac)==0
         consume(u,b'\x0a'+field(channel));assert get(u,0x57ca40)==1 and bytes(u.mem_read(0x577e30,6))==b'Lobby\0'
+        a.sendall(create_wire);assert exact(a,2)==b'\x4b\x6f';exact(a,4)
+        duplicate=connect(port);assert login(duplicate,'DuplicateHost')==b'\x04\x00'
+        duplicate.sendall(create_wire);assert exact(duplicate,2)==b'\x4b\x01';duplicate.close()
+        a.sendall(request(76)+request(78));assert blob(a,79)==b'\x01'
+        a.sendall(request(18))
         a.sendall(request(17));users=[blob(a,16),blob(a,16)];assert all(x[0]==1 for x in users)
         consume(u,b'\x10'+field(users[0]));assert get(u,0x57bc14)==1
         b.sendall(request(17));blob(b,16);blob(b,16);blob(a,16)
@@ -130,6 +144,97 @@ with tempfile.TemporaryDirectory(prefix='amagadon-zone-') as temp:
         ping=connect(port);assert login(ping,'Heartbeat')==b'\x04\x00';ping.settimeout(35)
         assert exact(ping,1)==b'\x58';ping.sendall(request(89));ping.close()
         edits=json.loads((d/'patch.json').read_text());v=machine()
+        def start_gate(patched,ai=True,host=True,ready=True,identity=True):
+            u=machine();sp=0x2008000;u.reg_write(UC_X86_REG_ESP,sp)
+            if patched:
+                for e in edits:u.mem_write(e['address'],base64.b64decode(e['bytes']))
+            put(u,0x513c60,8);u.mem_write(0x513c64,bytes([3,2 if ai else 0])+bytes(6));u.mem_write(0x513c80,bytes(8))
+            put(u,0x513e88,123);put(u,0x513c9c,123 if identity else 456);u.mem_write(0x513cd3,b'\x05')
+            for i in range(8):put(u,0x50be18+i*12,0)
+            if not ready:put(u,0x50be24,1)
+            u.reg_write(UC_X86_REG_ESI,0x12345678)
+            def api(u,a,size,_):
+                if a==0x474e10:ret(u,0,int(host))
+                elif a==0x466e33:u.emu_stop()
+            u.hook_add(UC_HOOK_CODE,api);u.emu_start(0x466e2e,0x5f0000,count=2000)
+            assert u.reg_read(UC_X86_REG_EIP)==0x466e33 and u.reg_read(UC_X86_REG_ESP)==sp and u.reg_read(UC_X86_REG_ESI)==0x12345678
+            return u.reg_read(UC_X86_REG_EAX),u.mem_read(0x513c80,1)[0]
+        assert start_gate(False)==(0,0)
+        assert start_gate(True)==(1,1)
+        assert start_gate(True,ai=False)==(0,1)
+        assert start_gate(True,host=False)==(0,0)
+        assert start_gate(True,ready=False)==(0,1)
+        assert start_gate(True,identity=False)==(0,0)
+        def countdown(patched,remote=False):
+            u=machine();sp=0x2008000;now=[0];events=[];base=0x50e748
+            if patched:
+                for e in edits:u.mem_write(e['address'],base64.b64decode(e['bytes']))
+            u.mem_write(base,bytes(0x5416));u.mem_write(base+11,b'\x06')
+            put(u,0x513c60,8);u.mem_write(0x513c64,bytes([3,3 if remote else 2])+bytes(6));put(u,0x513e88,123);put(u,0x513c9c,123)
+            put(u,0x507b20,0);put(u,0x513ed4,0)
+            def api(u,a,size,_):
+                if a==0x474e10:ret(u,0,1)
+                elif a==0x429850:ret(u,0,now[0])
+                elif a==0x4939f0:ret(u,0)
+                elif a==0x497570:events.append('start-notify');ret(u,0)
+                elif a==0x4975a0:events.append('metadata');ret(u,0)
+                elif a==0x4745e0:ret(u,0) # remote transport; no fake ACKs
+            u.hook_add(UC_HOOK_CODE,api)
+            def run(entry,args=()):
+                put(u,sp,0x5f0000)
+                for i,x in enumerate(args):put(u,sp+4+i*4,x)
+                u.reg_write(UC_X86_REG_ESP,sp);u.reg_write(UC_X86_REG_ECX,base)
+                u.emu_start(entry,0x5f0000,count=100000)
+                assert u.reg_read(UC_X86_REG_EIP)==0x5f0000 and u.reg_read(UC_X86_REG_ESP)==sp+4+len(args)*4
+            run(0x475220,(2,0));states=[]
+            for t in (0,1000,2000,3000,4000,5000,5100,5200):
+                now[0]=t;run(0x475310);states.append(u.mem_read(base+11,1)[0])
+                if get(u,0x507b20)==1:break # outer engine leaves this lobby on the next dispatch
+            return states,get(u,0x507b20),get(u,0x513ed4),get(u,0x50bcf8),events
+        assert countdown(False)[0]==[6]*8
+        states,launch,multi,timer,events=countdown(True)
+        assert states[:6]==[5,4,3,2,1,7] and launch==1 and multi==1 and timer==3000 and events==['start-notify','metadata'], (states,launch,multi,timer,events)
+        assert countdown(True,remote=True)[0]==[6]*8 # real peer still needs real ACK
+        # Cancel must stay enabled until the original idle-state guard permits leave.
+        for patched in (False,True):
+            u=machine();obj=0x1300000;put(u,obj+0x19c,1);u.reg_write(UC_X86_REG_EAX,obj);u.reg_write(UC_X86_REG_ESI,0)
+            if patched:
+                for e in edits:u.mem_write(e['address'],base64.b64decode(e['bytes']))
+            u.emu_start(0x466e7b,0x466e81,count=20);assert get(u,obj+0x19c)==int(patched)
+        # Host versus AI can leave through the native end flag without a phantom peer ACK.
+        for patched,remote,identity in ((False,False,True),(True,False,True),(True,True,True),(True,False,False)):
+            u=machine();sp=0x2008000;u.reg_write(UC_X86_REG_ESP,sp);u.reg_write(UC_X86_REG_ESI,1)
+            put(u,0x513e88,123);put(u,0x513c9c,123 if identity else 456)
+            u.mem_write(0x513c64,bytes([3,3 if remote else 2])+bytes(6));put(u,0x507bf4,0)
+            if patched:
+                for e in edits:u.mem_write(e['address'],base64.b64decode(e['bytes']))
+            u.emu_start(0x483d24,0x483d2a,count=500)
+            assert get(u,0x51a660)==1 and get(u,0x507bf4)==int(patched and not remote and identity)
+            assert u.reg_read(UC_X86_REG_ESP)==sp and u.reg_read(UC_X86_REG_ESI)==1
+        def registration_flow(patched,result=0,confirm='testpass'):
+            u=machine();sp=0x2008000;put(u,sp,0x5f0000);u.reg_write(UC_X86_REG_ESP,sp)
+            if patched:
+                for e in edits:u.mem_write(e['address'],base64.b64decode(e['bytes']))
+            for i,s in enumerate(['RegisterUser','testpass',confirm,'1.15','unused']):
+                ptr=0x1300000+i*4096;u.mem_write(ptr,s.encode()+b'\0');put(u,sp+4+i*4,ptr)
+            calls=[]
+            registers=(UC_X86_REG_EBX,UC_X86_REG_ESI,UC_X86_REG_EDI,UC_X86_REG_EBP)
+            for i,r in enumerate(registers):u.reg_write(r,0x11110000+i)
+            def api(u,a,size,_):
+                if a in (0x48ddc0,0x48df80):calls.append('legacy');u.emu_stop()
+                elif a==0x4961d0:calls.append('register');ret(u,0,result)
+                elif a in (0x495190,0x495880,0x496060,0x4962c0,0x496340):ret(u,0,1)
+                elif a in (0x4953c0,0x4aa7c0,0x497550,0x4953b0,0x48ebe0,0x4951d0,0x495860,0x4aa830):ret(u,0,0)
+            u.hook_add(UC_HOOK_CODE,api);u.emu_start(0x4955e0,0x5f0000,count=10000)
+            if patched:
+                assert u.reg_read(UC_X86_REG_EIP)==0x5f0000 and u.reg_read(UC_X86_REG_ESP)==sp+4
+                assert [u.reg_read(r) for r in registers]==[0x11110000+i for i in range(4)]
+            return calls,u.reg_read(UC_X86_REG_EAX)
+        assert registration_flow(False)[0]==['legacy']
+        assert registration_flow(True)==(['register'],0)
+        assert registration_flow(True,1)==(['register'],0xfffffff6)
+        assert registration_flow(True,2)==(['register'],0xfffffff4)
+        assert registration_flow(True,confirm='mismatch')==([],0xfffffffe)
         for e in edits:v.mem_write(e['address'],base64.b64decode(e['bytes']))
         for index in [0,1,29,0xffffffff]:
             sp=0x2008000;put(v,sp,0x5f0000);put(v,sp+4,index);v.reg_write(UC_X86_REG_ESP,sp);v.emu_start(0x497b40,0x5f0000,count=100)

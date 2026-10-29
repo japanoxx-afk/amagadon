@@ -68,3 +68,15 @@ DDrawCompat 0.7.2는 8비트 offscreen 표면을 유지하며 GdiInterops=none, 
 cnc-ddraw v7.1.0.0의 [DirectInput 구현](https://github.com/FunkyFr3sh/cnc-ddraw/blob/v7.1.0.0/src/directinput.c)은 내부 마우스 잠금 상태/포커스에 따라 입력을 비웁니다. 이 경로가 원인일 가능성에 대응해 `no_dinput_hook=true`를 기본 적용하고 기존 설정도 InputProfile=1로 한 번 이전합니다. 이후 사용자의 명시적 변경은 유지합니다. 제보 환경에서의 해결 여부는 미확인입니다.
 
 5초 간격의 전경 게임 샘플에서 내부 좌표가 두 구간 연속 동일하고 OS 커서 이동량 합계가 64 이상이거나 창 hung 상태가 지속되면 `suspected-input-stall`과 실행당 최대 하나의 `stall-*.dmp`를 저장합니다. 좌표 (0,0), 메모리 읽기 실패, 백그라운드는 입력 정지 판단에서 제외합니다. 일시정지/메뉴에서도 발생할 수 있으므로 확정 오류로 처리하지 않습니다. 덤프는 예외 스트림이 없는 실행 중 스레드 진단 자료이고 전체 힙을 수집하지 않습니다. 모듈 목록도 기록해 입력/그래픽 오버레이 충돌 조사에 활용하며 기존 ZIP에 포함됩니다. 원본 게임 바이너리와 게임 메모리는 수정하지 않습니다.
+
+## 0.3.17 게임 종료·메뉴·녹화 진단
+
+게임의 모드/종료 플래그/대화상자/결과 값은 250ms마다 읽되 변화가 있을 때만 기록한다. 5초 표본에는 실제 내부 해상도, 엔진 마우스 좌표, 진영 컨트롤 활성 여부·항목 수·선택값, 결과 대화상자 영역과 키보드 복구 카운터가 포함된다. 캡처 관련 모듈명과 프로세스 affinity는 30초마다 기록한다. 표본 사이의 짧은 변화는 놓칠 수 있으며, 모듈이 없다고 외부 화면 녹화가 없다는 의미는 아니다.
+
+자동 리플레이는 시작 상태 저장 전, 저장 후 재로드 전, 재로드 후 첫 프레임, 경기 종료에 참가 슬롯·생존 상태·팀 정보를 launcher.log에 남긴다. 이름·채팅·키 입력 내용은 추가하지 않는다. 싱글플레이 즉시 DRAW의 저장/불러오기 영향과 실제 승패 상태를 비교하기 위한 진단이며 원인 확정이나 승패 조건 변경이 아니다.
+
+### HD layout 0.3.23
+
+Production completed is copied by 471380 into 4f9c7c and drawn through 4a5c9d -> 4a8720, independently of the 507cd8 message list fixed in 0.3.22. The dedicated call wrapper adds HUD offset (112,168) to the centered shadow-text coordinates.
+
+Scoreboard 4a9100 uses fixed 800x600 sprites and hit rectangles but a NULL destination rectangle stretches scoreback.bmp to the HD surface. The runtime fix composes the background in an explicit 800x600 destination, presents the complete 800x600 source to the full primary surface, and maps the scoreboard mouse sample/cursor by 25/32. Only scoreboard call sites change. Original mouse event codes and the native OK mouse-release exit remain intact. Regression executes real 4aa15c hit/exit dispatch plus draw-call contracts; it does not substitute for live DirectDraw visual verification.

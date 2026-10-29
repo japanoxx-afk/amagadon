@@ -68,11 +68,31 @@ namespace Amagadon {
         }
         static object InputState(Process p) {
             Func<int,int?> read=address=>{var b=new byte[4];IntPtr n;return ReadProcessMemory(p.Handle,new IntPtr(address),b,4,out n)&&n.ToInt64()==4?(int?)BitConverter.ToInt32(b,0):null;};
-            int? pointer=read(InputRecovery.CounterPointer);byte[] counters=new byte[44];IntPtr count;
+            int? pointer=read(InputRecovery.CounterPointer);byte[] counters=new byte[60];IntPtr count;
             object recovery=null;
-            if(pointer.HasValue && pointer.Value>0 && ReadProcessMemory(p.Handle,new IntPtr(pointer.Value),counters,44,out count) && count.ToInt64()==44)
-                recovery=new {reads=BitConverter.ToUInt32(counters,0),lastRead="0x"+BitConverter.ToUInt32(counters,4).ToString("X8"),acquireAttempts=BitConverter.ToUInt32(counters,8),lastAcquire="0x"+BitConverter.ToUInt32(counters,12).ToString("X8"),acquireSuccess=BitConverter.ToUInt32(counters,16),failedReads=BitConverter.ToUInt32(counters,20),activations=BitConverter.ToUInt32(counters,24),notificationTimeouts=BitConverter.ToUInt32(counters,28),backgroundSkips=BitConverter.ToUInt32(counters,36),focusResumes=BitConverter.ToUInt32(counters,40)};
+            if(pointer.HasValue && pointer.Value>0 && ReadProcessMemory(p.Handle,new IntPtr(pointer.Value),counters,60,out count) && count.ToInt64()==60)
+                recovery=new {reads=BitConverter.ToUInt32(counters,0),lastRead="0x"+BitConverter.ToUInt32(counters,4).ToString("X8"),acquireAttempts=BitConverter.ToUInt32(counters,8),lastAcquire="0x"+BitConverter.ToUInt32(counters,12).ToString("X8"),acquireSuccess=BitConverter.ToUInt32(counters,16),failedReads=BitConverter.ToUInt32(counters,20),activations=BitConverter.ToUInt32(counters,24),notificationTimeouts=BitConverter.ToUInt32(counters,28),backgroundSkips=BitConverter.ToUInt32(counters,36),focusResumes=BitConverter.ToUInt32(counters,40),keyboardReads=BitConverter.ToUInt32(counters,44),keyboardLastRead="0x"+BitConverter.ToUInt32(counters,48).ToString("X8"),keyboardAcquireAttempts=BitConverter.ToUInt32(counters,52),keyboardLastAcquire="0x"+BitConverter.ToUInt32(counters,56).ToString("X8")};
             return new {pausedForFocus=read(0x572b5c),mouseEnabled=read(0x5727d0),mouseDevice=read(0x5727e8),notificationEvent=read(0x5727f4),inputThread=read(0x5727f8),recovery=recovery};
+        }
+        static object MatchState(Process p) {
+            Func<int,int,int?> read=(address,size)=>{var b=new byte[size];IntPtr n;return ReadProcessMemory(p.Handle,new IntPtr(address),b,size,out n)&&n.ToInt64()==size?(int?)(size==1?b[0]:BitConverter.ToInt32(b,0)):null;};
+            // Raw engine values, not inferred victory/defeat labels. No player names or chat.
+            return new {mode=read(0x504f48,1),multiplayer=read(0x513ed4,4),crazyZone=read(0x513ed0,4),
+                endFlag=read(0x507bf4,4),terminationWait=read(0x51a660,4),dialog=read(0x507bf8,4),result=read(0x51a668,4),lobbyCountdown=read(0x50e753,1),startPending=read(0x507b20,4),
+                startedAt=read(0x51a690,4),minimumDuration=read(0x51a68c,4),
+                localPlayer=read(0x513e88,4),nativeMouseX=read(0x4e89d8,4),nativeMouseY=read(0x4e89dc,4),
+                displayWidth=read(0x4f75ec,4),displayHeight=read(0x4f75f0,4),frameInterval=read(0x50bc64,4)};
+        }
+        static object MenuState(Process p) {
+            Func<int,int?> read=address=>{byte[] b=new byte[4];IntPtr n;return ReadProcessMemory(p.Handle,new IntPtr(address),b,4,out n)&&n.ToInt64()==4?(int?)BitConverter.ToInt32(b,0):null;};
+            var races=new List<object>();
+            for(int i=0;i<8;i++) {
+                int? pointer=read(0x504f08+i*4);
+                if(pointer.HasValue && pointer.Value>0)races.Add(new {slot=i,address=pointer,enabled=read(pointer.Value+0x19c),items=read(pointer.Value+0x244),selected=read(pointer.Value+0x248)});
+            }
+            int? dialog=read(0x507bac);int?[] bounds=null;
+            if(dialog.HasValue && dialog.Value>0)bounds=Enumerable.Range(0,4).Select(i=>read(dialog.Value+16+i*4)).ToArray();
+            return new {menu=read(0x4d6d78),raceControls=races,dialog=dialog,dialogBounds=bounds,nativeMouseX=read(0x4e89d8),nativeMouseY=read(0x4e89dc)};
         }
         public static void Begin(int pid,string executable,string folder,Settings settings) {
             if(settings==null || !settings.DiagnosticLogging)return;
@@ -125,7 +145,7 @@ namespace Amagadon {
                 object gameInput=null;int gx=0,gy=0;
                 if(engineMouse) {byte[] bytes=new byte[8];IntPtr read;if(ReadProcessMemory(p.Handle,new IntPtr(0x504d70),bytes,8,out read) && read.ToInt64()==8) {gx=BitConverter.ToInt32(bytes,0);gy=BitConverter.ToInt32(bytes,4);gameInput=new {x=gx,y=gy};}}
                 bool hung=IsHungAppWindow(p.MainWindowHandle);
-                if(engineMouse) {Write(folder,"network-state",NetworkState(p));Write(folder,"input-state",InputState(p));}
+                if(engineMouse) {Write(folder,"network-state",NetworkState(p));Write(folder,"input-state",InputState(p));Write(folder,"match-state",MatchState(p));Write(folder,"menu-state",MenuState(p));}
                 Write(folder,"sample",new {gameInput=gameInput,foreground=foreground==(uint)p.Id,window=p.MainWindowHandle.ToInt64(),hungWindow=hung,cursorAvailable=haveCursor,cursor=cursor,clipAvailable=haveClip,clip=clip,client=client,workingSet=p.WorkingSet64,privateBytes=p.PrivateMemorySize64,handles=p.HandleCount,threads=p.Threads.Count,cpuMs=p.TotalProcessorTime.TotalMilliseconds});
                 bool suspected=detector.Observe(engineMouse && gameInput!=null && haveCursor && foreground==(uint)p.Id,gx,gy,cursor.x,cursor.y,hung);
                 if(suspected && !captured) {
@@ -166,11 +186,27 @@ namespace Amagadon {
                 if(attached && !DebugSetProcessKillOnExit(false)) {DebugActiveProcessStop((uint)pid);attached=false;}
                 Write(folder,"crash-monitor",new {attached=attached,error=attached?0:Marshal.GetLastWin32Error()});
                 File.WriteAllText(Path.Combine(folder,"ready.txt"),attached?"attached":"telemetry-only");
-                bool initialBreak=true,captured=false;var detector=new StallDetector();int exceptions=0;var sampleClock=Stopwatch.StartNew();long lastSample=-5000;
+                bool initialBreak=true,captured=false;var detector=new StallDetector();int exceptions=0;var sampleClock=Stopwatch.StartNew();long lastSample=-5000,lastMatch=-250,lastCapture=-30000;string previousMatch=null;
                 while(true) {
+                    if(sampleClock.ElapsedMilliseconds-lastCapture>=30000) {
+                        lastCapture=sampleClock.ElapsedMilliseconds;
+                        try {Write(folder,"capture-environment",new {affinity=p.ProcessorAffinity.ToInt64(),modules=p.Modules.Cast<ProcessModule>().Select(m=>m.ModuleName).Where(n=>n.IndexOf("obs",StringComparison.OrdinalIgnoreCase)>=0||n.IndexOf("capture",StringComparison.OrdinalIgnoreCase)>=0||n.IndexOf("graphics-hook",StringComparison.OrdinalIgnoreCase)>=0).ToArray()});}catch(Exception ex) {Write(folder,"capture-environment-error",ex.Message);}
+                    }
+                    if(engineMouse && sampleClock.ElapsedMilliseconds-lastMatch>=250) {
+                        lastMatch=sampleClock.ElapsedMilliseconds;
+                        try {
+                            var values=new List<int?>();
+                            foreach(int address in new[]{0x504f48,0x507bf4,0x507bf8,0x51a668}) {
+                                int size=address==0x504f48?1:4;byte[] b=new byte[size];IntPtr n;
+                                values.Add(ReadProcessMemory(p.Handle,new IntPtr(address),b,size,out n)&&n.ToInt64()==size?(int?)(size==1?b[0]:BitConverter.ToInt32(b,0)):null);
+                            }
+                            string current=Core.Json.Serialize(values);
+                            if(current!=previousMatch) {previousMatch=current;Write(folder,"match-transition",MatchState(p));Write(folder,"network-at-transition",NetworkState(p));}
+                        }catch(Exception ex) {Write(folder,"match-sample-error",ex.Message);}
+                    }
                     if(sampleClock.ElapsedMilliseconds-lastSample>=5000) {lastSample=sampleClock.ElapsedMilliseconds;Snapshot(p,folder,!EditorPatch.IsEditor(name),engineMouse,detector,ref captured);}
-                    if(!attached) {if(p.HasExited)break;Thread.Sleep(1000);continue;}
-                    if(!WaitForDebugEvent(buffer,1000)) {if(p.HasExited)break;continue;}
+                    if(!attached) {if(p.HasExited)break;Thread.Sleep(engineMouse?250:1000);continue;}
+                    if(!WaitForDebugEvent(buffer,engineMouse?250U:1000U)) {if(p.HasExited)break;continue;}
                     uint kind=unchecked((uint)Marshal.ReadInt32(buffer)),tid=unchecked((uint)Marshal.ReadInt32(buffer,8)),status=0x10002;
                     bool exited=false;
                     try {
@@ -179,7 +215,7 @@ namespace Amagadon {
                             bool bootstrap=initialBreak && first && code==0x80000003;if(bootstrap)initialBreak=false;
                             status=bootstrap?0x10002U:0x80010001U;
                             if(!bootstrap && (exceptions++<100 || !first))Write(folder,"exception",new {code="0x"+code.ToString("X8"),address="0x"+unchecked((uint)Marshal.ReadInt32(buffer,24)).ToString("X8"),thread=tid,firstChance=first});
-                            if(!first) {if(engineMouse)Write(folder,"network-at-crash",NetworkState(p));try {Dump(p,tid,buffer,folder);}catch(Exception ex) {Write(folder,"dump-error",ex.Message);}}
+                            if(!first) {if(engineMouse) {Write(folder,"network-at-crash",NetworkState(p));Write(folder,"match-at-crash",MatchState(p));Write(folder,"input-at-crash",InputState(p));}try {Dump(p,tid,buffer,folder);}catch(Exception ex) {Write(folder,"dump-error",ex.Message);}}
                         } else if(kind==3 || kind==6) {IntPtr f=Marshal.ReadIntPtr(buffer,12);if(f!=IntPtr.Zero && f!=new IntPtr(-1))CloseHandle(f);}
                         else if(kind==5) {Write(folder,"exit",new {code="0x"+unchecked((uint)Marshal.ReadInt32(buffer,12)).ToString("X8")});exited=true;}
                     } finally {if(!ContinueDebugEvent((uint)pid,tid,status))Write(folder,"continue-error",Marshal.GetLastWin32Error());}

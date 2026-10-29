@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Drawing;
 using System.IO;
 using System.Linq;
@@ -32,7 +32,7 @@ namespace Amagadon {
             stop.Text="서버 종료";stop.SetBounds(216,268,176,42);Controls.Add(stop);
             var logs=new Button {Text="서버 로그 폴더",Location=new Point(408,268),Size=new Size(232,42)};Controls.Add(logs);
             state.SetBounds(24,323,616,40);Controls.Add(state);
-            Controls.Add(new Label {Text="게임에서 Multi Play → Crazy Zone → Amagadon Private Zone을 선택하세요.\r\n로그인: 영문·숫자·_·- 아이디 1~19자 / 비밀번호 1~9바이트. 첫 로그인 시 계정을 만듭니다.\r\n대기실에서 Lobby에 입장한 뒤 방을 만들거나 참가하세요. 같은 LAN/VPN에서 먼저 사용하세요.\r\n전투는 기존 DirectPlay TCP 연결을 사용하므로 방장의 PC에도 연결할 수 있어야 합니다.",Location=new Point(24,369),Size=new Size(640,92),Font=new Font("맑은 고딕",9)});
+            Controls.Add(new Label {Text="게임에서 Multi Play → Crazy Zone → Amagadon Private Zone을 선택하세요.\r\n로그인: 영문·숫자·_·- 아이디 1~19자 / 비밀번호 1~9바이트. 새 계정 등록 또는 첫 로그인으로 계정을 만듭니다.\r\n대기실에서 Lobby에 입장한 뒤 방을 만들거나 참가하세요. 같은 LAN/VPN에서 먼저 사용하세요.\r\n전투는 기존 DirectPlay TCP 연결을 사용하므로 방장의 PC에도 연결할 수 있어야 합니다.",Location=new Point(24,369),Size=new Size(640,92),Font=new Font("맑은 고딕",9)});
             var launch=new Button {Text="이 서버로 게임 실행",Location=new Point(408,466),Size=new Size(232,34)};Controls.Add(launch);
             launch.Click+=delegate {try {CrazyZonePatch.Validate(Address,Port);DialogResult=DialogResult.OK;Close();}catch(Exception ex){MessageBox.Show(this,ex.Message,"서버 주소 확인");}};
             start.Click+=delegate {try {

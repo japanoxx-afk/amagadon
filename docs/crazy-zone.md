@@ -50,3 +50,33 @@
 사용자가 지정한 로컬 `wanggun/dummyserver.py`, `임팩트오브파워/server/protocol.py` 및 `analysis/protocol.md`, `삼국지천명2/server/compat_server.py`와 `src/NetworkPatch.cs`를 읽었다. 연결별 송신 직렬화, 명령 단위 TCP 재조립, 서버/게임 포트 분리, 네이티브 송수신 코드 검증 방식을 참고했다. Crazy Zone 패킷은 해당 게임들의 프로토콜을 재사용하지 않고 아마게돈 EXE에서 별도로 복원했다.
 
 `scripts/test-crazy-zone.py`는 실제 loopback TCP에서 분할/합쳐진 요청, 두 클라이언트, 계정·잘못된 암호·중복 로그인, 채널·접속자·채팅·방 생성/목록/참가/퇴장, 비정상 길이, 불완전 연결의 격리와 계정 해시 저장을 검사한다. 원본 x86 송신 빌더와 op 인코더, 수신 파서·채널/접속자/방 목록/참가 정보 해석, 패치된 주소/포트와 스택 복귀도 실행한다. 실제 런처 서버 시작과 Crazy Zone 계정 화면 도달을 관찰했다. 실제 두 PC 전투 성공을 의미하지 않는다.
+
+## 0.3.18 사설 계정 등록
+
+현재 멈춤 프로세스 덤프에서 메인 스레드의 0x49563c, 0x48df47, 0x48e617을 확인했다. 사설 서버 로그에는 연결 자체가 없었다. 등록 함수 0x4955e0은 사설 대기실 연결 전에 0x48ddc0의 별도 서비스 확인을 호출하며 0x48e5f0은 결과 바이트가 0인 동안 시간 제한 없이 기다린다. 등록 성공 후에도 0x48df80으로 별도 서비스에 통보한다.
+
+CrazyZonePatch가 적용되는 사설 모드에서만 0x495637/0x49583f 호출을 xor eax,eax + NOP으로 대체한다. 호출자 인자 정리와 원본 아이디·비밀번호 일치/길이 검사 및 사설 서버의 계정 검증은 유지한다. 공식 모드의 실행 파일/원본 디스크 파일은 변경하지 않는다. 서버 op5 응답은 op6+결과값이며 실제 원본 송신·수신 코드와 TCP 분할 전송으로 검증했다. 이전의 '첫 로그인으로 생성' 외에 등록 화면을 통한 계정 생성도 지원한다.
+
+## 0.3.19 방 생성 맵 정보 검사
+
+실행 중 클라이언트 0x57b910=4, 너비/높이=128/128, 0x57ca28=1을 확인했다. op74 기록은 있으나 원래 서버의 raw[86] 범위 1~2 검사 때문에 방 생성 전에 거절됐다. 원본 0x497071은 맵 +0xf0 바이트를 읽어 패킷 86번 바이트에 복사한다. 이 바이트를 2종류 enum으로 간주한 검사를 제거하고 원본 값 그대로 전달한다. 88바이트 길이·문자열 종료·중복 제목 검사는 유지한다. 게임이 여러 거절 원인을 동일한 문구로 표시하므로 server JSONL의 room-create-rejected reason을 추가했다. 실제 원본 빌더로 128×128 및 값4 패킷을 생성해 방 생성/참가 테스트에 사용하며 별도 계정의 중복 제목 거절도 검사한다.
+
+## 0.3.20 방장과 AI 시작
+
+현재 방에서 슬롯 종류 03-02-00..., 활성 상태 전부0, 준비 대기 값 전부0을 확인했다. 원본 0x474fb0은 활성 사람 또는 종류2 컴퓨터만 세므로 방장이 누락되어 0x4754e0에서 참가자1로 시작을 거절한다. 원본 0x4726f8은 다른 DirectPlay 플레이어 생성 이벤트에서 첫 슬롯을 활성화하므로 AI만 있는 방에는 이벤트가 없다.
+
+사설 모드의 시작 호출 0x466e2e에만 보정한다. 원본 IsHost(0x474e10), 첫 슬롯 DPID와 로컬 DPID 일치, 종류3을 모두 확인해 첫 슬롯 활성 바이트를1로 설정한 뒤 원본 시작 조건을 호출한다. 상대 없는 방, 다른 사람의 준비 대기, 비방장, ID 불일치는 여전히 거절한다. x86 테스트는 원본 시작 검사 및 실제 참가자 수 계산 함수까지 실행한다.
+
+## 0.3.21 사람 상대 없는 시작 큐 완료
+
+서버 op85 수신에도 게임 상태 0x50e753=6으로 남았다. 0x475310의 큐 처리는 ACK 대상이 없는 항목을 0x475435에서 삭제한다. 반면 카운트다운5 설정/게임 시작은 0x47303d의 수신 ACK 처리에만 있어 방장+AI에서는 호출되지 않았다.
+
+사설 패치의 큐 완료 지점에서 호스트·첫 슬롯 본인·나머지 사람 슬롯 없음 조건을 확인한다. opcode2에는 카운트다운5, opcode5에는 원본 시계 초기화, opcode4에는 원본 시작 통보·메타데이터 전송 및 0x456520 호출을 적용하고 원본 큐 해제를 수행한다. 원격 플레이어 ACK를 조작하지 않는다. Cancel 비활성화 명령 0x466e7b는 제외하되 원본 상태6 검사 및 퇴장 경로를 유지한다. 현재 프로세스는 조사 중 종료되어 실시간 Cancel 상태 보정은 적용하지 못했다.
+
+테스트는 전체 0x475310 루프를 가상 시각으로 진행하여 5,4,3,2,1,7과 0x507b20=1/0x513ed4=1을 확인하며, 외부 통신/사운드만 대역을 쓴다. 시작 플래그가 서면 바깥 게임 루프가 방을 떠나므로 테스트도 그 시점에서 종료한다.
+
+### 0.3.22: private host versus AI quit
+
+Observed native quit request consumed with `51a660=2`, `507bf4=0`, multiplayer=1. Hook host-only continuation `483d24`: preserve native termination state and registers/flags; verify local DirectPlay ID matches slot zero, human slot zero, and no other human slots. Set native end flag 1, allowing the ordinary outer-loop cleanup. Real peers keep native termination synchronization. Regression covers old stuck flag, repaired AI case, remote human and mismatched identity. This is not a force-process-exit patch.
+
+HD layout runtime hooks are limited to current recipe hash. `46d95e` supplies a SetRect wrapper for main F10 and confirmation containers (indices 1,7–10); draw and hit tests share their translated RECT. Save/load entry fields have separate hardcoded text coordinates and are excluded. Message-list call `4a611d` gets the HUD offset. Original EXE and replay file hashes remain unchanged.

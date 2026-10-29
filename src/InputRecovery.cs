@@ -10,7 +10,7 @@ namespace Amagadon {
         [DllImport("kernel32.dll",SetLastError=true)] static extern IntPtr VirtualAllocEx(IntPtr process,IntPtr address,UIntPtr size,uint type,uint protection);
         [DllImport("kernel32.dll",SetLastError=true)] static extern bool ReadProcessMemory(IntPtr process,IntPtr address,byte[] bytes,int size,out IntPtr count);
         [DllImport("kernel32.dll",SetLastError=true)] static extern bool VirtualProtectEx(IntPtr process,IntPtr address,UIntPtr size,uint protection,out uint previous);
-        sealed class Code {
+        internal sealed class Code {
             public readonly MemoryStream Stream=new MemoryStream();readonly BinaryWriter writer;
             readonly int address;readonly Dictionary<string,int> labels=new Dictionary<string,int>();readonly List<Tuple<int,string>> fixups=new List<Tuple<int,string>>();
             public Code(int address) {this.address=address;writer=new BinaryWriter(Stream);}
@@ -24,6 +24,8 @@ namespace Amagadon {
         static byte[] Detour(int site,int target,int count) {byte[] bytes=Enumerable.Repeat((byte)0x90,count).ToArray();bytes[0]=0xe9;Buffer.BlockCopy(BitConverter.GetBytes(target-site-5),0,bytes,1,4);return bytes;}
         public static readonly Dictionary<int,string> Expected=new Dictionary<int,string> {
             {0x494f33,"480f85f2000000"},
+            {0x4905ea,"ff51283bc57415"},
+            {0x490da1,"ff521c85c07424"},
             {0x4906f5,"ff51288b4c24103bce0f84680200003d1e0007807511a1e8275700508b08ff511c89335e5b59c3"},
             {0x4909ac,"6aff"},{0x4909fb,"6aff"},{0x4909af,"ffd785c0754f"},{0x4909fe,"ffd785c074b1"},
             {CounterPointer,"90909090"}
@@ -72,13 +74,37 @@ namespace Amagadon {
             f.Hex("68");f.Int(cave+1296);f.Hex("50ff159cb04c00a3");f.Int(stats+32);f.Hex("85c0");f.Branch("0f84","inactive");
             f.Label("resolved");f.Hex("ffd03b05502b5700");f.Branch("0f85","inactive");f.Hex("b801000000c3");
             f.Label("inactive");f.Hex("ff05");f.Int(stats+36);f.Hex("31c0c3");
-            byte[] foreground=f.Finish();var payload=new byte[1536];
+            byte[] foreground=f.Finish();var payload=new byte[2048];
+            var k=new Code(cave+1536);
+            k.Hex("ff5128ff05");k.Int(stats+44);k.Hex("a3");k.Int(stats+48);
+            k.Hex("3d1e000780");k.Branch("0f84","recover");
+            k.Hex("3d0c000780");k.Branch("0f85","result");
+            k.Label("recover");k.Jump("e8",cave+1024);k.Hex("85c0");k.Jump("0f84",0x490666);
+            k.Hex("ff05");k.Int(stats+52);
+            k.Hex("8b460c508b08ff511ca3");k.Int(stats+56);
+            k.Hex("85c0");k.Jump("0f88",0x490666);
+            // Clear held-key/ring state after reacquiring; never replay stale keys.
+            k.Hex("8bce");k.Jump("e8",0x490470);
+            k.Hex("c744240c000100008d54240c8b460c6a0052576a10508b08ff5128a3");k.Int(stats+48);
+            k.Label("result");k.Hex("85c0");k.Jump("0f88",0x490666);
+            // DI_BUFFEROVERFLOW is success with valid buffered events.
+            k.Jump("e9",0x490606);
+            byte[] keyboard=k.Finish();Buffer.BlockCopy(keyboard,0,payload,1536,keyboard.Length);
+            var startup=new Code(cave+1856);
+            startup.Hex("ff521ca3");startup.Int(stats+12);
+            startup.Hex("85c0");startup.Jump("0f89",0x490dcc);
+            // Foreground-exclusive devices may legitimately be unavailable during
+            // startup. Keep the notification thread alive for bounded recovery.
+            foreach(string error in new[]{"3d05000780","3d1e000780","3d0c000780"}) {startup.Hex(error);startup.Jump("0f84",0x490dcc);}
+            startup.Jump("e9",0x490da8);byte[] startupCode=startup.Finish();Buffer.BlockCopy(startupCode,0,payload,1856,startupCode.Length);
             Buffer.BlockCopy(focus,0,payload,0,focus.Length);Buffer.BlockCopy(mouse,0,payload,128,mouse.Length);Buffer.BlockCopy(wait,0,payload,512,wait.Length);
             Buffer.BlockCopy(foreground,0,payload,1024,foreground.Length);
             Buffer.BlockCopy(System.Text.Encoding.ASCII.GetBytes("user32.dll\0"),0,payload,1280,11);
             byte[] api=System.Text.Encoding.ASCII.GetBytes("GetForegroundWindow\0");Buffer.BlockCopy(api,0,payload,1296,api.Length);
             return new Dictionary<int,byte[]> {
-                {cave,payload},{stats,new byte[44]},{CounterPointer,BitConverter.GetBytes(stats)},
+                {cave,payload},{stats,new byte[60]},{CounterPointer,BitConverter.GetBytes(stats)},
+                {0x4905ea,Detour(0x4905ea,cave+1536,7)},
+                {0x490da1,Detour(0x490da1,cave+1856,7)},
                 {0x494f33,Detour(0x494f33,cave,7)},{0x4906f5,Detour(0x4906f5,cave+128,39)},
                 {0x4909ac,NetworkGuard.Hex("6a64")},{0x4909fb,NetworkGuard.Hex("6a64")},
                 {0x4909af,Detour(0x4909af,cave+512,6)},{0x4909fe,Detour(0x4909fe,cave+512,6)}
@@ -94,7 +120,7 @@ namespace Amagadon {
             var edits=Build(memory.ToInt32());NetworkGuard.Write(process,memory.ToInt32(),edits[memory.ToInt32()]);uint previous;
             if(!VirtualProtectEx(process,memory,new UIntPtr(4096),0x20,out previous))throw new IOException("입력 복구 코드 보호 설정 실패");
             foreach(var edit in edits)if(edit.Key!=memory.ToInt32())NetworkGuard.Write(process,edit.Key,edit.Value);
-            Core.Log("Input recovery applied: click activation, bounded DirectInput reacquire/retry, 100ms notification fallback; counters=0x"+(memory.ToInt32()+4096).ToString("X8"));
+            Core.Log("Input recovery applied: click activation, bounded mouse/keyboard reacquire/retry, transient startup recovery, 100ms notification fallback; counters=0x"+(memory.ToInt32()+4096).ToString("X8"));
         }
     }
 }

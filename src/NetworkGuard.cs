@@ -1,4 +1,4 @@
-using System;using System.Collections.Generic;using System.Diagnostics;using System.IO;using System.Linq;using System.Runtime.InteropServices;using System.Text;
+﻿using System;using System.Collections.Generic;using System.Diagnostics;using System.IO;using System.Linq;using System.Runtime.InteropServices;using System.Text;
 namespace Amagadon {
  public static class NetworkGuard {
   public const int Counter=0x475ba8;
@@ -49,6 +49,8 @@ namespace Amagadon {
    var edits=Build(memory.ToInt32());Write(process,memory.ToInt32(),edits[memory.ToInt32()]);uint previous;if(!VirtualProtectEx(process,memory,new UIntPtr(4096),0x20,out previous))throw new IOException("Network guard executable protection failed");
    foreach(var edit in edits)if(edit.Key!=memory.ToInt32())Write(process,edit.Key,edit.Value);
    InputRecovery.Apply(process);
+   FramePacing.Apply(process);
+   InGameLayout.Apply(process,hash);
    CrazyZonePatch.Apply(process);
    Core.Log("IPX guard applied before first thread resume: null provider, released pointer, failure menu return; original file unchanged");
   }

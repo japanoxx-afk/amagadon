@@ -189,6 +189,7 @@ namespace Amagadon {
                     string name=Text(f[0]),password=Text(f[1]);int result=Authenticate(name,password,op==5);
                     if(result==0 && clients.Any(x=>x!=c && x.Name!=null && x.Name.Equals(name,StringComparison.OrdinalIgnoreCase)))result=3;
                     Reply(c,op==3?4:6,result);
+                    Log(op==5?"registration-result":"authentication-result",new {client=c.Id,result=result});
                     if(op==3 && result==0) {c.Name=accounts[name].Name;Log("login",new {client=c.Id});}
                     return;
                 }
@@ -225,11 +226,16 @@ namespace Amagadon {
                         c.Rooms=true;Send(c,Blob(79,new byte[]{1}));
                         foreach(Room room in rooms.Values.Where(r=>!r.Playing && r.Channel.Equals(c.Channel,StringComparison.OrdinalIgnoreCase)).ToArray())Send(c,Blob(79,RoomRecord(room,1)));break;
                     case 74:
-                        LeaveRoom(c);raw=f[0];string title=Text(raw.Take(33).ToArray());
-                        if(title.Length==0 || Array.IndexOf(raw,(byte)0,0,33)<0 || Array.IndexOf(raw,(byte)0,33,13)<0 || Array.IndexOf(raw,(byte)0,46,34)<0 || rooms.Values.Any(r=>r.Channel==c.Channel && r.Title.Equals(title,StringComparison.OrdinalIgnoreCase)) || raw[86]<1 || raw[86]>2) {Reply(c,75,1);break;}
+                        raw=f[0];string title=Text(raw.Take(33).ToArray());
+                        // Byte 86 is copied from native map metadata +0xf0, not
+                        // a two-valued protocol enum. Real game maps send 4.
+                        string rejection=title.Length==0?"empty-title":Array.IndexOf(raw,(byte)0,0,33)<0 || Array.IndexOf(raw,(byte)0,33,13)<0 || Array.IndexOf(raw,(byte)0,46,34)<0?"unterminated-field":
+                            rooms.Values.Any(r=>r.Host!=c && r.Channel==c.Channel && r.Title.Equals(title,StringComparison.OrdinalIgnoreCase))?"duplicate-title":null;
+                        if(rejection!=null) {Log("room-create-rejected",new {client=c.Id,reason=rejection,mapMetadata=raw[86]});Reply(c,75,1);break;}
+                        LeaveRoom(c);
                         var created=new Room {Id=nextRoom++,Host=c,Title=title,Password=Text(raw.Skip(33).Take(13).ToArray()),Channel=c.Channel,Native=raw};
                         rooms.Add(created.Id,created);created.Members.Add(c);c.Room=created.Id;c.Users=c.Rooms=false;
-                        Send(c,Join(new byte[]{75,111},BitConverter.GetBytes(created.Id)));BroadcastRoom(created,1);break;
+                        Send(c,Join(new byte[]{75,111},BitConverter.GetBytes(created.Id)));BroadcastRoom(created,1);Log("room-created",new {client=c.Id,room=created.Id,mapMetadata=raw[86]});break;
                     case 83:
                         Room found=rooms.Values.FirstOrDefault(r=>r.Channel==c.Channel && r.Title.Equals(Text(f[0]),StringComparison.OrdinalIgnoreCase));
                         if(found==null || found.Host==c || found.Playing || found.Members.Count>=8 || found.Password!=Text(f[1])) {Reply(c,84,1);break;}
