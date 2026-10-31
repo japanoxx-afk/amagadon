@@ -149,7 +149,7 @@ namespace Amagadon {
         string work,relative,recordDirectory,recordDestination;
         ReplayInfo info; ReplayReader reader; BinaryWriter writer;
         IntPtr handle,requestEvent,ackEvent; bool preciseTimer; uint request; int frames;
-        bool playback,finished,disposed;int selectionAddress;uint processId;int replaySpeed=1,baseReplayInterval=-1;bool replayHudHidden,replayIToggled;
+        bool playback,finished,disposed;int selectionAddress;uint processId;int replaySpeed=1,baseReplayInterval=-1;bool replayHudHidden,replayIToggled;byte[] observerCamera;
         volatile bool stopRequested;
         public bool IsPlayback {get {return playback;}}
         public void RequestStop() {if(playback)stopRequested=true;}
@@ -226,7 +226,7 @@ namespace Amagadon {
                 try {if(!CreateProcess(executable,new StringBuilder("\""+executable+"\""),IntPtr.Zero,IntPtr.Zero,false,4|0x400,environmentBlock,game,ref startup,out pi))throw new IOException("게임을 실행할 수 없습니다. 오류 "+Marshal.GetLastWin32Error());}finally {Marshal.FreeHGlobal(environmentBlock);}
                 handle=pi.process;
                 if(!fixture)Diagnostics.Begin((int)pi.pid,executable,game,DiagnosticSettings);
-                processId=pi.pid;Core.Log("Replay start pid="+pi.pid+" mode="+(playback?"play":"record")+" executable="+executable+" mailbox=0x"+Box.ToString("X8"));
+                processId=pi.pid;Core.Log("Replay source="+(source??"recording"));Core.Log("Replay start pid="+pi.pid+" mode="+(playback?"play":"record")+" executable="+executable+" mailbox=0x"+Box.ToString("X8"));
                 try {
                     // Verify our mailbox belongs to the exact known patch before activating.
                     if(fixture) {if(Encoding.ASCII.GetString(Read(Box+64,8))!="AGRTEST1")throw new IOException("리플레이 테스트 프로세스 서명이 다릅니다: "+BitConverter.ToString(Read(Box+64,8)));}
@@ -282,6 +282,7 @@ namespace Amagadon {
                 }
                 if(playback && !finished && ChildExitCode!=0 && String.IsNullOrEmpty(Result))Result="리플레이 게임이 비정상 종료했습니다: 0x"+ChildExitCode.ToString("X8")+" · 재생 "+frames+"프레임. 진단 로그를 확인해주세요.";
                 if(String.IsNullOrEmpty(Result))Result=playback?"게임이 종료되어 리플레이 재생을 마쳤습니다.":"게임을 종료했습니다. 기록한 리플레이가 없으면 싱글플레이와 1024×768 모드를 확인해주세요.";
+                if(playback && source!=null)Core.Log("Replay result source="+Path.GetFileName(source)+" frames="+frames+" result="+Result);
                 Core.Log("Replay child exit=0x"+ExitCode.ToString("X8")+" "+Result);
             } finally {
                 if(requestEvent!=IntPtr.Zero) {CloseHandle(requestEvent);requestEvent=IntPtr.Zero;}
@@ -382,6 +383,11 @@ namespace Amagadon {
             if(pressed && !replayIToggled && selectionAddress!=0) {replayHudHidden=!replayHudHidden;Number(selectionAddress+0x76704,replayHudHidden?1U:0U);Core.Log("Replay HUD hidden="+replayHudHidden);}
             replayIToggled=pressed;
         }
+        [StructLayout(LayoutKind.Sequential)] struct ObserverPoint {public int X,Y;}
+        [StructLayout(LayoutKind.Sequential)] struct ObserverRect {public int Left,Top,Right,Bottom;}
+        [DllImport("user32.dll")] static extern bool GetCursorPos(out ObserverPoint point);
+        [DllImport("user32.dll")] static extern bool ScreenToClient(IntPtr window,ref ObserverPoint point);
+        [DllImport("user32.dll")] static extern bool GetClientRect(IntPtr window,out ObserverRect rect);
         void MoveObserverCamera() {
             if(frames%3!=0)return;
             uint active;GetWindowThreadProcessId(GetForegroundWindow(),out active);
@@ -389,10 +395,15 @@ namespace Amagadon {
             int map=(int)U32(0x4f9de4);if(map==0)return;
             int width=BitConverter.ToUInt16(Read(map+230,2),0),height=BitConverter.ToUInt16(Read(map+232,2),0);
             int x=(int)U32(0x5812e8),y=(int)U32(0x5812ec);
+            ObserverPoint cursor;ObserverRect bounds;IntPtr window=GetForegroundWindow();
+            if(GetCursorPos(out cursor) && ScreenToClient(window,ref cursor) && GetClientRect(window,out bounds) && cursor.X>=0 && cursor.Y>=0 && cursor.X<bounds.Right && cursor.Y<bounds.Bottom) {
+                if(cursor.X<12)x--;else if(cursor.X>=bounds.Right-12)x++;
+                if(cursor.Y<12)y--;else if(cursor.Y>=bounds.Bottom-12)y++;
+            }
             if(GetAsyncKeyState(0x25)<0)x--;if(GetAsyncKeyState(0x27)<0)x++;
             if(GetAsyncKeyState(0x26)<0)y--;if(GetAsyncKeyState(0x28)<0)y++;
             Number(0x5812e8,(uint)Math.Max(0,Math.Min(Math.Max(0,width-32),x)));
-            Number(0x5812ec,(uint)Math.Max(0,Math.Min(Math.Max(0,height-24),y)));
+            Number(0x5812ec,(uint)Math.Max(0,Math.Min(Math.Max(0,height-18),y)));
         }
         void UpdateResourceOverlay() {
             int manager=(int)U32(0x504a10);if(manager==0)return;
@@ -435,9 +446,13 @@ namespace Amagadon {
             else if(kind==3) {
                 if(playback && !fixture && info.Format!=3) {int player=Read(0x4e7270,1)[0];if(player>=10)throw new IOException("리플레이 플레이어 범위 오류");var packet=reader.PreviousFinalPacket()??data.Skip(0x300+player*64).Take(64).ToArray();Write(Box+0x200,packet);}
                 Write(0x52f210,data.Take(1408).ToArray());
-                if(info.Format==3) {int offset=1408;foreach(var range in CommandRanges){Write(range[0],data.Skip(offset).Take(range[1]).ToArray());offset+=range[1];}}
+                if(info.Format==3) {int offset=1408;foreach(var range in CommandRanges){Write(range[0],data.Skip(offset).Take(range[1]).ToArray());offset+=range[1];}if(playback && !fixture && observerCamera!=null)Write(0x5812e8,observerCamera);}
             }
-            else {Write((int)U32(Box+24)+0x1010,data.Take(KeyboardSize).ToArray());Write((int)U32(Box+28),data.Skip(KeyboardSize).Take(4).ToArray());if(!playback || fixture || info.Format!=3)Write(0x5812e8,data.Skip(KeyboardSize+4).Take(8).ToArray());else MoveObserverCamera();Write((int)U32(Box+36),data.Skip(KeyboardSize+12).ToArray());}
+            else {Write((int)U32(Box+24)+0x1010,data.Take(KeyboardSize).ToArray());Write((int)U32(Box+28),data.Skip(KeyboardSize).Take(4).ToArray());if(playback && !fixture && info.Format==3) {
+                    if(observerCamera==null)observerCamera=data.Skip(KeyboardSize+4).Take(8).ToArray();
+                    else {MoveObserverCamera();observerCamera=Read(0x5812e8,8);}
+                }
+                Write(0x5812e8,data.Skip(KeyboardSize+4).Take(8).ToArray());Write((int)U32(Box+36),data.Skip(KeyboardSize+12).ToArray());}
         }
         // The original save loader copies complete unit structs, including the
         // previous process's definition and sprite pointers. Rebind those
