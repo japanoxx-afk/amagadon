@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.IO;
 using System.IO.Compression;
 using System.Text;
@@ -47,6 +47,23 @@ namespace Amagadon {
                 string archive=Path.Combine(root,"match.agr");ReplayFiles.Pack(recording,archive,info);
                 var restored=ReplayFiles.Unpack(archive,Path.Combine(root,"restored"));Check(restored.Frames==2,"round trip");
                 Check(ReplayFiles.Inspect(archive).Frames==2,"list metadata round trip");
+                byte[] selectionState=new byte[SelectionRuntime.StateSize];
+                Buffer.BlockCopy(BitConverter.GetBytes(65),0,selectionState,4,4);
+                for(int id=0;id<65;id++)Buffer.BlockCopy(BitConverter.GetBytes((ushort)id),0,selectionState,0x2000+id*2,2);
+                File.WriteAllBytes(Path.Combine(recording,"selection.bin"),selectionState);
+                info.ControlsVersion=SelectionRuntime.Protocol;
+                string extended=Path.Combine(root,"extended.agr");ReplayFiles.Pack(recording,extended,info);
+                string extendedRoot=Path.Combine(root,"extended");var extendedInfo=ReplayFiles.Unpack(extended,extendedRoot);
+                Check(extendedInfo.ControlsVersion==1 && Core.Hash(Path.Combine(extendedRoot,"selection.bin"))==info.SelectionHash,"extended selection replay round trip");
+                bool badSelection=false;byte[] badState=(byte[])selectionState.Clone();badState[0x2002]=0;
+                try {SelectionRuntime.ValidateState(badState);}catch(IOException){badSelection=true;}Check(badSelection,"duplicate selection rejected");
+                badSelection=false;Buffer.BlockCopy(BitConverter.GetBytes(1701),0,badState,4,4);
+                try {SelectionRuntime.ValidateState(badState);}catch(IOException){badSelection=true;}Check(badSelection,"selection count bounds");
+                using(var stream=File.Open(extended,FileMode.Open,FileAccess.ReadWrite))using(var zip=new ZipArchive(stream,ZipArchiveMode.Update)) {
+                    zip.GetEntry("selection.bin").Delete();using(var output=zip.CreateEntry("selection.bin").Open())output.WriteByte(0);
+                }
+                badSelection=false;try {ReplayFiles.Unpack(extended,Path.Combine(root,"badSelection"));}catch(IOException){badSelection=true;}Check(badSelection,"selection archive corruption rejected");
+                info.ControlsVersion=0;
                 string peek=Path.Combine(root,"peek.bin");
                 using(var writer=new BinaryWriter(File.Create(peek))) {writer.Write(Encoding.ASCII.GetBytes("AGRPL001"));Event(writer,1,2072);Event(writer,2,64);writer.Write(3);writer.Write(0U);writer.Write(0U);writer.Write(1408);var packet=new byte[1408];packet[64]=0x7a;writer.Write(packet);Event(writer,0,0);}
                 using(var input=new ReplayReader(peek)) {var packet=input.PreviousFinalPacket();Check(packet!=null && packet.Length==64 && packet[0]==0x7a,"resolved packet lookahead");Check(input.Next().Kind==1 && input.Next().Kind==2 && input.Next().Kind==3,"lookahead preserves event cursor");Check(input.PreviousFinalPacket()==null,"final frame lookahead terminates");}
@@ -62,6 +79,10 @@ namespace Amagadon {
                 string rng=Path.Combine(root,"rng.bin");
                 using(var writer=new BinaryWriter(File.Create(rng))) {writer.Write(Encoding.ASCII.GetBytes("AGRPL001"));Event(writer,1,2080);Event(writer,2,72);Event(writer,3,1416);Event(writer,0,0);}
                 using(var input=new ReplayReader(rng,2))input.Validate(1);
+                string finalCommands=Path.Combine(root,"final-commands.bin");
+                using(var writer=new BinaryWriter(File.Create(finalCommands))) {writer.Write(Encoding.ASCII.GetBytes("AGRPL001"));Event(writer,1,2080);Event(writer,2,72);Event(writer,3,1612);Event(writer,0,0);}
+                using(var input=new ReplayReader(finalCommands,3))input.Validate(1);
+                rejected=false;try {using(var input=new ReplayReader(finalCommands,2))input.Validate(1);}catch(IOException){rejected=true;}Check(rejected,"final command format cannot be read as pre-input packets");
                 using(var stream=File.Open(rng,FileMode.Open,FileAccess.Write)) {stream.Position=8+16+2080-8;stream.Write(BitConverter.GetBytes(251U),0,4);}
                 rejected=false;try {using(var input=new ReplayReader(rng,2))input.Validate(1);}catch(IOException){rejected=true;}Check(rejected,"engine RNG index bounds");
                 rejected=false;try {using(var input=new ReplayReader(rng,1))input.Validate(1);}catch(IOException){rejected=true;}Check(rejected,"format and payload binding");

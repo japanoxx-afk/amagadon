@@ -40,7 +40,7 @@ namespace Amagadon {
    try {if(!WriteProcessMemory(process,new IntPtr(address),bytes,bytes.Length,out count) || count.ToInt64()!=bytes.Length || !FlushInstructionCache(process,new IntPtr(address),size))throw new IOException("Network guard write failed");}
    finally {uint ignored;VirtualProtectEx(process,new IntPtr(address),size,old,out ignored);}
   }
-  public static void Apply(IntPtr process,string executable) {
+  public static int Apply(IntPtr process,string executable,bool extendedSelection=true) {
    string hash=Core.Hash(executable);
    if(hash!=NativePatch.InputHash && !NativePatch.IsPrevious(hash) && hash!="1a3051c992ea27f3b10545f6623642c2071d31070ae54d5e98129f99c9cb6c22")throw new IOException("네트워크 보호 패치가 지원하지 않는 실행 파일입니다.");
    var expected=new Dictionary<int,string>{{0x475b31,"83c9ff33c0f2aef7d149"},{0x475bc1,"83c9ff33c0f2aef7d149"},{0x475b3e,"8b0252ff5008"},{0x475bce,"8b0252ff5008"},{0x45c092,"50ff1564b24c00"},{0x45c104,"50ff1564b24c00"},{Counter,"90909090"}};
@@ -51,8 +51,11 @@ namespace Amagadon {
    InputRecovery.Apply(process);
    FramePacing.Apply(process);
    InGameLayout.Apply(process,hash);
+   RallySpawn.Apply(process,hash);
    CrazyZonePatch.Apply(process);
+   int selection=extendedSelection?SelectionRuntime.Apply(process,hash):0;
    Core.Log("IPX guard applied before first thread resume: null provider, released pointer, failure menu return; original file unchanged");
+   return selection;
   }
   internal static Process TrackProcess(int pid) {
    Process process=Process.GetProcessById(pid);

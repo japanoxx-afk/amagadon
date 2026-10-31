@@ -12,8 +12,8 @@ using System.Threading.Tasks;
 using System.Web.Script.Serialization;
 using System.Windows.Forms;
 
-[assembly: System.Reflection.AssemblyVersion("0.3.24.0")]
-[assembly: System.Reflection.AssemblyInformationalVersion("0.3.24")]
+[assembly: System.Reflection.AssemblyVersion("0.3.45.0")]
+[assembly: System.Reflection.AssemblyInformationalVersion("0.3.45")]
 namespace Amagadon {
     public class Settings {
         public string GamePath="";
@@ -28,8 +28,8 @@ namespace Amagadon {
     }
     public class Backup { public string Directory; public string[] Existing; }
     public static class Core {
-        public const string Version = "0.3.24";
-        public const string DisplayVersion = "0.3.24";
+        public const string Version = "0.3.45";
+        public const string DisplayVersion = "0.3.45";
         public static readonly string Home = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "AmagadonLauncher");
         public static readonly JavaScriptSerializer Json = new JavaScriptSerializer();
         public static string Hash(string path) { using(var h=SHA256.Create()) using(var f=File.OpenRead(path)) return BitConverter.ToString(h.ComputeHash(f)).Replace("-", "").ToLowerInvariant(); }
@@ -109,7 +109,7 @@ namespace Amagadon {
             AddLabel("그래픽 렌더러",32,329);renderer.DropDownStyle=ComboBoxStyle.DropDownList;renderer.Items.AddRange(new object[]{"자동","GDI","Direct3D 9","OpenGL"});renderer.SetBounds(32,356,338,34);Controls.Add(renderer);
             confine.Text="게임에 포커스가 있을 때 마우스 가두기";confine.SetBounds(388,351,338,44);Controls.Add(confine);
             compat.Text="그래픽 호환성 적용 (원본 DLL/설정 백업)"; compat.SetBounds(32,401,680,36); Controls.Add(compat);
-            Controls.Add(new Label{Text="1024×768 내부 해상도는 4:3 시야를 사용합니다. 화면 늘리기로 모니터를 채울 수 있습니다.\r\n원본 EXE를 유지하고 별도 HD 실행 파일을 사용합니다. ACE는 전용 그래픽 호환 설정으로 실행합니다.",Location=new Point(32,447),Size=new Size(694,46),Font=new Font("맑은 고딕",9)});
+            Controls.Add(new Label{Text="F2: 군사 전체 · .: 쉬는 일꾼 전체 · 드래그/부대 선택 최대 1,700기\r\n멀티플레이는 참가자 모두 같은 선택 확장 버전을 사용해주세요. 원본 EXE는 보존합니다.",Location=new Point(32,447),Size=new Size(694,46),Font=new Font("맑은 고딕",9)});
             game=Button("게임 실행",32,506,338,60); game.BackColor=Color.FromArgb(169,66,39); editor=Button("맵 에디터 실행",388,506,338,60);
             update=Button("업데이트",32,585,160,40); var notes=Button("패치노트",208,585,160,40); var restore=Button("원본 설정 복원",388,585,160,40); var logs=Button("로깅 리포트 ZIP",564,585,162,40);
             autoReplay.Text="싱글플레이 리플레이 자동 기록 · 실험 (AI 동기화 검증 중)";autoReplay.SetBounds(32,636,694,34);Controls.Add(autoReplay);
@@ -141,7 +141,7 @@ namespace Amagadon {
             var workArea=Screen.FromControl(this).WorkingArea;
             MinimumSize=new Size(Math.Min((int)(776*uiScale),workArea.Width),Math.Min((int)(600*uiScale),workArea.Height));
             Size=new Size(Math.Min(Width,workArea.Width),Math.Min(Height,workArea.Height));
-            status.Text=String.IsNullOrEmpty(path.Text)?"게임 설치 폴더를 선택해주세요.":"설치 경로를 확인한 뒤 실행해주세요.";
+            status.Text=String.IsNullOrEmpty(path.Text)?"게임 설치 폴더를 선택해주세요.":"F2: 군사 전체 · .: 쉬는 일꾼 전체 선택\r\n멀티플레이 참가자는 모두 0.3.45 이상 선택 확장 버전이 필요합니다.";
             game.Click+=async delegate { await Launch("Armageddon.exe"); }; editor.Click+=async delegate { await Launch("ACE.exe"); }; update.Click+=async delegate { await CheckUpdate(); };
             notes.Click+=delegate { ShowNotes(); }; restore.Click+=delegate { try { NativePatch.Remove(path.Text,Path.Combine(Base,"compat","hd-preview.json"));Core.Restore(path.Text); status.Text="원본 그래픽 설정을 복원하고 생성한 HD 실행 파일을 제거했습니다."; } catch(Exception ex) { Error(ex); } };
             logs.Click+=async delegate {using(var dialog=new SaveFileDialog {Filter="진단 ZIP (*.zip)|*.zip",FileName="Amagadon-Report-"+DateTime.Now.ToString("yyyyMMdd-HHmmss")+".zip"}) {if(dialog.ShowDialog(this)!=DialogResult.OK)return;logs.Enabled=false;try {string gameFolder=path.Text;await Task.Run(()=>Diagnostics.Report(gameFolder,dialog.FileName));status.Text="진단 리포트를 저장했습니다: "+dialog.FileName;Process.Start("explorer.exe","/select,\""+dialog.FileName+"\"");}catch(Exception ex) {Error(ex);}finally {logs.Enabled=true;}}}; FormClosing+=delegate(object sender,FormClosingEventArgs args) {if(gameRunning) {args.Cancel=true;status.Text="실행 중인 게임 또는 에디터를 먼저 종료해주세요.";return;}try { Save(); } catch(Exception ex) { Core.Log(ex.Message); } };
@@ -157,7 +157,7 @@ namespace Amagadon {
         async Task Launch(string exe,string replaySource=null,bool privateZone=false) {
             EditorCompatibility editorLease=null;gameRunning=true;game.Enabled=editor.Enabled=update.Enabled=replay.Enabled=false;
             try {
-                Save(); Core.Validate(settings.GamePath); Core.EnsureIdle(settings.GamePath);EditorCompatibility.Recover(settings.GamePath);
+                Save(); Core.Validate(settings.GamePath); Core.EnsureIdle(settings.GamePath);EditorCompatibility.Recover(settings.GamePath);TerrainPatch.Prepare(settings.GamePath);
                 CrazyZonePatch.Address=privateZone?settings.ZoneAddress:null;CrazyZonePatch.Port=settings.ZonePort;
                 if(privateZone)CrazyZonePatch.Validate(settings.ZoneAddress,settings.ZonePort);
                 string file=Path.Combine(settings.GamePath,exe);
@@ -178,7 +178,7 @@ namespace Amagadon {
                 Core.Log("Start version="+Core.DisplayVersion+" "+file+" SHA256="+Core.Hash(file)+" settings="+Core.Json.Serialize(settings));
                 if(!privateZone && exe=="Armageddon.exe" && settings.NativeHD && (settings.AutoReplay || replaySource!=null)) {
                     status.Text=replaySource!=null?"리플레이 시작 상태를 불러오는 중…":"게임 실행 중 · 싱글플레이 자동 기록 준비";
-                    using(var session=new ReplaySession(settings.GamePath,file,replaySource)) {session.DiagnosticSettings=settings;activeReplay=session;session.Progress=delegate(string text) {if(!IsDisposed && IsHandleCreated)BeginInvoke((Action)delegate {status.Text=text;});};if(session.IsPlayback) {replay.Text="재생 중단";replay.Enabled=true;}await Task.Run(()=>session.Run());status.Text=session.Result;}
+                    using(var session=new ReplaySession(settings.GamePath,file,replaySource)) {session.DiagnosticSettings=settings;activeReplay=session;session.Progress=delegate(string text) {if(!IsDisposed && IsHandleCreated)BeginInvoke((Action)delegate {status.Text=text;});};if(session.IsPlayback) {replay.Text="재생 중단";replay.Enabled=true;}await Task.Run(()=>session.Run());status.Text=session.Result;if(session.IsPlayback && session.Result!="리플레이 재생을 완료했습니다." && session.Result!="리플레이 재생을 중단했습니다.")MessageBox.Show(this,session.Result,"리플레이 재생 결과",MessageBoxButtons.OK,MessageBoxIcon.Warning);}
                 } else using(var p=exe=="Armageddon.exe"?NetworkGuard.Start(file,settings.GamePath):Process.Start(Diagnostics.StartInfo(file,settings.GamePath))) {
                     Diagnostics.Begin(p.Id,file,settings.GamePath,settings);status.Text=exe+" 실행 중"; await Task.Run(()=>p.WaitForExit());
                     int exitCode=p.ExitCode;Core.Log(exe+" exit=0x"+exitCode.ToString("X8")); status.Text=exitCode==0?"정상 종료했습니다.":"비정상 종료: 0x"+exitCode.ToString("X8")+" · 실행 로그를 확인해주세요.";

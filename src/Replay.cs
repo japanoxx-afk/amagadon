@@ -10,7 +10,8 @@ using System.Threading;
 
 namespace Amagadon {
     public sealed class ReplayInfo {
-        public int Format=1, Frames;
+        public int Format=1, Frames, ControlsVersion;
+        public string SelectionHash;
         public string Version=Core.DisplayVersion, ExecutableHash, DataHash, IndexHash, SaveHash, CommandsHash;
         public string CreatedUtc, MapName, MapHash;
         public bool Complete;
@@ -23,7 +24,7 @@ namespace Amagadon {
                 var entry=zip.GetEntry("manifest.json");if(entry==null || entry.Length>65536)throw new IOException("리플레이 목록 정보가 올바르지 않습니다.");
                 using(var reader=new StreamReader(entry.Open())) {
                     var info=Core.Json.Deserialize<ReplayInfo>(reader.ReadToEnd());
-                    if(info==null || (info.Format!=1 && info.Format!=2) || !info.Complete || info.Frames<1)throw new IOException("완료되지 않은 리플레이입니다.");return info;
+                    if(info==null || (info.ControlsVersion!=0 && info.ControlsVersion!=SelectionRuntime.Protocol) || (info.Format!=1 && info.Format!=2 && info.Format!=3) || !info.Complete || info.Frames<1)throw new IOException("완료되지 않은 리플레이입니다.");return info;
                 }
             }
         }
@@ -33,27 +34,36 @@ namespace Amagadon {
         }
         public static void Pack(string directory,string destination,ReplayInfo info) {
             info.SaveHash=Core.Hash(Path.Combine(directory,"start.sav"));info.CommandsHash=Core.Hash(Path.Combine(directory,"commands.bin"));
+            if(info.ControlsVersion==SelectionRuntime.Protocol) {SelectionRuntime.ValidateState(File.ReadAllBytes(Path.Combine(directory,"selection.bin")));info.SelectionHash=Core.Hash(Path.Combine(directory,"selection.bin"));}
             File.WriteAllText(Path.Combine(directory,"manifest.json"),Core.Json.Serialize(info),Encoding.UTF8);
             string temporary=destination+".partial";
             using(var stream=new FileStream(temporary,FileMode.CreateNew)) using(var zip=new ZipArchive(stream,ZipArchiveMode.Create)) {
-                foreach(string name in new[]{"manifest.json","start.sav","commands.bin"}) using(var output=zip.CreateEntry(name,CompressionLevel.Optimal).Open()) using(var input=File.OpenRead(Path.Combine(directory,name)))input.CopyTo(output);
+                foreach(string name in (info.ControlsVersion==0?new[]{"manifest.json","start.sav","commands.bin"}:new[]{"manifest.json","start.sav","commands.bin","selection.bin"})) using(var output=zip.CreateEntry(name,CompressionLevel.Optimal).Open()) using(var input=File.OpenRead(Path.Combine(directory,name)))input.CopyTo(output);
             }
             File.Move(temporary,destination);
         }
         public static ReplayInfo Unpack(string source,string directory) {
             Directory.CreateDirectory(directory);
             using(var stream=File.OpenRead(source)) using(var zip=new ZipArchive(stream,ZipArchiveMode.Read)) {
-                string[] names={"manifest.json","start.sav","commands.bin"};
-                if(zip.Entries.Count!=3 || names.Any(n=>zip.Entries.Count(e=>e.FullName==n)!=1))throw new IOException("지원하지 않는 리플레이 구성입니다.");
+                var manifest=zip.GetEntry("manifest.json");if(manifest==null || manifest.Length>16384)throw new IOException("리플레이 목록 정보가 올바르지 않습니다.");
+                ReplayInfo headerInfo;using(var text=new StreamReader(manifest.Open()))headerInfo=Core.Json.Deserialize<ReplayInfo>(text.ReadToEnd());
+                if(headerInfo==null || (headerInfo.ControlsVersion!=0 && headerInfo.ControlsVersion!=SelectionRuntime.Protocol))throw new IOException("지원하지 않는 선택 명령 버전입니다.");
+                string[] names=headerInfo.ControlsVersion==0?new[]{"manifest.json","start.sav","commands.bin"}:new[]{"manifest.json","start.sav","commands.bin","selection.bin"};
+                if(zip.Entries.Count!=names.Length || names.Any(n=>zip.Entries.Count(e=>e.FullName==n)!=1))throw new IOException("지원하지 않는 리플레이 구성입니다.");
                 foreach(string name in names) {
-                    var entry=zip.GetEntry(name);long limit=name=="manifest.json"?16384:(name=="start.sav"?MaxSave:MaxCommands);
+                    var entry=zip.GetEntry(name);long limit=name=="selection.bin"?SelectionRuntime.StateSize:(name=="manifest.json"?16384:(name=="start.sav"?MaxSave:MaxCommands));
                     if(entry.Length>limit)throw new IOException("리플레이 파일 크기 제한을 초과했습니다.");
                     using(var input=entry.Open()) using(var output=new FileStream(Path.Combine(directory,name),FileMode.CreateNew))CopyBounded(input,output,limit);
                 }
             }
             var info=Core.Json.Deserialize<ReplayInfo>(File.ReadAllText(Path.Combine(directory,"manifest.json")));
-            if(info==null || (info.Format!=1 && info.Format!=2) || !info.Complete || info.Frames<1 || info.Frames>1000000)throw new IOException("완료되지 않았거나 지원하지 않는 리플레이입니다.");
+            if(info==null || (info.ControlsVersion!=0 && info.ControlsVersion!=SelectionRuntime.Protocol) || (info.Format!=1 && info.Format!=2 && info.Format!=3) || !info.Complete || info.Frames<1 || info.Frames>1000000)throw new IOException("완료되지 않았거나 지원하지 않는 리플레이입니다.");
             if(Core.Hash(Path.Combine(directory,"start.sav"))!=info.SaveHash || Core.Hash(Path.Combine(directory,"commands.bin"))!=info.CommandsHash)throw new IOException("리플레이 파일 검증에 실패했습니다.");
+            if(info.ControlsVersion==SelectionRuntime.Protocol) {
+                string selection=Path.Combine(directory,"selection.bin");
+                if(Core.Hash(selection)!=info.SelectionHash)throw new IOException("리플레이 선택 상태 해시가 다릅니다.");
+                SelectionRuntime.ValidateState(File.ReadAllBytes(selection));
+            }
             byte[] header=new byte[518];
             using(var save=File.OpenRead(Path.Combine(directory,"start.sav"))) {
                 if(save.Read(header,0,header.Length)!=header.Length || Array.IndexOf(header,(byte)0,0,256)<0 || BitConverter.ToUInt32(header,514)>1700)
@@ -63,7 +73,9 @@ namespace Amagadon {
             return info;
         }
         public static void CheckGame(ReplayInfo info,string game,string executable) {
-            if(Core.Hash(executable)!=info.ExecutableHash || Core.Hash(Path.Combine(game,"Armageddon.MFP"))!=info.DataHash || Core.Hash(Path.Combine(game,"Armageddon.HED"))!=info.IndexHash)
+            if(Core.Hash(executable)!=info.ExecutableHash ||
+                ((Core.Hash(Path.Combine(game,"Armageddon.MFP"))!=info.DataHash || Core.Hash(Path.Combine(game,"Armageddon.HED"))!=info.IndexHash) &&
+                 !TerrainPatch.MatchesOriginalArchive(game,info.IndexHash,info.DataHash)))
                 throw new IOException("기록 당시의 게임 데이터 및 런처 패치 버전이 필요합니다.");
             if(!String.IsNullOrEmpty(info.MapHash)) {
                 string map=MapPath(game,info.MapName);
@@ -90,10 +102,10 @@ namespace Amagadon {
         public ReplayEvent Next() {
             if(reader.BaseStream.Position==reader.BaseStream.Length)return null;
             var e=new ReplayEvent {Kind=reader.ReadInt32(),Clock=reader.ReadUInt32(),Digest=reader.ReadUInt32()};
-            int length=reader.ReadInt32();int expected=e.Kind==1?2072:(e.Kind==2?64:(e.Kind==3?1408:(e.Kind==0?0:-1)));
+            int length=reader.ReadInt32();int expected=e.Kind==1?2072:(e.Kind==2?64:(e.Kind==3?(format==3?1604:1408):(e.Kind==0?0:-1)));
             if(e.Kind!=0 && format==0)format=length==expected?1:(length==expected+8?2:-1);
-            if(expected<0 || length!=(expected+(e.Kind!=0 && format==2?8:0)))throw new IOException("잘못된 리플레이 명령 길이입니다.");
-            e.Data=reader.ReadBytes(length);if(e.Data.Length!=length)throw new IOException("리플레이 기록이 중간에 잘렸습니다.");if(e.Kind!=0 && format==2 && BitConverter.ToUInt32(e.Data,expected)>250)throw new IOException("리플레이 엔진 난수 범위 오류");return e;
+            if(expected<0 || length!=(expected+(e.Kind!=0 && format>=2?8:0)))throw new IOException("잘못된 리플레이 명령 길이입니다.");
+            e.Data=reader.ReadBytes(length);if(e.Data.Length!=length)throw new IOException("리플레이 기록이 중간에 잘렸습니다.");if(e.Kind!=0 && format>=2 && BitConverter.ToUInt32(e.Data,expected)>250)throw new IOException("리플레이 엔진 난수 범위 오류");return e;
         }
         // The next frame retains this frame's resolved packet at 52f250.
         // Read it without advancing the event stream, including legacy files.
@@ -137,7 +149,7 @@ namespace Amagadon {
         string work,relative,recordDirectory,recordDestination;
         ReplayInfo info; ReplayReader reader; BinaryWriter writer;
         IntPtr handle,requestEvent,ackEvent; bool preciseTimer; uint request; int frames;
-        bool playback,finished,disposed;
+        bool playback,finished,disposed;int selectionAddress;uint processId;int replaySpeed=1,baseReplayInterval=-1;bool replayHudHidden,replayIToggled;
         volatile bool stopRequested;
         public bool IsPlayback {get {return playback;}}
         public void RequestStop() {if(playback)stopRequested=true;}
@@ -201,6 +213,7 @@ namespace Amagadon {
                     ReplayFiles.CheckGame(info,game,executable);reader=new ReplayReader(Path.Combine(work,"commands.bin"),info.Format);
                     if(CaptureDiagnostic!=null) {
                         scenarioDirectory=Path.Combine(work,"scenario");Directory.CreateDirectory(scenarioDirectory);File.Copy(Path.Combine(work,"start.sav"),Path.Combine(scenarioDirectory,"start.sav"));
+                        if(info.ControlsVersion==SelectionRuntime.Protocol)File.Copy(Path.Combine(work,"selection.bin"),Path.Combine(scenarioDirectory,"selection.bin"));
                         scenarioWriter=new BinaryWriter(new FileStream(Path.Combine(scenarioDirectory,"commands.bin"),FileMode.CreateNew));scenarioWriter.Write(Encoding.ASCII.GetBytes("AGRPL001"));
                         Core.Log("SCENARIO CAPTURE: scripted inputs only; source state hashes are not used as a recovery claim");
                     }
@@ -213,13 +226,22 @@ namespace Amagadon {
                 try {if(!CreateProcess(executable,new StringBuilder("\""+executable+"\""),IntPtr.Zero,IntPtr.Zero,false,4|0x400,environmentBlock,game,ref startup,out pi))throw new IOException("게임을 실행할 수 없습니다. 오류 "+Marshal.GetLastWin32Error());}finally {Marshal.FreeHGlobal(environmentBlock);}
                 handle=pi.process;
                 if(!fixture)Diagnostics.Begin((int)pi.pid,executable,game,DiagnosticSettings);
-                Core.Log("Replay start pid="+pi.pid+" mode="+(playback?"play":"record")+" executable="+executable+" mailbox=0x"+Box.ToString("X8"));
+                processId=pi.pid;Core.Log("Replay start pid="+pi.pid+" mode="+(playback?"play":"record")+" executable="+executable+" mailbox=0x"+Box.ToString("X8"));
                 try {
                     // Verify our mailbox belongs to the exact known patch before activating.
                     if(fixture) {if(Encoding.ASCII.GetString(Read(Box+64,8))!="AGRTEST1")throw new IOException("리플레이 테스트 프로세스 서명이 다릅니다: "+BitConverter.ToString(Read(Box+64,8)));}
                     else if(Core.Hash(executable)!=NativePatch.Replay034Hash && Core.Hash(executable)!=NativePatch.Replay033FinalHash && Core.Hash(executable)!=NativePatch.LegacyOutputHash && Core.Hash(executable)!=NativePatch.Replay032Hash && Core.Hash(executable)!=NativePatch.Replay033Hash && Core.Hash(executable)!=NativePatch.Load(Path.Combine(AppDomain.CurrentDomain.BaseDirectory,"compat","hd-preview.json")).OutputHash)throw new IOException("지원하지 않는 리플레이 실행 파일입니다.");
-                    if(!fixture)NetworkGuard.Apply(handle,executable);
+                    if(!fixture)selectionAddress=NetworkGuard.Apply(handle,executable,!playback || info.ControlsVersion==SelectionRuntime.Protocol);
                     if(eventsEnabled && Core.Hash(executable)!=NativePatch.LegacyOutputHash)SetupEvents();
+                    if(!fixture && (!playback || info.Format==3 || CaptureDiagnostic!=null)) {
+                        if(BitConverter.ToString(Read(0x45448c,5))!="B8-60-22-02-00")throw new IOException("리플레이 최종 명령 위치가 다릅니다.");
+                        byte[] barrier=Convert.FromBase64String("nGCDPQCgMwIAdByDPRSgMwIAdBODPdQ+UQABdAq4AwAAAOjZwP//YZ24YCICAOletRH+");
+                        if(Read(0x2338f00,barrier.Length).Any(value=>value!=0))throw new IOException("리플레이 명령 코드 공간이 사용 중입니다.");
+                        if(CaptureDiagnostic!=null) {int immediate=Array.IndexOf(barrier,(byte)0xb8);barrier[immediate+1]=5;}
+                        Write(0x2338f00,barrier);if(CaptureDiagnostic==null || info.Format==3)Write(0x454429,NetworkGuard.Hex("381dc83e5100"));
+                        byte[] branch=new byte[5];branch[0]=0xe9;Buffer.BlockCopy(BitConverter.GetBytes(0x2338f00-0x454491),0,branch,1,4);Write(0x45448c,branch);
+                        Core.Log("Replay format 3: capture final native packets and decoded command flags after input processing");
+                    }
                     if(playback && !fixture) {
                         if(BitConverter.ToString(Read(0x454436,5))!="E8-95-3D-FB-FF")throw new IOException("지원하지 않는 리플레이 명령 생성 코드입니다.");
                         if(BitConverter.ToString(Read(0x44b5f7,5))!="E8-34-98-04-00")throw new IOException("지원하지 않는 저장본 로더입니다.");
@@ -228,7 +250,7 @@ namespace Amagadon {
                         Write(SnapshotLoadAddress,loader);Write(0x44b5f7,Convert.FromBase64String(SnapshotLoadCall));
                         byte[] code=Convert.FromBase64String(PostInputCode);
                         if(Read(PostInputAddress,code.Length).Any(value=>value!=0))throw new IOException("리플레이 호환 코드 공간이 사용 중입니다.");
-                        Write(PostInputAddress,code);Write(0x454436,Convert.FromBase64String(PostInputCall));
+                        if(info.Format!=3) {Write(PostInputAddress,code);Write(0x454436,Convert.FromBase64String(PostInputCall));}
                         if(!FlushInstructionCache(handle,IntPtr.Zero,UIntPtr.Zero))throw new IOException("리플레이 호환 코드 반영 실패");
                     }
                     SetSavePath(relative+"\\start.sav");Number(Box,playback?2U:1U);
@@ -274,6 +296,12 @@ namespace Amagadon {
             }
         }
         void Handle(int kind) {
+            if(kind==5 && CaptureDiagnostic!=null) {
+                if(info.Format==3) {Handle(3);if(finished)return;}
+                int originalFormat=info.Format;byte[] finalPacket;
+                try {info.Format=3;finalPacket=Capture(3);}finally {info.Format=originalFormat;}
+                scenarioWriter.Write(3);scenarioWriter.Write(U32(0x503c6c));scenarioWriter.Write(0U);scenarioWriter.Write(finalPacket.Length);scenarioWriter.Write(finalPacket);scenarioWriter.Flush();return;
+            }
             if(kind==98)throw new IOException("재생 중 저장·불러오기 명령은 지원하지 않습니다. 원본 저장 파일은 변경하지 않았습니다.");
             if(kind==99)throw new IOException("시작 상태를 게임에서 불러오지 못했습니다.");
             if(kind==10) {
@@ -281,7 +309,7 @@ namespace Amagadon {
                 LogMatchState("before-start-snapshot");
                 recordDirectory=Path.Combine(work,"match-"+Guid.NewGuid().ToString("N"));Directory.CreateDirectory(recordDirectory);
                 SetSavePath(relative+"\\"+Path.GetFileName(recordDirectory)+"\\start.sav");
-                info=new ReplayInfo {Format=2,ExecutableHash=Core.Hash(executable),DataHash=Core.Hash(Path.Combine(game,"Armageddon.MFP")),IndexHash=Core.Hash(Path.Combine(game,"Armageddon.HED")),CreatedUtc=DateTime.UtcNow.ToString("o")};
+                info=new ReplayInfo {Format=fixture?2:3,ControlsVersion=selectionAddress==0?0:SelectionRuntime.Protocol,ExecutableHash=Core.Hash(executable),DataHash=Core.Hash(Path.Combine(game,"Armageddon.MFP")),IndexHash=Core.Hash(Path.Combine(game,"Armageddon.HED")),CreatedUtc=DateTime.UtcNow.ToString("o")};
                 string destination=fixture?Path.Combine(game,"results"):ReplayFiles.Home;Directory.CreateDirectory(destination);
                 recordDestination=Path.Combine(destination,DateTime.Now.ToString("yyyyMMdd-HHmmss")+"-"+Guid.NewGuid().ToString("N").Substring(0,8)+".agr");
                 writer=new BinaryWriter(new FileStream(Path.Combine(recordDirectory,"commands.bin"),FileMode.CreateNew,FileAccess.Write,FileShare.Read));writer.Write(Encoding.ASCII.GetBytes("AGRPL001"));
@@ -289,6 +317,7 @@ namespace Amagadon {
             }
             if(kind==11) {
                 LogMatchState("snapshot-saved-before-reload");
+                if(selectionAddress!=0)File.WriteAllBytes(Path.Combine(recordDirectory,"selection.bin"),SelectionRuntime.CaptureState(handle,selectionAddress));
                 string save=Path.Combine(recordDirectory,"start.sav");
                 if(!File.Exists(save) || new FileInfo(save).Length<512 || new FileInfo(save).Length>ReplayFiles.MaxSave)throw new IOException("게임 시작 상태를 저장하지 못했습니다.");
                 using(var input=File.OpenRead(save)) {byte[] bytes=new byte[256];if(input.Read(bytes,0,256)!=256)throw new IOException("시작 상태가 잘렸습니다.");info.MapName=Encoding.Default.GetString(bytes).Split('\0')[0];}
@@ -302,7 +331,7 @@ namespace Amagadon {
             }
             if(kind==1 && !reportedScreen) {
                 LogMatchState("first-frame-after-reload");
-                if(playback)RestoreSnapshotReferences();
+                if(playback) {RestoreSnapshotReferences();if(info.ControlsVersion==SelectionRuntime.Protocol)SelectionRuntime.RestoreState(handle,selectionAddress,File.ReadAllBytes(Path.Combine(work,"selection.bin")));}
                 if(fixture) {reportedScreen=true;} else {
                 int width=(int)U32(0x4f75ec),height=(int)U32(0x4f75f0);
                 Core.Log("Game speed index="+Read(0x4d4c64,1)[0]+" native delay="+U32(0x503c70)+"ms sync="+(requestEvent!=IntPtr.Zero?"kernel events":"legacy polling"));
@@ -320,9 +349,11 @@ namespace Amagadon {
                     frames++;
                     if(frames%600==0) {string progress="리플레이 재생 · "+frames+" / "+info.Frames+" 프레임";Core.Log(progress);if(Progress!=null)Progress(progress);}
                 }
+                if(kind==1 && !fixture)PollReplayControls();
                 Apply(kind,e.Data);
+                if(kind==1 && !fixture && selectionAddress!=0 && frames%15==1)UpdateResourceOverlay();
                 if(scenarioWriter!=null) {
-                    byte[] captured=Capture(kind);scenarioWriter.Write(kind);scenarioWriter.Write(U32(0x503c6c));scenarioWriter.Write(kind==1 && (frames==1 || frames%60==0)?Digest():0);scenarioWriter.Write(captured.Length);scenarioWriter.Write(captured);scenarioWriter.Flush();
+                    if(kind!=3) {byte[] captured=Capture(kind);scenarioWriter.Write(kind);scenarioWriter.Write(U32(0x503c6c));scenarioWriter.Write(kind==1 && (frames==1 || frames%60==0)?Digest():0);scenarioWriter.Write(captured.Length);scenarioWriter.Write(captured);scenarioWriter.Flush();}
                 }
             } else {
                 if(writer==null)throw new IOException("리플레이 기록이 시작되지 않았습니다.");
@@ -333,6 +364,46 @@ namespace Amagadon {
                 // leave a partial command that was already acknowledged.
                 writer.Flush();
             }
+        }
+        [DllImport("user32.dll")] static extern short GetAsyncKeyState(int key);
+        [DllImport("user32.dll")] static extern IntPtr GetForegroundWindow();
+        [DllImport("user32.dll")] static extern uint GetWindowThreadProcessId(IntPtr window,out uint pid);
+        void PollReplayControls() {
+            uint active;GetWindowThreadProcessId(GetForegroundWindow(),out active);
+            if(active!=processId) {replayIToggled=false;return;}
+            int speed=replaySpeed;
+            if(GetAsyncKeyState(0x31)<0 || GetAsyncKeyState(0x61)<0)speed=1;
+            if(GetAsyncKeyState(0x32)<0 || GetAsyncKeyState(0x62)<0)speed=2;
+            if(GetAsyncKeyState(0x34)<0 || GetAsyncKeyState(0x64)<0)speed=4;
+            if(baseReplayInterval<0)baseReplayInterval=Math.Max(1,(int)Read(0x4d4c65,1)[0]);
+            Write(0x4d4c65,new[]{(byte)Math.Max(1,baseReplayInterval/speed)});
+            if(speed!=replaySpeed) {replaySpeed=speed;Core.Log("Replay speed "+speed+"x");if(Progress!=null)Progress("리플레이 · "+speed+"배속 · I: HUD 표시 전환");}
+            bool pressed=GetAsyncKeyState(0x49)<0;
+            if(pressed && !replayIToggled && selectionAddress!=0) {replayHudHidden=!replayHudHidden;Number(selectionAddress+0x76704,replayHudHidden?1U:0U);Core.Log("Replay HUD hidden="+replayHudHidden);}
+            replayIToggled=pressed;
+        }
+        void MoveObserverCamera() {
+            if(frames%3!=0)return;
+            uint active;GetWindowThreadProcessId(GetForegroundWindow(),out active);
+            if(active!=processId)return;
+            int map=(int)U32(0x4f9de4);if(map==0)return;
+            int width=BitConverter.ToUInt16(Read(map+230,2),0),height=BitConverter.ToUInt16(Read(map+232,2),0);
+            int x=(int)U32(0x5812e8),y=(int)U32(0x5812ec);
+            if(GetAsyncKeyState(0x25)<0)x--;if(GetAsyncKeyState(0x27)<0)x++;
+            if(GetAsyncKeyState(0x26)<0)y--;if(GetAsyncKeyState(0x28)<0)y++;
+            Number(0x5812e8,(uint)Math.Max(0,Math.Min(Math.Max(0,width-32),x)));
+            Number(0x5812ec,(uint)Math.Max(0,Math.Min(Math.Max(0,height-24),y)));
+        }
+        void UpdateResourceOverlay() {
+            int manager=(int)U32(0x504a10);if(manager==0)return;
+            byte[] rows=new byte[1024];
+            for(int player=1;player<=8;player++) {
+                if(Read(manager+0x7126+player,1)[0]==0)continue;
+                uint ore=U32(manager+0xa8c0+player*4),second=U32(manager+0xa8e8+player*4);
+                byte[] text=Encoding.ASCII.GetBytes("P"+player+"  O:"+ore+"  R:"+second);
+                Buffer.BlockCopy(text,0,rows,(player-1)*128,Math.Min(text.Length,127));
+            }
+            Write(selectionAddress+0x76800,rows);
         }
         void LogMatchState(string phase) {
             if(fixture || DiagnosticSettings==null || !DiagnosticSettings.DiagnosticLogging)return;
@@ -349,19 +420,24 @@ namespace Amagadon {
         }
         byte[] CaptureRaw(int kind) {
             if(kind==2)return Read(0x504d70,64);
-            if(kind==3)return Read(0x52f210,1408);
+            if(kind==3) {
+                byte[] packet=Read(0x52f210,1408);if(info.Format!=3)return packet;
+                using(var output=new MemoryStream()) {output.Write(packet,0,packet.Length);foreach(var range in CommandRanges){byte[] flags=Read(range[0],range[1]);output.Write(flags,0,flags.Length);}return output.ToArray();}
+            }
             byte[] result=new byte[2072];Buffer.BlockCopy(Read((int)U32(Box+24)+0x1010,KeyboardSize),0,result,0,KeyboardSize);
             Buffer.BlockCopy(Read((int)U32(Box+28),4),0,result,KeyboardSize,4);Buffer.BlockCopy(Read(0x5812e8,8),0,result,KeyboardSize+4,8);Buffer.BlockCopy(Read((int)U32(Box+36),4),0,result,KeyboardSize+12,4);return result;
         }
+        static readonly int[][] CommandRanges={new[]{0x4f9e40,20},new[]{0x51bc28,32},new[]{0x51bc50,36},new[]{0x51bcf4,36},new[]{0x51bd48,72}};
         void Apply(int kind,byte[] data) {
-            int size=kind==1?2072:(kind==2?64:1408);
+            int size=kind==1?2072:(kind==2?64:(info.Format==3?1604:1408));
             if(data.Length==size+8) {uint index=BitConverter.ToUInt32(data,size);if(index>250)throw new IOException("엔진 난수 상태가 올바르지 않습니다.");Write(0x581158,new[]{(byte)index});Write((int)U32(Box+28),data.Skip(size+4).Take(4).ToArray());data=data.Take(size).ToArray();}
             if(kind==2)Write(0x504d70,data);
             else if(kind==3) {
-                if(playback && !fixture) {int player=Read(0x4e7270,1)[0];if(player>=10)throw new IOException("리플레이 플레이어 범위 오류");var packet=reader.PreviousFinalPacket()??data.Skip(0x300+player*64).Take(64).ToArray();Write(Box+0x200,packet);}
-                Write(0x52f210,data);
+                if(playback && !fixture && info.Format!=3) {int player=Read(0x4e7270,1)[0];if(player>=10)throw new IOException("리플레이 플레이어 범위 오류");var packet=reader.PreviousFinalPacket()??data.Skip(0x300+player*64).Take(64).ToArray();Write(Box+0x200,packet);}
+                Write(0x52f210,data.Take(1408).ToArray());
+                if(info.Format==3) {int offset=1408;foreach(var range in CommandRanges){Write(range[0],data.Skip(offset).Take(range[1]).ToArray());offset+=range[1];}}
             }
-            else {Write((int)U32(Box+24)+0x1010,data.Take(KeyboardSize).ToArray());Write((int)U32(Box+28),data.Skip(KeyboardSize).Take(4).ToArray());Write(0x5812e8,data.Skip(KeyboardSize+4).Take(8).ToArray());Write((int)U32(Box+36),data.Skip(KeyboardSize+12).ToArray());}
+            else {Write((int)U32(Box+24)+0x1010,data.Take(KeyboardSize).ToArray());Write((int)U32(Box+28),data.Skip(KeyboardSize).Take(4).ToArray());if(!playback || fixture || info.Format!=3)Write(0x5812e8,data.Skip(KeyboardSize+4).Take(8).ToArray());else MoveObserverCamera();Write((int)U32(Box+36),data.Skip(KeyboardSize+12).ToArray());}
         }
         // The original save loader copies complete unit structs, including the
         // previous process's definition and sprite pointers. Rebind those
@@ -420,7 +496,7 @@ namespace Amagadon {
         void EndPlayback() {
             if(scenarioWriter!=null) {
                 scenarioWriter.Write(0);scenarioWriter.Write(0U);scenarioWriter.Write(0U);scenarioWriter.Write(0);scenarioWriter.Dispose();scenarioWriter=null;
-                var captured=Core.Json.Deserialize<ReplayInfo>(Core.Json.Serialize(info));captured.Format=2;captured.Version=Core.DisplayVersion;captured.Frames=frames;captured.Complete=true;captured.CreatedUtc=DateTime.UtcNow.ToString("o");ReplayFiles.Pack(scenarioDirectory,CaptureDiagnostic,captured);Core.Log("SCENARIO FORMAT2 WRITTEN "+CaptureDiagnostic);
+                var captured=Core.Json.Deserialize<ReplayInfo>(Core.Json.Serialize(info));captured.Format=3;captured.Version=Core.DisplayVersion;captured.Frames=frames;captured.Complete=true;captured.CreatedUtc=DateTime.UtcNow.ToString("o");ReplayFiles.Pack(scenarioDirectory,CaptureDiagnostic,captured);Core.Log("SCENARIO FORMAT3 WRITTEN "+CaptureDiagnostic);
             }
             finished=true;Result="리플레이 재생을 완료했습니다.";Number(Box,3);}
         public void Dispose() {

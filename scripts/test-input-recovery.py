@@ -243,3 +243,25 @@ def background_api(u,a,size,_):
 u.hook_add(UC_HOOK_CODE,background_api);u.emu_start(0x4a9b68,0x4a9b78,count=100)
 assert seen==[[0x580400,0x1008600,0x580500,0,0x1000000,0]] and u.reg_read(UC_X86_REG_ESP)==SP
 print('PASS: production banner, scoreboard canvas/background/cursor scaling, actual OK release path, no exit on outside click or press-only')
+
+# Upgrade fill/outline: run each actual call site, all fractions; source RECT
+# feeds subsequent width arithmetic and must never acquire the HUD offset.
+for site,target,count,index in ((0x4a6a50,0x48f230,3,1),(0x4a6be5,0x48f230,3,1),(0x4a6d44,0x48f230,3,1),(0x4a6a9e,0x48f540,4,2),(0x4a6c33,0x48f540,4,2)):
+ for width in (0,55,110):
+  u=machine();rect=0x1300000;original=[300,500,300+width,510]
+  for i,v in enumerate(original):put(u,rect+i*4,v)
+  args=[0x1234,0x5678,0x9abc,0xdef0][:count];args[index]=rect
+  for i,v in enumerate(args):put(u,SP+i*4,v)
+  seen=[]
+  def progress_api(u,a,size,_):
+   if a==target:
+    sp=u.reg_read(UC_X86_REG_ESP);actual=[get(u,sp+4+i*4) for i in range(count)]
+    translated=[get(u,actual[index]+i*4) for i in range(4)]
+    assert translated==[original[i]+(112 if i%2==0 else 168) for i in range(4)]
+    assert actual[index]!=rect
+    actual[index]=rect;assert actual==args;seen.append(True);ret(u,0)
+  u.hook_add(UC_HOOK_CODE,progress_api);u.emu_start(site,site+5,count=300)
+  assert seen==[True] and u.reg_read(UC_X86_REG_ESP)==SP
+  assert u.reg_read(UC_X86_REG_EBX)==0x11111111
+  assert [get(u,rect+i*4) for i in range(4)]==original
+print('PASS: five upgrade fill/outline sites at 0/50/100 percent, private rectangles, caller arguments and stack preserved')

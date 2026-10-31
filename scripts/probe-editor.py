@@ -7,18 +7,18 @@ clipper HWND and copy only its client rectangle to its own DC instead. Keep the
 8-bit offscreen surfaces/palette and let GDI convert to desktop color depth.
 """
 from pathlib import Path
-import pefile, struct, sys, hashlib, json, gzip, base64
+import pefile, struct, sys, hashlib, json, gzip, base64, runpy
 from keystone import Ks, KS_ARCH_X86, KS_MODE_32
 original=Path(sys.argv[1]).read_bytes()
 assert hashlib.sha256(original).hexdigest()=='a1b1b0464ce5b9af1841973184adb8c9852ed78fbc922b182a1d90933877d507'
 p=pefile.PE(data=original); b=bytearray(original)
 align=lambda v,a:(v+a-1)//a*a
 rva=align(p.OPTIONAL_HEADER.SizeOfImage,0x1000); va=0x400000+rva
-raw=align(len(b),0x1000); b.extend(bytes(raw-len(b)+0x1000))
+raw=align(len(b),0x1000); b.extend(bytes(raw-len(b)+0x3000))
 header=p.sections[-1].get_file_offset()+40
-b[header:header+40]=struct.pack('<8sIIIIIIHHI',b'.acefix',0x1000,rva,0x1000,raw,0,0,0,0,0xe0000060)
+b[header:header+40]=struct.pack('<8sIIIIIIHHI',b'.acefix',0x3000,rva,0x3000,raw,0,0,0,0,0xe0000060)
 struct.pack_into('<H',b,p.FILE_HEADER.get_field_absolute_offset('NumberOfSections'),len(p.sections)+1)
-struct.pack_into('<I',b,p.OPTIONAL_HEADER.get_field_absolute_offset('SizeOfImage'),rva+0x1000)
+struct.pack_into('<I',b,p.OPTIONAL_HEADER.get_field_absolute_offset('SizeOfImage'),rva+0x3000)
 code=f'''
  push ebp
  push ebx
@@ -112,6 +112,8 @@ code=f'''
 enc=bytes(Ks(KS_ARCH_X86,KS_MODE_32).asm(code,va)[0]);b[raw:raw+len(enc)]=enc
 b[raw+0x810:raw+0x81b]=b'gdi32.dll\0\0'; b[raw+0x820:raw+0x827]=b'BitBlt\0'
 offset=p.get_offset_from_rva(0x1fb80);b[offset:offset+6]=b'\xe9'+struct.pack('<i',va-0x41fb85)+b'\x90'
+runpy.run_path(str(Path(__file__).with_name('editor-navigation.py')))['install'](b,p,raw,va)
+runpy.run_path(str(Path(__file__).with_name('editor-reverse-ramps.py')))['install'](b,p,raw,va)
 Path(sys.argv[2]).write_bytes(b)
 edits=[];i=0
 while i<len(original):
@@ -119,7 +121,7 @@ while i<len(original):
     start=i
     while i<len(original) and original[i]!=b[i]:i+=1
     edits.append(dict(Offset=start,Before=original[start:i].hex(),After=b[start:i].hex()))
-recipe=dict(Version='0.3.9',InputHash=hashlib.sha256(original).hexdigest(),InputLength=len(original),OutputHash=hashlib.sha256(b).hexdigest(),OutputLength=len(b),Edits=edits,AppendGzip=base64.b64encode(gzip.compress(b[len(original):],mtime=0)).decode())
+recipe=dict(Version='0.3.30',InputHash=hashlib.sha256(original).hexdigest(),InputLength=len(original),OutputHash=hashlib.sha256(b).hexdigest(),OutputLength=len(b),Edits=edits,AppendGzip=base64.b64encode(gzip.compress(b[len(original):],mtime=0)).decode())
 path=Path(__file__).resolve().parent.parent/'compat/editor-gdi.json'
 path.write_text(json.dumps(recipe,indent=2)+'\n',encoding='utf8')
 print('Recipe',hashlib.sha256(path.read_bytes()).hexdigest(),'output',recipe['OutputHash'])

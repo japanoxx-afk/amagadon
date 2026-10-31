@@ -27,7 +27,7 @@ namespace Amagadon {
             byte[] rect=c.Finish();var payload=new byte[2048];Buffer.BlockCopy(rect,0,payload,0,rect.Length);
             var text=new InputRecovery.Code(cave+256);
             // thiscall message list: return, x, y, line spacing, colour.
-            text.Hex("834424047081442408a8000000");text.Jump("e9",0x4710f0);
+            text.Hex("83442404708344240854");text.Jump("e9",0x4710f0);
             byte[] message=text.Finish();Buffer.BlockCopy(message,0,payload,256,message.Length);
             byte[] load=NetworkGuard.Hex("be0000000090");Buffer.BlockCopy(BitConverter.GetBytes(cave),0,load,1,4);
             byte[] call=NetworkGuard.Hex("e800000000");Buffer.BlockCopy(BitConverter.GetBytes(cave+256-0x4a6122),0,call,1,4);
@@ -56,17 +56,43 @@ namespace Amagadon {
             present.Hex("526a0050ff5114a18029570050");present.Jump("e8",0x4919a0);present.Hex("83c404");
             present.Jump("e8",0x491be0);present.Hex("c70590295700000000005e83c408c3");
             Copy(payload,512,present.Finish());
+            // Briefing container uses seven stdcall arguments; translate its
+            // common child origin temporarily, restoring serialized coordinates.
+            var briefing=new InputRecovery.Code(cave+1280);
+            briefing.Hex("558bec5356578bf18b7e108b5e148346107083461454");
+            for(int i=6;i>=0;i--)briefing.Hex("ff75"+(8+i*4).ToString("x2"));
+            briefing.Jump("e8",0x49eb80);
+            briefing.Hex("897e10895e145f5e5b5dc21c00");
+            Copy(payload,1280,briefing.Finish());
             Copy(payload,1536,NetworkGuard.Hex("00000000000000002003000058020000"));
-            return new Dictionary<int,byte[]> {{cave,payload},{0x46d95e,load},{0x4a611d,call},
+            // Upgrade/transform progress uses palette fill, unlike production fill.
+            Copy(payload,800,Progress(cave+800,0x48f230,3,1));
+            Copy(payload,1024,Progress(cave+1024,0x48f540,4,2));
+            return new Dictionary<int,byte[]> {{cave,payload},{0x4a60cc,Call(0x4a60cc,cave+1280)},{0x46d95e,load},{0x4a611d,call},
                 {0x4a5c9d,Call(0x4a5c9d,cave+320)}, {0x4a9b31,Call(0x4a9b31,cave+384)},
-                {0x4aa157,Call(0x4aa157,cave+512)}, {0x4a9b68,Jump(0x4a9b68,cave+448,16)}};
+                {0x4a6a50,Call(0x4a6a50,cave+800)}, {0x4a6be5,Call(0x4a6be5,cave+800)},
+                {0x4a6d44,Call(0x4a6d44,cave+800)}, {0x4a6a9e,Call(0x4a6a9e,cave+1024)},
+                {0x4a6c33,Call(0x4a6c33,cave+1024)}, {0x4aa157,Call(0x4aa157,cave+512)}, {0x4a9b68,Jump(0x4a9b68,cave+448,16)}};
+        }
+        static byte[] Progress(int address,int target,int count,int rectIndex) {
+            var c=new InputRecovery.Code(address);
+            c.Hex("538bdc83ec108b43");c.Hex((8+rectIndex*4).ToString("x2"));
+            for(int i=0;i<4;i++) {
+                c.Hex("8b48"+ (i*4).ToString("x2") + "81c1");c.Int(i%2==0?112:168);
+                c.Hex("894b"+((byte)(240+i*4)).ToString("x2"));
+            }
+            for(int i=count-1;i>=0;i--) {
+                if(i==rectIndex)c.Hex("8d43f050");
+                else c.Hex("ff73"+(8+i*4).ToString("x2"));
+            }
+            c.Jump("e8",target);c.Hex("83c4"+(16+count*4).ToString("x2")+"5bc3");return c.Finish();
         }
         static void Copy(byte[] target,int offset,byte[] bytes){Buffer.BlockCopy(bytes,0,target,offset,bytes.Length);}
         static byte[] Jump(int site,int target,int size){byte[] b=Enumerable.Repeat((byte)0x90,size).ToArray();b[0]=0xe9;Copy(b,1,BitConverter.GetBytes(target-site-5));return b;}
         static byte[] Call(int site,int target){byte[] b=Jump(site,target,5);b[0]=0xe8;return b;}
         public static void Apply(IntPtr process,string hash) {
             if(hash!="1a3051c992ea27f3b10545f6623642c2071d31070ae54d5e98129f99c9cb6c22")return;
-            foreach(var entry in new Dictionary<int,string>{{0x46d95e,"8b3554b24c00"},{0x4a611d,"e8ceaffcff"},{0x4a5c9d,"e87e2a0000"},{0x4a9b31,"e86a73feff"},{0x4aa157,"e83481feff"},{0x4a9b68,"6a0068000000016a00526a0057ff5114"}}) {
+            foreach(var entry in new Dictionary<int,string>{{0x4a60cc,"e8af8affff"},{0x46d95e,"8b3554b24c00"},{0x4a611d,"e8ceaffcff"},{0x4a6a50,"e8db87feff"},{0x4a6be5,"e84686feff"},{0x4a6d44,"e8e784feff"},{0x4a6a9e,"e89d8afeff"},{0x4a6c33,"e80889feff"},{0x4a5c9d,"e87e2a0000"},{0x4a9b31,"e86a73feff"},{0x4aa157,"e83481feff"},{0x4a9b68,"6a0068000000016a00526a0057ff5114"}}) {
                 byte[] expected=NetworkGuard.Hex(entry.Value),actual=new byte[expected.Length];IntPtr n;
                 if(!ReadProcessMemory(process,new IntPtr(entry.Key),actual,actual.Length,out n)||n.ToInt64()!=actual.Length||!actual.SequenceEqual(expected))throw new IOException("게임 UI 패치 대상 코드가 다릅니다.");
             }
