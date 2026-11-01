@@ -348,7 +348,7 @@ namespace Amagadon {
             finally {if(attached)DebugActiveProcessStop((uint)pid);Marshal.FreeHGlobal(buffer);}
         }
         public static string Report(string game,string destination) {
-            string temp=destination+"."+Guid.NewGuid().ToString("N")+".partial";var index=new List<object>();long total=0;
+            string temp=destination+"."+Guid.NewGuid().ToString("N")+".partial";var index=new List<object>();var includedNames=new HashSet<string>(StringComparer.OrdinalIgnoreCase);long total=0;
             try {using(var zip=ZipFile.Open(temp,ZipArchiveMode.Create)) {
                 var files=new List<string>();
                 foreach(string name in new[]{"launcher.log","launcher.log.1","settings.json"}) {string f=Path.Combine(Core.Home,name);if(File.Exists(f))files.Add(f);}
@@ -363,10 +363,11 @@ namespace Amagadon {
                             long length=input.Length;if(length>64L*1024*1024 || total+length>512L*1024*1024) {index.Add(new {file=relative,status="skipped-size-limit",bytes=length});continue;}
                             var entry=zip.CreateEntry(relative,CompressionLevel.Optimal);
                             using(var output=entry.Open()) {byte[] buffer=new byte[65536];long left=length;while(left>0) {int n=input.Read(buffer,0,(int)Math.Min(left,buffer.Length));if(n==0)break;output.Write(buffer,0,n);left-=n;}if(left!=0)throw new IOException("File changed during report");}
-                            total+=length;index.Add(new {file=relative,status="included",bytes=length});
+                            includedNames.Add(relative);total+=length;index.Add(new {file=relative,status="included",bytes=length});
                         }
                     }catch(Exception ex) {index.Add(new {file=relative,status="failed",error=ex.Message});}
                 }
+                DiagnosticReports.MergeAutomatic(zip,index,includedNames,ref total);
                 foreach(string n in new[]{"ddraw.ini","DDrawCompat.ini","DDrawCompat-ACE.ini","DDrawCompat-ACE.Compat.ini","DDrawCompat-ACE.log","DDrawCompat-ACE.Compat.log","cnc-ddraw.log","ddraw.log","ipxwrapper.log","dplayx.log","directplay.log",".amagadon-editor.json"}) {
                     string f=Path.Combine(game??"",n);if(String.IsNullOrWhiteSpace(game) || !File.Exists(f))continue;
                     try {if(new FileInfo(f).Length<=8*1024*1024) {using(var input=new FileStream(f,FileMode.Open,FileAccess.Read,FileShare.ReadWrite|FileShare.Delete))using(var output=zip.CreateEntry("game/"+n).Open())input.CopyTo(output);}}catch(Exception ex) {index.Add(new {file=n,status="failed",error=ex.Message});}
