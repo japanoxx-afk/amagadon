@@ -238,7 +238,7 @@ namespace Amagadon {
             Func<int,int,byte[]> read=(a,n)=>{var b=new byte[n];IntPtr got;if(!ReadProcessMemory(p.Handle,new IntPtr(a),b,n,out got)||got.ToInt32()!=n)throw new IOException("동기화 상태 읽기 실패");return b;};
             int clock=BitConverter.ToInt32(read(0x503c6c,4),0),manager=BitConverter.ToInt32(read(0x504a10,4),0);
             int count=manager==0?0:Math.Max(0,Math.Min(1700,BitConverter.ToInt32(read(manager+4,4),0)));var units=new List<object>();
-            for(int i=0;i<count;i++){int ptr=BitConverter.ToInt32(read(manager+8+i*4,4),0);if(ptr==0)continue;var b=read(ptr,0x13bc);units.Add(new {id=i,type=BitConverter.ToUInt16(b,12),owner=b[60],alive=b[0x13b8],x=BitConverter.ToInt32(b,20),y=BitConverter.ToInt32(b,24),health=BitConverter.ToInt32(b,0x9c4)});}
+            for(int i=0;i<count;i++){int ptr=BitConverter.ToInt32(read(manager+8+i*4,4),0);if(ptr==0)continue;var b=read(ptr,0x13bc);units.Add(new {id=i,type=BitConverter.ToUInt16(b,12),owner=b[60],alive=b[0x13b8],x=BitConverter.ToInt32(b,20),y=BitConverter.ToInt32(b,24),health=BitConverter.ToInt32(b,0x9c4),orderTarget=BitConverter.ToInt32(b,0x414),orderState=b[0x464],orderTimer=BitConverter.ToInt32(b,0x478),rallyX=BitConverter.ToInt32(b,0x1398),rallyY=BitConverter.ToInt32(b,0x139c)});}
             return new {clockBefore=clock,clockAfter=BitConverter.ToInt32(read(0x503c6c,4),0),network=NetworkState(p),units=units,commands=Convert.ToBase64String(read(0x52f510,640)),note="Read-only asynchronous sample; clockBefore/After identify concurrent simulation advancement."};
         }
         public static int Watch(int pid,long ticks,string folder) {
