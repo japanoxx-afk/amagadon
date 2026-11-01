@@ -68,8 +68,15 @@ namespace Amagadon {
                 int b=counter.Value;
                 sync=new {fingerprintMismatches=read(b+8),missingHistory=read(b+12),lastReason=read(b+16),peerSlot=read(b+20),historyIndex=read(b+24),localFingerprint=read(b+28)&255,remoteFingerprint=read(b+32)&255,clock=read(b+36),nativeErrorCount=read(b+40),localPlayer=read(b+44),sequence=read(b+48)};
             }
+            object lobbyRefresh=null;
+            if((read(0x47538a)&255)==0xe9) {
+                int? displacement=read(0x47538b);
+                if(displacement.HasValue) {int data=unchecked(0x47538f+displacement.Value-1024+4096);lobbyRefresh=new {sent=read(data),received=read(data+4)};}
+            }
+            var lobbySlots=new List<object>();
+            for(int i=0;i<8;i++)lobbySlots.Add(new {slot=i,kind=read(0x513c64+i)&255,active=read(0x513c80+i)&255,playerId=read(0x513c9c+i*60),hasName=read(0x513ca0+i*60)!=0,race=read(0x513cd3+i*60)&255});
             return new {directPlayObject=read(0x5140d0),ipxProvider=read(0x5140f4),tcpProvider=read(0x5140f8),initializationFailure=read(0x4d96f0),guardFailureCount=counter.HasValue?read(counter.Value):null,
-                lockstep=sync,
+                lockstep=sync,lobby=new {session=read(0x51429c),phase=read(0x513ed8),inGame=read(0x513ed4),localId=read(0x513e88),hostId=read(0x513e7c),countdown=read(0x50e753)&255,refresh=lobbyRefresh,slots=lobbySlots},
                 crazyZone=new {connected=read(0x57ca38),connectionEnded=read(0x57ca3c),welcome=read(0x57ca30),loginResult=read(0x4eaaac),channelResult=read(0x4eaaa8),roomCreateResult=read(0x57ca28),roomJoinResult=read(0x57ca6c),roomId=read(0x57b93c)}};
         }
         static object InputState(Process p) {

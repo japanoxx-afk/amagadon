@@ -150,6 +150,48 @@ with tempfile.TemporaryDirectory(prefix='amagadon-zone-') as temp:
         ping=connect(port);assert login(ping,'Heartbeat')==b'\x04\x00';ping.settimeout(35)
         assert exact(ping,1)==b'\x58';ping.sendall(request(89));ping.close()
         edits=json.loads((d/'patch.json').read_text());v=machine()
+        # The original once-per-second branch refreshes the host table via
+        # native guaranteed 0x26, then the original guest consumer restores it.
+        def lobby_refresh(host=True,phase=1,ingame=0,state=6,identity=True,session=True):
+            u=machine();u.mem_map(0,0x10000);sp=0x2008000
+            for e in edits:u.mem_write(e['address'],base64.b64decode(e['bytes']))
+            put(u,0x51429c,int(session));put(u,0x513ed8,phase);put(u,0x513ed4,ingame)
+            put(u,0x513e88,123);put(u,0x513c9c,123 if identity else 456)
+            u.mem_write(0x513c64,b'\x03\x03'+bytes(6));u.mem_write(0x513ca0,b'FixtureHost\0')
+            put(u,0x513cd8,456);u.mem_write(0x513cdc,b'FixtureGuest\0')
+            put(u,0x5140d0,0x1500000);put(u,0x1500000,0x1501000);put(u,0x15010c4,0x590100)
+            u.mem_write(0x50e753,bytes([state]));u.reg_write(UC_X86_REG_ESI,0x50e748)
+            u.reg_write(UC_X86_REG_ESP,sp);u.reg_write(UC_X86_REG_EFLAGS,0x246)
+            registers=[UC_X86_REG_EBX,UC_X86_REG_ECX,UC_X86_REG_EDX,UC_X86_REG_EDI,UC_X86_REG_EBP]
+            before=[u.reg_read(r) for r in registers];table=bytes(u.mem_read(0x513c60,548));packets=[]
+            def api(u,a,size,_):
+                if a==0x474e10:ret(u,0,int(host))
+                elif a in (0x474e90,0x474ef0):ret(u,0) # local temporary object's lifecycle only
+                elif a==0x590100:
+                    t=u.reg_read(UC_X86_REG_ESP)
+                    assert get(u,t+8)==123 and get(u,t+12)==0 and get(u,t+16)==1
+                    packets.append(bytes(u.mem_read(get(u,t+20),get(u,t+24))))
+                    ret(u,40,0)
+            u.hook_add(UC_HOOK_CODE,api);u.emu_start(0x47538a,0x47538f,count=10000)
+            assert u.reg_read(UC_X86_REG_ESP)==sp and [u.reg_read(r) for r in registers]==before
+            assert bytes(u.mem_read(0x513c60,548))==table
+            assert get(u,0x1001000)==len(packets)
+            return packets,table
+        packets,host_table=lobby_refresh();assert len(packets)==1 and packets[0][0]==0x26
+        assert len(packets[0])==552 and packets[0][4:]==host_table
+        for args in [dict(host=False),dict(phase=0),dict(ingame=1),dict(state=5),dict(state=7),dict(identity=False),dict(session=False)]:
+            assert lobby_refresh(**args)[0]==[]
+        guest=machine()
+        for e in edits:guest.mem_write(e['address'],base64.b64decode(e['bytes']))
+        put(guest,0x51429c,1);guest.mem_write(0x1300000,packets[0]);sp=0x2008000
+        put(guest,sp,0x5f0000);put(guest,sp+4,0x1300000);put(guest,sp+8,123);put(guest,sp+12,0)
+        guest.reg_write(UC_X86_REG_ESP,sp);guest.emu_start(0x472ea0,0x5f0000,count=10000)
+        assert bytes(guest.mem_read(0x513c60,548))==host_table and get(guest,0x1001004)==1
+        # A late initialization/reset that lost the first table is repaired again.
+        guest.mem_write(0x513c60,bytes(548));guest.reg_write(UC_X86_REG_ESP,sp)
+        guest.emu_start(0x472ea0,0x5f0000,count=10000)
+        assert bytes(guest.mem_read(0x513c60,548))==host_table and get(guest,0x1001004)==2
+        print('PASS: native guaranteed host lobby snapshot restores blank guest slots; game/countdown/guest/invalid session excluded')
         def start_gate(patched,ai=True,host=True,ready=True,identity=True):
             u=machine();sp=0x2008000;u.reg_write(UC_X86_REG_ESP,sp)
             if patched:

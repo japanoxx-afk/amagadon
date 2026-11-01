@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -23,7 +23,7 @@ namespace Amagadon {
         }
         public static Dictionary<int,byte[]> Build(int cave,string address,int port) {
             Validate(address,port);
-            var code=new byte[1024];
+            var code=new byte[2048];
             // Server-list getter: exactly one local entry, then NULL. cdecl.
             byte[] getter=NetworkGuard.Hex("837c2404007506b800000000c331c0c3");
             Buffer.BlockCopy(BitConverter.GetBytes(cave+64),0,getter,8,4);
@@ -74,7 +74,28 @@ namespace Amagadon {
             quit.Label("done");quit.Hex("619d");quit.Jump("e9",0x483d2a);
             byte[] quitCode=quit.Finish();Buffer.BlockCopy(quitCode,0,code,768,quitCode.Length);
             byte[] quitJump=NetworkGuard.Hex("e90000000090");Buffer.BlockCopy(BitConverter.GetBytes(cave+768-0x483d29),0,quitJump,1,4);
+            // Runs only on the native once-per-second lobby timer branch.
+            // Re-send the authoritative table using native guaranteed message 0x26.
+            var refresh=new InputRecovery.Code(cave+1024);
+            refresh.Hex("9c60");
+            refresh.Hex("833d9c42510000");refresh.Branch("0f84","done");
+            refresh.Hex("833dd83e510001");refresh.Branch("0f85","done");
+            refresh.Hex("833dd43e510000");refresh.Branch("0f85","done");
+            refresh.Hex("807e0b06");refresh.Branch("0f85","done");
+            refresh.Jump("e8",0x474e10);refresh.Hex("85c0");refresh.Branch("0f84","done");
+            refresh.Hex("a1883e51003b059c3c5100");refresh.Branch("0f85","done");
+            refresh.Hex("803d643c510003");refresh.Branch("0f85","done");
+            refresh.Hex("ff05");refresh.Int(cave+4096);
+            refresh.Jump("e8",0x474c90);
+            refresh.Label("done");refresh.Hex("619d8a460b3c06");refresh.Jump("e9",0x47538f);
+            byte[] refreshCode=refresh.Finish();Buffer.BlockCopy(refreshCode,0,code,1024,refreshCode.Length);
+            byte[] refreshJump=NetworkGuard.Hex("e900000000");Buffer.BlockCopy(BitConverter.GetBytes(cave+1024-0x47538f),0,refreshJump,1,4);
+            var received=new InputRecovery.Code(cave+1536);
+            received.Hex("9cff05");received.Int(cave+4100);received.Hex("9d8d7504b989000000");received.Jump("e9",0x4735f1);
+            byte[] receivedCode=received.Finish();Buffer.BlockCopy(receivedCode,0,code,1536,receivedCode.Length);
+            byte[] receivedJump=NetworkGuard.Hex("e900000000909090");Buffer.BlockCopy(BitConverter.GetBytes(cave+1536-0x4735ee),0,receivedJump,1,4);
             return new Dictionary<int,byte[]> {
+                {0x4735e9,receivedJump}, {0x47538a,refreshJump}, {cave+4096,new byte[64]},
                 {0x483d24,quitJump},
                 {0x475435,completeJump},
                 // Keep cancel reachable while still in the idle (6) state.
@@ -98,12 +119,12 @@ namespace Amagadon {
         public static void Apply(IntPtr process) {
             if(Address==null)return;
             Validate(Address,Port);
-            var expected=new Dictionary<int,string> {{0x483d24,"893560a65100"},{0x466e7b,"89b09c010000"},{0x475435,"558bcee883feffff"},{0x466e2e,"e8ade60000"},{0x497b40,"8b4424048b"},{0x497b50,"8b"},{0x4958aa,"6808ba5700"},{0x4a0390,"a1502b"},{0x49740f,"8bfb"},{0x495637,"e88487ffff"},{0x49583f,"e83c87ffff"}};
+            var expected=new Dictionary<int,string> {{0x4735e9,"8d7504b989000000"},{0x47538a,"8a460b3c06"},{0x483d24,"893560a65100"},{0x466e7b,"89b09c010000"},{0x475435,"558bcee883feffff"},{0x466e2e,"e8ade60000"},{0x497b40,"8b4424048b"},{0x497b50,"8b"},{0x4958aa,"6808ba5700"},{0x4a0390,"a1502b"},{0x49740f,"8bfb"},{0x495637,"e88487ffff"},{0x49583f,"e83c87ffff"}};
             foreach(var item in expected) {
                 byte[] bytes=NetworkGuard.Hex(item.Value),actual=new byte[bytes.Length];IntPtr read;
                 if(!ReadProcessMemory(process,new IntPtr(item.Key),actual,actual.Length,out read) || read.ToInt64()!=actual.Length || !actual.SequenceEqual(bytes))throw new IOException("Crazy Zone 패치 대상 코드가 다릅니다.");
             }
-            IntPtr memory=VirtualAllocEx(process,IntPtr.Zero,new UIntPtr(4096),0x3000,4);
+            IntPtr memory=VirtualAllocEx(process,IntPtr.Zero,new UIntPtr(8192),0x3000,4);
             if(memory==IntPtr.Zero)throw new IOException("Crazy Zone 메모리 할당 실패");
             var edits=Build(memory.ToInt32(),Address,Port);
             NetworkGuard.Write(process,memory.ToInt32(),edits[memory.ToInt32()]);uint previous;
