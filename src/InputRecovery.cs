@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -25,6 +25,7 @@ namespace Amagadon {
         public static readonly Dictionary<int,string> Expected=new Dictionary<int,string> {
             {0x494f33,"480f85f2000000"},
             {0x4905ea,"ff51283bc57415"},
+            {0x49061e,"898c8e10100000"},
             {0x490da1,"ff521c85c07424"},
             {0x4906f5,"ff51288b4c24103bce0f84680200003d1e0007807511a1e8275700508b08ff511c89335e5b59c3"},
             {0x4909ac,"6aff"},{0x4909fb,"6aff"},{0x4909af,"ffd785c0754f"},{0x4909fe,"ffd785c074b1"},
@@ -75,6 +76,12 @@ namespace Amagadon {
             f.Label("resolved");f.Hex("ffd03b05502b5700");f.Branch("0f85","inactive");f.Hex("b801000000c3");
             f.Label("inactive");f.Hex("ff05");f.Int(stats+36);f.Hex("31c0c3");
             byte[] foreground=f.Finish();var payload=new byte[2048];
+            var enter=new Code(cave+768);
+            enter.Hex("83f91c");enter.Branch("0f84","check");
+            enter.Hex("81f99c000000");enter.Branch("0f85","accept");
+            enter.Label("check");enter.Hex("83bc8e1010000000");enter.Jump("0f85",0x49065a);
+            enter.Label("accept");enter.Hex("898c8e10100000");enter.Jump("e9",0x490625);
+            byte[] enterCode=enter.Finish();Buffer.BlockCopy(enterCode,0,payload,768,enterCode.Length);
             var k=new Code(cave+1536);
             k.Hex("ff5128ff05");k.Int(stats+44);k.Hex("a3");k.Int(stats+48);
             k.Hex("3d1e000780");k.Branch("0f84","recover");
@@ -103,6 +110,7 @@ namespace Amagadon {
             byte[] api=System.Text.Encoding.ASCII.GetBytes("GetForegroundWindow\0");Buffer.BlockCopy(api,0,payload,1296,api.Length);
             return new Dictionary<int,byte[]> {
                 {cave,payload},{stats,new byte[60]},{CounterPointer,BitConverter.GetBytes(stats)},
+                {0x49061e,Detour(0x49061e,cave+768,7)},
                 {0x4905ea,Detour(0x4905ea,cave+1536,7)},
                 {0x490da1,Detour(0x490da1,cave+1856,7)},
                 {0x494f33,Detour(0x494f33,cave,7)},{0x4906f5,Detour(0x4906f5,cave+128,39)},

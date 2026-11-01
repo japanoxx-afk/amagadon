@@ -159,6 +159,15 @@ assert pacing(100,10,[110])==['clock']
 assert pacing(100,0,[100])==['clock']
 assert pacing(0xfffffff0,32,[0,16])==['clock','yield','clock']
 assert pacing(100,10,[101,102,103,110])==['clock','yield','clock','clock','yield','clock']
+# Enter is edge-triggered; releases use the original held-key reset path.
+for key in (0x1c,0x9c,0x1e,0x0e):
+ u=machine();obj=0x580000;u.reg_write(UC_X86_REG_ESI,obj);u.reg_write(UC_X86_REG_ECX,key);u.reg_write(UC_X86_REG_EBP,0)
+ u.emu_start(0x49061e,0x490625,count=100);assert get(u,obj+0x1010+key*4)==key
+ u.reg_write(UC_X86_REG_ECX,key);stop=0x49065a if key in (0x1c,0x9c) else 0x490625
+ u.emu_start(0x49061e,stop,count=100);assert u.reg_read(UC_X86_REG_EIP)==stop
+ u.reg_write(UC_X86_REG_ECX,key);u.emu_start(0x490653,0x49065a,count=100);assert get(u,obj+0x1010+key*4)==0
+ u.emu_start(0x49061e,0x490625,count=100);assert get(u,obj+0x1010+key*4)==key
+print('PASS Enter/numpad Enter duplicate-down suppression, release/repress, text and Backspace repeat preservation')
 if '--input-only' in sys.argv:
  print('PASS: focused input/pacing suite complete; layout regressions are separate')
  sys.exit(0)
