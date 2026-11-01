@@ -264,6 +264,21 @@ namespace Amagadon {
             for(int i=0;i<count;i++){int ptr=BitConverter.ToInt32(read(manager+8+i*4,4),0);if(ptr==0)continue;var b=read(ptr,0x13bc);units.Add(new {id=i,type=BitConverter.ToUInt16(b,12),owner=b[60],alive=b[0x13b8],x=BitConverter.ToInt32(b,20),y=BitConverter.ToInt32(b,24),health=BitConverter.ToInt32(b,0x9c4),orderTarget=BitConverter.ToInt32(b,0x414),orderState=b[0x464],orderTimer=BitConverter.ToInt32(b,0x478),rallyX=BitConverter.ToInt32(b,0x1398),rallyY=BitConverter.ToInt32(b,0x139c)});}
             return new {clockBefore=clock,clockAfter=BitConverter.ToInt32(read(0x503c6c,4),0),network=NetworkState(p),units=units,commands=Convert.ToBase64String(read(0x52f510,640)),note="Read-only asynchronous sample; clockBefore/After identify concurrent simulation advancement."};
         }
+        // C++ throws (0xE06D7363) carry the ThrowInfo pointer as parameter 2; its
+        // module names the DLL that keeps throwing. Bounded; resolved off the debugger thread.
+        static void NoteOrigin(Dictionary<uint,int> origins,uint throwInfo) {
+            lock(origins) {int n;if(origins.TryGetValue(throwInfo,out n))origins[throwInfo]=n+1;else if(origins.Count<64)origins[throwInfo]=1;}
+        }
+        static void ReportOrigins(Process p,string folder,Dictionary<uint,int> origins,HashSet<uint> reported) {
+            KeyValuePair<uint,int>[] items;lock(origins)items=origins.Where(kv=>!reported.Contains(kv.Key)).ToArray();
+            if(items.Length==0)return;
+            ProcessModule[] modules;try{p.Refresh();modules=p.Modules.Cast<ProcessModule>().ToArray();}catch(Exception){return;}
+            foreach(var kv in items) {
+                reported.Add(kv.Key);long a=kv.Key;
+                var m=modules.FirstOrDefault(x=>a>=x.BaseAddress.ToInt64() && a<x.BaseAddress.ToInt64()+x.ModuleMemorySize);
+                Write(folder,"first-chance-origin",new {throwInfo="0x"+kv.Key.ToString("X8"),module=m==null?null:m.ModuleName,path=m==null?null:m.FileName,countAtReport=kv.Value});
+            }
+        }
         public static int Watch(int pid,long ticks,string folder) {
             string root=Path.GetFullPath(Home)+Path.DirectorySeparatorChar;
             if(!Path.GetFullPath(folder).StartsWith(root,StringComparison.OrdinalIgnoreCase))return 2;
@@ -276,16 +291,45 @@ namespace Amagadon {
                 if(!name.StartsWith("Armageddon",StringComparison.OrdinalIgnoreCase) && !EditorPatch.IsEditor(name) && !name.Equals("Amagadon.DiagnosticFixture.exe",StringComparison.OrdinalIgnoreCase))return 4;
                 string hash=Core.Hash(p.MainModule.FileName);
                 bool engineMouse=name.StartsWith("Armageddon",StringComparison.OrdinalIgnoreCase) && (hash==NativePatch.InputHash || NativePatch.IsPrevious(hash) || hash==NativePatch.Load(Path.Combine(AppDomain.CurrentDomain.BaseDirectory,"compat","hd-preview.json")).OutputHash);
-                attached=DebugActiveProcess((uint)pid);
-                if(attached && !DebugSetProcessKillOnExit(false)) {DebugActiveProcessStop((uint)pid);attached=false;}
-                Write(folder,"crash-monitor",new {attached=attached,error=attached?0:Marshal.GetLastWin32Error()});
-                File.WriteAllText(Path.Combine(folder,"ready.txt"),attached?"attached":"telemetry-only");
+                // The debugger thread only waits for and continues debug events. A pending
+                // event suspends every game thread, so telemetry (memory reads, trace files,
+                // JSON) runs on this thread and can no longer stretch those suspensions.
+                var attachedSignal=new ManualResetEvent(false);var debuggerDone=new ManualResetEvent(false);bool attachResult=false;int attachError=0;
+                object traceGate=new object();var origins=new Dictionary<uint,int>();var reportedOrigins=new HashSet<uint>();
                 bool initialBreak=true,captured=false;var detector=new StallDetector();long handledExceptions=0,reportedExceptions=0;uint lastExceptionCode=0,lastExceptionAddress=0;var sampleClock=Stopwatch.StartNew();long lastSample=-5000,lastMatch=-250,lastCapture=-30000;string previousMatch=null;bool divergenceCaptured=false;bool sawDivergence=false;uint lastConstructionGuard=0;
                 var recentMatch=new Queue<object>();object lastMatchState=null,lastNetworkState=null;DateTime? lastStateUtc=null;bool sawUnhandledException=false;int? debugExit=null;
+                var debugger=new Thread(()=>{
+                 try {
+                  attachResult=DebugActiveProcess((uint)pid);
+                  if(attachResult && !DebugSetProcessKillOnExit(false)) {DebugActiveProcessStop((uint)pid);attachResult=false;}
+                  if(!attachResult)attachError=Marshal.GetLastWin32Error();
+                 } finally {attachedSignal.Set();}
+                 if(!attachResult){debuggerDone.Set();return;}
+                 try {
+                  while(true) {
+                   if(!WaitForDebugEvent(buffer,1000U)) {if(p.HasExited)break;continue;}
+                    uint kind=unchecked((uint)Marshal.ReadInt32(buffer)),tid=unchecked((uint)Marshal.ReadInt32(buffer,8)),status=0x10002;
+                    bool exited=false;
+                    try {
+                        if(kind==1) {
+                            uint code=unchecked((uint)Marshal.ReadInt32(buffer,12));bool first=Marshal.ReadInt32(buffer,92)!=0;
+                            bool bootstrap=initialBreak && first && code==0x80000003;if(bootstrap)initialBreak=false;
+                            status=bootstrap?0x10002U:0x80010001U;
+                            if(!bootstrap && first){Interlocked.Increment(ref handledExceptions);lastExceptionCode=code;lastExceptionAddress=unchecked((uint)Marshal.ReadInt32(buffer,24));if(code==0xE06D7363 && Marshal.ReadInt32(buffer,28)>=3)NoteOrigin(origins,unchecked((uint)Marshal.ReadInt32(buffer,40)));}
+                            if(!first)Write(folder,"exception",new {code="0x"+code.ToString("X8"),address="0x"+unchecked((uint)Marshal.ReadInt32(buffer,24)).ToString("X8"),thread=tid,firstChance=false});
+                            if(!first) {sawUnhandledException=true;if(engineMouse) {try{lock(traceGate){lastConstructionGuard=CaptureConstructionGuard(p,folder,lastConstructionGuard);Write(folder,"sync-trace-captured",CaptureSyncTrace(p,folder,"crash"));}}catch(Exception ex){Write(folder,"sync-trace-save-error",ex.Message);}Write(folder,"network-at-crash",NetworkState(p));Write(folder,"match-at-crash",MatchState(p));Write(folder,"input-at-crash",InputState(p));}try {Dump(p,tid,buffer,folder);}catch(Exception ex) {Write(folder,"dump-error",ex.Message);}}
+                        } else if(kind==3 || kind==6) {IntPtr f=Marshal.ReadIntPtr(buffer,12);if(f!=IntPtr.Zero && f!=new IntPtr(-1))CloseHandle(f);}
+                        else if(kind==5) {if(engineMouse)try{lock(traceGate){lastConstructionGuard=CaptureConstructionGuard(p,folder,lastConstructionGuard);Write(folder,"sync-trace-captured",CaptureSyncTrace(p,folder,"exit"));}}catch(Exception ex){Write(folder,"sync-trace-save-error",ex.Message);}debugExit=Marshal.ReadInt32(buffer,12);Write(folder,"exit",new {code="0x"+unchecked((uint)debugExit.Value).ToString("X8")});exited=true;}
+                    } finally {if(!ContinueDebugEvent((uint)pid,tid,status))Write(folder,"continue-error",Marshal.GetLastWin32Error());}
+                    if(exited)break;
+                  }
+                 } catch(Exception ex) {Write(folder,"debugger-thread-error",ex.ToString());}
+                 finally {DebugActiveProcessStop((uint)pid);debuggerDone.Set();}
+                }) {IsBackground=true,Name="Amagadon debugger"};
+                debugger.Start();attachedSignal.WaitOne();attached=attachResult;
+                Write(folder,"crash-monitor",new {attached=attached,error=attachError,debuggerThread=true});
+                File.WriteAllText(Path.Combine(folder,"ready.txt"),attached?"attached":"telemetry-only");
                 while(true) {
-                    // Drain pending debugger events before telemetry: a pending event suspends the target.
-                    bool pendingDebugEvent=attached && WaitForDebugEvent(buffer,0);
-                    if(!pendingDebugEvent) {
                     if(sampleClock.ElapsedMilliseconds-lastCapture>=30000) {
                         lastCapture=sampleClock.ElapsedMilliseconds;
                         try {Write(folder,"capture-environment",new {affinity=p.ProcessorAffinity.ToInt64(),modules=p.Modules.Cast<ProcessModule>().Select(m=>m.ModuleName).Where(n=>n.IndexOf("obs",StringComparison.OrdinalIgnoreCase)>=0||n.IndexOf("capture",StringComparison.OrdinalIgnoreCase)>=0||n.IndexOf("graphics-hook",StringComparison.OrdinalIgnoreCase)>=0).ToArray()});}catch(Exception ex) {Write(folder,"capture-environment-error",ex.Message);}
@@ -293,14 +337,14 @@ namespace Amagadon {
                     if(engineMouse && sampleClock.ElapsedMilliseconds-lastMatch>=250) {
                         lastMatch=sampleClock.ElapsedMilliseconds;
                         try {
-                            uint rejected=CaptureConstructionGuard(p,folder,lastConstructionGuard);
-                            if(rejected!=lastConstructionGuard){lastConstructionGuard=rejected;try{Write(folder,"sync-trace-captured",CaptureSyncTrace(p,folder,"invalid-build-target"));}catch(Exception ex){Write(folder,"sync-trace-save-error",ex.Message);}}
+                            lock(traceGate){uint rejected=CaptureConstructionGuard(p,folder,lastConstructionGuard);
+                            if(rejected!=lastConstructionGuard){lastConstructionGuard=rejected;try{Write(folder,"sync-trace-captured",CaptureSyncTrace(p,folder,"invalid-build-target"));}catch(Exception ex){Write(folder,"sync-trace-save-error",ex.Message);}}}
                             var values=new List<int?>();
                             foreach(int address in new[]{0x504f48,0x507bf4,0x507bf8,0x51a668,0x51a8e4}) {
                                 int size=address==0x504f48||address==0x51a8e4?1:4;byte[] b=new byte[size];IntPtr n;
                                 values.Add(ReadProcessMemory(p.Handle,new IntPtr(address),b,size,out n)&&n.ToInt64()==size?(int?)(size==1?b[0]:BitConverter.ToInt32(b,0)):null);
                             }
-                            if(values[0]==4 && values[4].GetValueOrDefault()>0 && !divergenceCaptured){divergenceCaptured=true;sawDivergence=true;try{Write(folder,"sync-trace-captured",CaptureSyncTrace(p,folder,"first-divergence"));}catch(Exception ex){Write(folder,"sync-trace-save-error",ex.Message);}try{Write(folder,"first-sync-divergence",DivergenceState(p));}catch(Exception ex){Write(folder,"sync-divergence-error",ex.Message);}}
+                            if(values[0]==4 && values[4].GetValueOrDefault()>0 && !divergenceCaptured){divergenceCaptured=true;sawDivergence=true;try{lock(traceGate)Write(folder,"sync-trace-captured",CaptureSyncTrace(p,folder,"first-divergence"));}catch(Exception ex){Write(folder,"sync-trace-save-error",ex.Message);}try{Write(folder,"first-sync-divergence",DivergenceState(p));}catch(Exception ex){Write(folder,"sync-divergence-error",ex.Message);}}
                             if(values[0].GetValueOrDefault()!=4)divergenceCaptured=false;
                             string current=Core.Json.Serialize(values);
                             if(values[0].HasValue) {
@@ -317,35 +361,21 @@ namespace Amagadon {
                     }
                     if(sampleClock.ElapsedMilliseconds-lastSample>=5000) {
                         lastSample=sampleClock.ElapsedMilliseconds;
-                        if(handledExceptions!=reportedExceptions){Write(folder,"first-chance-summary",new {total=handledExceptions,sinceLast=handledExceptions-reportedExceptions,lastCode="0x"+lastExceptionCode.ToString("X8"),lastAddress="0x"+lastExceptionAddress.ToString("X8"),note="First-chance exceptions are passed to the application; not proof of a crash."});reportedExceptions=handledExceptions;}
+                        long handledNow=Interlocked.Read(ref handledExceptions);ReportOrigins(p,folder,origins,reportedOrigins);if(handledNow!=reportedExceptions){Write(folder,"first-chance-summary",new {total=handledNow,sinceLast=handledNow-reportedExceptions,lastCode="0x"+lastExceptionCode.ToString("X8"),lastAddress="0x"+lastExceptionAddress.ToString("X8"),note="First-chance exceptions are passed to the application; not proof of a crash. Handled on a dedicated debugger thread so telemetry never delays continuation."});reportedExceptions=handledNow;}
                         Snapshot(p,folder,!EditorPatch.IsEditor(name),engineMouse,detector,ref captured);
                         // Persist a bounded rolling copy before a crash/forced monitor exit.
                         // Atomic replacement leaves the previous valid copy on write failure.
                         try {
                             string target=Path.Combine(folder,"recent-state.json"),pending=target+".partial";
-                            if(engineMouse){lastNetworkState=NetworkState(p);try{CaptureSyncTrace(p,folder,"periodic");}catch(Exception ex){Write(folder,"sync-trace-save-error",ex.Message);}}
+                            if(engineMouse){lastNetworkState=NetworkState(p);try{lock(traceGate)CaptureSyncTrace(p,folder,"periodic");}catch(Exception ex){Write(folder,"sync-trace-save-error",ex.Message);}}
                             File.WriteAllText(pending,Core.Json.Serialize(new {savedUtc=DateTime.UtcNow,lastStateUtc=lastStateUtc,match=lastMatchState,network=lastNetworkState,history=recentMatch.ToArray()}));
                             if(File.Exists(target))File.Replace(pending,target,null);else File.Move(pending,target);
                         }catch(Exception ex){Write(folder,"recent-state-save-error",ex.Message);}
                     }
-                    if(!attached) {if(p.HasExited)break;Thread.Sleep(engineMouse?250:1000);continue;}
-                    if(!WaitForDebugEvent(buffer,engineMouse?250U:1000U)) {if(p.HasExited)break;continue;}
-                    }
-                    uint kind=unchecked((uint)Marshal.ReadInt32(buffer)),tid=unchecked((uint)Marshal.ReadInt32(buffer,8)),status=0x10002;
-                    bool exited=false;
-                    try {
-                        if(kind==1) {
-                            uint code=unchecked((uint)Marshal.ReadInt32(buffer,12));bool first=Marshal.ReadInt32(buffer,92)!=0;
-                            bool bootstrap=initialBreak && first && code==0x80000003;if(bootstrap)initialBreak=false;
-                            status=bootstrap?0x10002U:0x80010001U;
-                            if(!bootstrap && first){handledExceptions++;lastExceptionCode=code;lastExceptionAddress=unchecked((uint)Marshal.ReadInt32(buffer,24));}
-                            if(!first)Write(folder,"exception",new {code="0x"+code.ToString("X8"),address="0x"+unchecked((uint)Marshal.ReadInt32(buffer,24)).ToString("X8"),thread=tid,firstChance=false});
-                            if(!first) {sawUnhandledException=true;if(engineMouse) {try{lastConstructionGuard=CaptureConstructionGuard(p,folder,lastConstructionGuard);Write(folder,"sync-trace-captured",CaptureSyncTrace(p,folder,"crash"));}catch(Exception ex){Write(folder,"sync-trace-save-error",ex.Message);}Write(folder,"network-at-crash",NetworkState(p));Write(folder,"match-at-crash",MatchState(p));Write(folder,"input-at-crash",InputState(p));}try {Dump(p,tid,buffer,folder);}catch(Exception ex) {Write(folder,"dump-error",ex.Message);}}
-                        } else if(kind==3 || kind==6) {IntPtr f=Marshal.ReadIntPtr(buffer,12);if(f!=IntPtr.Zero && f!=new IntPtr(-1))CloseHandle(f);}
-                        else if(kind==5) {if(engineMouse)try{lastConstructionGuard=CaptureConstructionGuard(p,folder,lastConstructionGuard);Write(folder,"sync-trace-captured",CaptureSyncTrace(p,folder,"exit"));}catch(Exception ex){Write(folder,"sync-trace-save-error",ex.Message);}debugExit=Marshal.ReadInt32(buffer,12);Write(folder,"exit",new {code="0x"+unchecked((uint)debugExit.Value).ToString("X8")});exited=true;}
-                    } finally {if(!ContinueDebugEvent((uint)pid,tid,status))Write(folder,"continue-error",Marshal.GetLastWin32Error());}
-                    if(exited)break;
+                    if(attached) {if(debuggerDone.WaitOne(engineMouse?250:1000))break;}
+                    else {if(p.HasExited)break;Thread.Sleep(engineMouse?250:1000);}
                 }
+                if(attached)debuggerDone.WaitOne();
                 Write(folder,"first-chance-summary",new {total=handledExceptions,sinceLast=handledExceptions-reportedExceptions,lastCode="0x"+lastExceptionCode.ToString("X8"),lastAddress="0x"+lastExceptionAddress.ToString("X8")});
                 Write(folder,"process-end-context",new {lastStateUtc=lastStateUtc,debugExit=debugExit,unhandledException=sawUnhandledException,match=lastMatchState,network=lastNetworkState,history=recentMatch.ToArray(),note="Cached state before exit; exit code zero does not prove a normal match completion."});
                 p.WaitForExit();
@@ -354,7 +384,7 @@ namespace Amagadon {
                 Write(folder,"process-end",new {exit="0x"+p.ExitCode.ToString("X8")});
                 try {DiagnosticReports.SaveSession(folder,sawUnhandledException?"미처리 예외 감지":sawDivergence?"동기화 불일치 감지":"프로세스 종료 / 정상 여부 미판정");}catch(Exception ex){Write(folder,"automatic-report-error",ex.Message);}
             }return 0;}catch(Exception ex) {Write(folder,"monitor-error",ex.ToString());try{DiagnosticReports.SaveSession(folder,"진단 감시 중단 / 마지막 저장 기록");}catch(Exception saveError){Write(folder,"automatic-report-error",saveError.Message);}return 1;}
-            finally {if(attached)DebugActiveProcessStop((uint)pid);Marshal.FreeHGlobal(buffer);}
+            finally {Marshal.FreeHGlobal(buffer);}
         }
         public static string Report(string game,string destination) {
             string temp=destination+"."+Guid.NewGuid().ToString("N")+".partial";var index=new List<object>();var includedNames=new HashSet<string>(StringComparer.OrdinalIgnoreCase);long total=0;
