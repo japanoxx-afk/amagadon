@@ -218,6 +218,21 @@ namespace Amagadon {
             AtomicDiagnosticJson(Path.Combine(folder,"invalid-build-targets.json"),new {format=1,total=count,events=rows,notes="Rejected before footprint/cost access; native construction cancellation path used. reason 1=race range, 2=definition index range, 3=missing catalog, 4=missing definition."});
             Write(folder,"invalid-build-targets",new {total=count,records=rows.Count});return count;
         }
+        static void CaptureUnitTrace(Process p,string folder,int runtime,uint generation,bool frozen,uint clock) {
+            const int size=0x354000,stride=54464;int address=runtime+0x281000;
+            byte[] magic=new byte[4];IntPtr got;
+            if(!ReadProcessMemory(p.Handle,new IntPtr(address),magic,4,out got)||got.ToInt32()!=4||BitConverter.ToUInt32(magic,0)!=0x31544e55)return;
+            byte[] raw=new byte[size];if(!ReadProcessMemory(p.Handle,new IntPtr(address),raw,size,out got)||got.ToInt32()!=size)throw new IOException("개별 유닛 이력 읽기 실패");
+            var frames=new List<object>();
+            for(int i=0;i<64;i++) {int o=4096+i*stride;uint seq=BitConverter.ToUInt32(raw,o),count=BitConverter.ToUInt32(raw,o+12);if(seq==0||(seq&63)!=i||count>1700||BitConverter.ToUInt32(raw,o+20)!=seq||BitConverter.ToUInt32(raw,o+8)!=generation)continue;
+                byte[] again=new byte[24];if(!ReadProcessMemory(p.Handle,new IntPtr(address+o),again,24,out got)||got.ToInt32()!=24||!again.SequenceEqual(raw.Skip(o).Take(24)))continue;
+                frames.Add(new {sequence=seq,clock=BitConverter.ToUInt32(raw,o+4),count=count,offset=o});
+            }
+            if(frames.Count==0)return;
+            var index=new {format=1,generation=generation,frameStride=stride,unitStride=32,unitOffset=64,frames=frames,notes="Frame-boundary unit records; id=-1 is empty. Packed fields: id:i32,type:u16,owner:u8,active:u8,x:i32,y:i32,health:i32,target:i32,timer:i32,order:u8,raw4d0:u8,raw13b9:u8,raw10:u8."};
+            string target=Path.Combine(folder,"unit-trace.dat"),pending=target+".partial";File.WriteAllBytes(pending,raw);if(File.Exists(target))File.Replace(pending,target,null);else File.Move(pending,target);AtomicDiagnosticJson(Path.Combine(folder,"unit-trace.json"),index);
+            if(frozen) {string archive=Path.Combine(folder,"SyncTrace","g"+generation.ToString("D8")+"-f"+clock.ToString("D10"));Directory.CreateDirectory(archive);if(!File.Exists(Path.Combine(archive,"unit-trace.dat")))File.WriteAllBytes(Path.Combine(archive,"unit-trace.dat"),raw);if(!File.Exists(Path.Combine(archive,"unit-trace.json")))AtomicDiagnosticJson(Path.Combine(archive,"unit-trace.json"),index);}
+        }
         static object CaptureSyncTrace(Process p,string folder,string reason) {
             Func<int,int,byte[]> read=(a,n)=>{var b=new byte[n];IntPtr got;if(!ReadProcessMemory(p.Handle,new IntPtr(a),b,n,out got)||got.ToInt32()!=n)throw new IOException("동기화 이력 읽기 실패");return b;};
             byte[] hook=read(0x48bc82,5);if(hook[0]!=0xe9)return new {available=false,reason="no-runtime-hook"};
@@ -238,6 +253,7 @@ namespace Amagadon {
                 string archive=Path.Combine(folder,"SyncTrace","g"+BitConverter.ToUInt32(first,20).ToString("D8")+"-f"+BitConverter.ToUInt32(first,16).ToString("D10"));Directory.CreateDirectory(archive);
                 string raw=Path.Combine(archive,"sync-trace.dat"),metadata=Path.Combine(archive,"sync-trace.json");if(!File.Exists(raw))File.WriteAllBytes(raw,first);if(!File.Exists(metadata))AtomicDiagnosticJson(metadata,index);
             }
+            CaptureUnitTrace(p,folder,runtime,BitConverter.ToUInt32(first,20),BitConverter.ToUInt32(first,12)!=0,BitConverter.ToUInt32(first,16));
             return new {available=true,reason=reason,frames=frames.Length,firstClock=frames[0].clock,lastClock=frames[frames.Length-1].clock,frozen=BitConverter.ToUInt32(first,12)!=0};
         }
         static object DivergenceState(Process p) {

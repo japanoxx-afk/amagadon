@@ -17,14 +17,14 @@ TRACK=DATA+0x66020
 SUPPRESS=DATA+0x66024
 STAMP=DATA+0x66040
 TEXT=DATA+0x66080
-SIZE=0x281000
+SIZE=0x5d5000
 blocks={}; hooks=[]; cursor=0
 ks=Ks(KS_ARCH_X86,KS_MODE_32)
 def reserve(name):
  global cursor
  blocks[name]={'address':BASE+cursor};cursor+=0x600
  return blocks[name]['address']
-for name in ('add','sync','select','rectangle','rect_native','first_accept','second_accept','rescan','wire','before','right','order','batch','group','group_native','key','hud','filter','reset','prune','terrain_visibility','resource_text','observer_view','replay_hud_gate','observer_visibility','replay_voice','minimap_resources','harvest_volume','world_resources','minimap_resource_sight','minimap_resource_color','hotkey_map','multiplayer_music','sync_trace','trace_barrier','skirmish_init','construction_guard'):
+for name in ('add','sync','select','rectangle','rect_native','first_accept','second_accept','rescan','wire','before','right','order','batch','group','group_native','key','hud','filter','reset','prune','terrain_visibility','resource_text','observer_view','replay_hud_gate','observer_visibility','replay_voice','minimap_resources','harvest_volume','world_resources','minimap_resource_sight','minimap_resource_color','hotkey_map','multiplayer_music','sync_trace','trace_barrier','skirmish_init','construction_guard','trace_units'):
  reserve(name)
 def at(name):return blocks[name]['address']
 def code(name,source):
@@ -1407,7 +1407,9 @@ jmp 0x4bc14c
 ''')
 hook(0x4bc147,'harvest_volume','8b4c241c51')
 trace_spec=importlib.util.spec_from_file_location('sync_trace',Path(__file__).with_name('build-sync-trace.py'));trace=importlib.util.module_from_spec(trace_spec);trace_spec.loader.exec_module(trace)
-code('sync_trace',trace.assembly(BASE))
+unit_spec=importlib.util.spec_from_file_location('unit_trace',Path(__file__).with_name('build-unit-trace.py'));unit_trace=importlib.util.module_from_spec(unit_spec);unit_spec.loader.exec_module(unit_trace)
+code('trace_units',unit_trace.assembly(BASE))
+code('sync_trace',trace.assembly(BASE,at('trace_units')))
 code('trace_barrier',f"call {at('sync_trace')}\nmov eax,0x22260\njmp 0x454491")
 hook(0x45448c,'trace_barrier','b860220200')
 guard_spec=importlib.util.spec_from_file_location('construction_guard',Path(__file__).with_name('build-construction-guard.py'));guard=importlib.util.module_from_spec(guard_spec);guard_spec.loader.exec_module(guard)

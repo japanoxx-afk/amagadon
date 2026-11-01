@@ -1,5 +1,5 @@
 """Read-only simulation-boundary trace. Writes only its own bounded ring."""
-def assembly(base):
+def assembly(base,unit_trace):
  t=base+0x80000;r=base+0x81000
  return f'''
 pushfd
@@ -143,6 +143,7 @@ unit_next:
 inc esi
 jmp unit_loop
 unit_done:
+call {unit_trace}
 mov eax,[{t}+20]
 mov [edi+88],eax
 push edi
