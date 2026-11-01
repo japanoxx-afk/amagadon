@@ -1,4 +1,6 @@
-"""Read-only extension at sync frame +1536. Original grid row pitch is 2048 bytes."""
+"""Read-only extension at sync frame +1536. Original grid row pitch is 2048 bytes.
+Version 2: 0x51BC28 is indexed from player 1 at offset 0 (native 0x408300/0x4837DA,
+reader 0x421318 uses p*4+0x51BC24); local UI mirrors 0x51BC4C/0x4FA62C at +448."""
 def assembly():
  return '''
 pushfd
@@ -11,7 +13,11 @@ mov ecx,128
 rep stosd
 pop edi
 mov dword ptr [edi],0x31545348
-mov dword ptr [edi+4],1
+mov dword ptr [edi+4],2
+mov eax,[0x51bc4c]
+mov [edi+448],eax
+movzx eax,word ptr [0x4fa62c]
+mov [edi+452],eax
 movzx eax,word ptr [ebp+0x711a]
 mov [edi+24],eax
 lea edx,[edi+32]
@@ -29,7 +35,7 @@ mov ax,[ecx*2+0x4fa618]
 mov [edx+16],ax
 mov ax,[ecx*2+0x4f9e40]
 mov [edx+18],ax
-mov eax,[ecx*4+0x51bc28]
+mov eax,[ecx*4+0x51bc24]
 mov [edx+20],eax
 mov eax,[ecx*4+0x51bcf4]
 mov [edx+24],eax

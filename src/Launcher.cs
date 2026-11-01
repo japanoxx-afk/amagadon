@@ -12,8 +12,8 @@ using System.Threading.Tasks;
 using System.Web.Script.Serialization;
 using System.Windows.Forms;
 
-[assembly: System.Reflection.AssemblyVersion("0.3.67.0")]
-[assembly: System.Reflection.AssemblyInformationalVersion("0.3.67")]
+[assembly: System.Reflection.AssemblyVersion("0.3.68.0")]
+[assembly: System.Reflection.AssemblyInformationalVersion("0.3.68")]
 namespace Amagadon {
     public class Settings {
         public string GamePath="";
@@ -28,11 +28,36 @@ namespace Amagadon {
         public int ScreenProfile=0;
         public string ZoneAddress="127.0.0.1";
         public int ZonePort=9000;
+        public bool KeepGameMusicOff=false;
     }
     public class Backup { public string Directory; public string[] Existing; }
+    // option.dat is the game's own 36-byte settings file (saved by 0x4A3600 from
+    // 0x4A3730): +0x04 music volume (0x4F862C), +0x0C music enabled (0x4EAC34).
+    // 0x4A3680 applies it when a match starts; enabled=0 pauses BGM (0x4BC5D0),
+    // so the match plays silently even though menu music was audible.
+    public static class GameMusic {
+        public const int Size=36,VolumeOffset=4,EnabledOffset=12;
+        public static string FilePath(string folder){return Path.Combine(folder,"option.dat");}
+        public static bool Silenced(string folder) {
+            string file=FilePath(folder);if(!File.Exists(file))return false;
+            byte[] data=File.ReadAllBytes(file);if(data.Length!=Size)return false;
+            return BitConverter.ToInt32(data,EnabledOffset)==0 || BitConverter.ToInt32(data,VolumeOffset)<=0;
+        }
+        public static void Enable(string folder) {
+            string file=FilePath(folder);byte[] data=File.ReadAllBytes(file);
+            if(data.Length!=Size)throw new IOException("option.dat 크기가 예상과 다릅니다. 변경하지 않았습니다.");
+            string backups=Path.Combine(folder,"LauncherBackups");Directory.CreateDirectory(backups);
+            File.Copy(file,Path.Combine(backups,"option-"+DateTime.UtcNow.ToString("yyyyMMdd-HHmmss")+"-"+Guid.NewGuid().ToString("N")+".dat"));
+            Buffer.BlockCopy(BitConverter.GetBytes(1),0,data,EnabledOffset,4);
+            if(BitConverter.ToInt32(data,VolumeOffset)<=0)Buffer.BlockCopy(BitConverter.GetBytes(100),0,data,VolumeOffset,4);
+            string temp=file+"."+Guid.NewGuid().ToString("N")+".tmp";
+            try {File.WriteAllBytes(temp,data);File.Replace(temp,file,null);}finally {if(File.Exists(temp))File.Delete(temp);}
+            Core.Log("Game music: option.dat music enabled (+0x0C=1); previous file backed up.");
+        }
+    }
     public static class Core {
-        public const string Version = "0.3.67";
-        public const string DisplayVersion = "0.3.67";
+        public const string Version = "0.3.68";
+        public const string DisplayVersion = "0.3.68";
         public static readonly string Home = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "AmagadonLauncher");
         public static readonly JavaScriptSerializer Json = new JavaScriptSerializer();
         public static string Hash(string path) { using(var h=SHA256.Create()) using(var f=File.OpenRead(path)) return BitConverter.ToString(h.ComputeHash(f)).Replace("-", "").ToLowerInvariant(); }
@@ -176,6 +201,11 @@ namespace Amagadon {
                 CrazyZonePatch.Address=privateZone?settings.ZoneAddress:null;CrazyZonePatch.Port=settings.ZonePort;
                 if(privateZone)CrazyZonePatch.Validate(settings.ZoneAddress,settings.ZonePort);
                 string file=Path.Combine(settings.GamePath,exe);
+                if(exe=="Armageddon.exe" && replaySource==null && !settings.KeepGameMusicOff && GameMusic.Silenced(settings.GamePath)) {
+                    var answer=MessageBox.Show(this,"게임 옵션에서 배경음악이 꺼져 있거나 음량이 0입니다 (option.dat).\r\n이 상태에서는 메뉴 음악은 나와도 경기가 시작되면 BGM이 멈춥니다.\r\n\r\n예: 배경음악을 켜고 실행 (기존 파일은 LauncherBackups에 보관)\r\n아니요: 끈 상태로 실행하고 다시 묻지 않음","배경음악 꺼짐",MessageBoxButtons.YesNoCancel,MessageBoxIcon.Question);
+                    if(answer==DialogResult.Cancel)return;
+                    if(answer==DialogResult.Yes)GameMusic.Enable(settings.GamePath);else {settings.KeepGameMusicOff=true;Save();}
+                }
                 if(exe=="ACE.exe") {file=EditorPatch.Prepare(settings.GamePath);editorLease=new EditorCompatibility(settings.GamePath);}
                 else {
                     if(settings.NativeHD) {

@@ -501,9 +501,17 @@ for tiles_w,tiles_h in ((1,1),(5,7),(16,17),(256,256),(0,5),(257,5)):
  w(u,B+0x8001c,1);w(u,0x513ed4,1);w(u,0x4f8a10,0xffffffff);w(u,0x503c6c,123)
  for player in range(1,9):
   for off in (0xa8c0,0xa8e8,0x2221c):w(u,MANAGER+off+player*4,off+player)
-  for addr in (0x51bc50,0x51bc28,0x51bcf4):w(u,addr+player*4,addr+player)
+  for addr in (0x51bc50,0x51bcf4):w(u,addr+player*4,addr+player)
   for addr in (0x4fa618,0x4f9e40):u.mem_write(addr+player*2,struct.pack('<H',player+10))
   for addr in (0x51bd48,0x51be00):u.mem_write(addr+player*8,struct.pack('<ii',-player,player*10))
+  # Let the original decoder place the per-player 0x51BC28 value: packet
+  # word20 high bits for player p land at 0x51BC28+(p-1)*4 (0x408300).
+  packet=0x52f510+player*64;u.mem_write(packet,b'\1');u.mem_write(packet+20,struct.pack('<H',(player<<10)|5))
+ asm(u,0x4080000,'call 0x408300\nnop');run(u,0x4080000,0x4080005)
+ for player in range(1,9):
+  assert r(u,0x51bc28+(player-1)*4)==player,player
+  u.mem_write(0x4f9e40+player*2,struct.pack('<H',player+10))
+ w(u,0x51bc4c,0x3c);u.mem_write(0x4fa62c,struct.pack('<H',0x206))
  u.mem_write(MANAGER+0x711a,b'\x34\x12')
  manager_before=bytes(u.mem_read(MANAGER,0x25000));global_before=bytes(u.mem_read(0x4f0000,0x40000))
  regs=[UC_X86_REG_EBX,UC_X86_REG_ECX,UC_X86_REG_EDX,UC_X86_REG_ESI,UC_X86_REG_EDI,UC_X86_REG_EBP]
@@ -514,10 +522,10 @@ for tiles_w,tiles_h in ((1,1),(5,7),(16,17),(256,256),(0,5),(257,5)):
  assert u.reg_read(UC_X86_REG_ESP)==STACK and u.reg_read(UC_X86_REG_EFLAGS)==0x246
  slot=B+0x81000+2048;ext=slot+1536
  assert r(u,slot)==r(u,slot+76)==1 and r(u,slot+88)==1
- assert [r(u,ext+i) for i in (0,4,8,12,20,24)]==[0x31545348,1,width,height,1 if valid else 2,0x1234]
+ assert [r(u,ext+i) for i in (0,4,8,12,20,24,448,452)]==[0x31545348,2,width,height,1 if valid else 2,0x1234,0x3c,0x206]
  for player in range(1,9):
   values=struct.unpack('<4i2H6i',u.mem_read(ext+32+(player-1)*44,44))
-  assert values==(0xa8c0+player,0xa8e8+player,0x2221c+player,0x51bc50+player,player+10,player+10,0x51bc28+player,0x51bcf4+player,-player,player*10,-player,player*10)
+  assert values==(0xa8c0+player,0xa8e8+player,0x2221c+player,0x51bc50+player,player+10,player+10,player,0x51bcf4+player,-player,player*10,-player,player*10),(player,values)
  if valid:
   for stripe in range(16):
    expected=fnv(b''.join(data[y*2048:y*2048+width*2] for y in range(stripe*height//16,(stripe+1)*height//16)))
@@ -529,4 +537,4 @@ for tiles_w,tiles_h in ((1,1),(5,7),(16,17),(256,256),(0,5),(257,5)):
  w(u,B+0x8001c,0);w(u,0x4f9de4,0xdead0000);w(u,0x503c6c,124)
  before=bytes(u.mem_read(B+0x81000,4096));run(u,0x45448c,0x454491)
  assert bytes(u.mem_read(B+0x81000,4096))==before
-print('PASS installed hidden-state trace: all eight players, fixed grid pitch, 16 FNV stripes, bounds, diagnostic OFF, original registers/flags/stack/return and read-only simulation')
+print('PASS installed hidden-state trace v2: native 0x408300 player indexing for 0x51BC28, local UI mirrors 0x51BC4C/0x4FA62C, all eight players, fixed grid pitch, 16 FNV stripes, bounds, diagnostic OFF, original registers/flags/stack/return and read-only simulation')

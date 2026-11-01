@@ -77,6 +77,67 @@ namespace Amagadon {
                 }
             }return result;
         }
+        static readonly string[] StateFields={"자원1","자원2","건설대상","대기모드","건물종류","배치플래그","모드BC28","커서BCF4","커서BD48X","커서BD48Y","커서BE00X","커서BE00Y"};
+        // Cursor-derived fields keep the local live cursor in idle frames, so they are
+        // compared only on frames where that player's slot carries a command.
+        static readonly HashSet<int> CursorFields=new HashSet<int>{5,6,7,8,9,10,11};
+        static Dictionary<long,KeyValuePair<Dictionary<string,long>,HashSet<int>>> Hidden(string path,string record,out int version) {
+            var result=new Dictionary<long,KeyValuePair<Dictionary<string,long>,HashSet<int>>>();version=0;
+            using(var zip=ZipFile.OpenRead(path)) {
+                var entry=zip.GetEntry(record);var binary=zip.GetEntry(record.Replace(".json",".dat"));if(entry==null || binary==null)return result;
+                if(entry.Length>8*1024*1024 || binary.Length>8*1024*1024)throw new IOException("동기화 기록 크기 제한 초과");
+                Dictionary<string,object> doc;using(var reader=new StreamReader(entry.Open()))doc=Core.Json.Deserialize<Dictionary<string,object>>(reader.ReadToEnd());
+                byte[] raw;using(var input=binary.Open())using(var buffer=new MemoryStream()){input.CopyTo(buffer);raw=buffer.ToArray();}
+                uint generation=Convert.ToUInt32(doc["generation"]);
+                foreach(object item in (System.Collections.IEnumerable)doc["stableFrames"]) {
+                    var row=(Dictionary<string,object>)item;long offset=Convert.ToInt64(row["offset"]);uint seq=Convert.ToUInt32(row["sequence"]);
+                    if(offset<4096 || offset+2048>raw.Length)continue;int o=(int)offset;
+                    if(BitConverter.ToUInt32(raw,o)!=seq || BitConverter.ToUInt32(raw,o+76)!=seq || BitConverter.ToUInt32(raw,o+88)!=generation)continue;
+                    int h=o+1536;uint v=BitConverter.ToUInt32(raw,h+4);if(BitConverter.ToUInt32(raw,h)!=0x31545348 || (v!=1 && v!=2))continue;version=(int)Math.Max(version,v);
+                    var values=new Dictionary<string,long>{{"격자상태",BitConverter.ToUInt32(raw,h+20)},{"mgr+711A",BitConverter.ToUInt32(raw,h+24)}};
+                    for(int p=1;p<=8;p++) {
+                        int b=h+32+(p-1)*44;long[] f={BitConverter.ToInt32(raw,b),BitConverter.ToInt32(raw,b+4),BitConverter.ToInt32(raw,b+8),BitConverter.ToInt32(raw,b+12),BitConverter.ToUInt16(raw,b+16),BitConverter.ToUInt16(raw,b+18),BitConverter.ToInt32(raw,b+20),BitConverter.ToInt32(raw,b+24),BitConverter.ToInt32(raw,b+28),BitConverter.ToInt32(raw,b+32),BitConverter.ToInt32(raw,b+36),BitConverter.ToInt32(raw,b+40)};
+                        // 0.3.67 (v1) stored player p+1's 0x51BC28 value under p.
+                        if(v==1)f[6]=p>1?BitConverter.ToInt32(raw,h+32+(p-2)*44+20):long.MinValue;
+                        for(int i=0;i<f.Length;i++)if(f[i]!=long.MinValue)values["P"+p+"."+i]=f[i];
+                    }
+                    if(BitConverter.ToUInt32(raw,h+20)==1)for(int i=0;i<16;i++)values["격자띠"+i]=BitConverter.ToUInt32(raw,h+384+i*4);
+                    var active=new HashSet<int>();for(int p=1;p<=8;p++){int packet=o+128+768+p*64;if(raw[packet]!=0 || BitConverter.ToUInt16(raw,packet+24)!=0)active.Add(p);}
+                    result[Convert.ToInt64(row["clock"])]=new KeyValuePair<Dictionary<string,long>,HashSet<int>>(values,active);
+                }
+            }return result;
+        }
+        static string Label(string key) {
+            if(!key.StartsWith("P") || key.IndexOf('.')<0)return key;
+            int dot=key.IndexOf('.');return "플레이어"+key.Substring(1,dot-1)+" "+StateFields[int.Parse(key.Substring(dot+1))];
+        }
+        static string HiddenDetails(string left,string right,string l,string r) {
+            int lv,rv;var a=Hidden(left,l,out lv);var b=Hidden(right,r,out rv);var clocks=a.Keys.Intersect(b.Keys).OrderBy(c=>c).ToArray();
+            if(clocks.Length==0)return "숨은 상태 기록의 공통 프레임이 없습니다. 0.3.67 이전 버전이거나 기록이 없으면 비교할 수 없습니다 (같다는 뜻이 아님).";
+            var first=new Dictionary<string,string>();int idle=0;
+            foreach(long c in clocks)foreach(string key in a[c].Key.Keys.Intersect(b[c].Key.Keys)) {
+                if(a[c].Key[key]==b[c].Key[key] || first.ContainsKey(key))continue;
+                int dot=key.IndexOf('.');
+                if(key.StartsWith("P") && dot>0 && CursorFields.Contains(int.Parse(key.Substring(dot+1)))) {int p=int.Parse(key.Substring(1,dot-1));if(!a[c].Value.Contains(p) && !b[c].Value.Contains(p)){idle++;continue;}}
+                first[key]="프레임 "+c+" · "+Label(key)+" · 좌측="+a[c].Key[key]+" 우측="+b[c].Key[key];
+            }
+            var text=new StringBuilder("숨은 상태 공통 프레임 "+clocks.Length+"개 (기록 형식 v"+Math.Min(lv,rv)+"~v"+Math.Max(lv,rv)+")\r\n");
+            if(first.Count==0)text.AppendLine("자원·건설대상·대기모드·격자 등 후보 항목의 차이가 없습니다.");
+            foreach(var line in first.Values.OrderBy(x=>long.Parse(x.Split(' ')[1])).Take(40))text.AppendLine("후보 차이: "+line);
+            text.AppendLine("명령 없는 프레임의 커서 파생값 차이 "+idle+"건은 로컬 커서 때문이며 후보에서 제외했습니다.");
+            text.Append("후보 차이는 원인 확정이 아닙니다. 가장 이른 프레임과 직전 명령을 함께 확인하세요.");
+            return text.ToString();
+        }
+        static string Version(string path,string record) {
+            using(var zip=ZipFile.OpenRead(path)) {
+                string[] parts=record.Split('/');int i=Array.IndexOf(parts,"Diagnostics");if(i<0 || i+1>=parts.Length)return null;
+                var entry=zip.GetEntry(string.Join("/",parts.Take(i+2))+"/events.jsonl");if(entry==null)return null;
+                using(var reader=new StreamReader(entry.Open()))for(int n=0;n<64;n++) {
+                    string line=reader.ReadLine();if(line==null)break;
+                    try {var e=Core.Json.Deserialize<Dictionary<string,object>>(line.TrimStart('﻿'));if(Convert.ToString(e["kind"])=="start")return Convert.ToString(((Dictionary<string,object>)e["data"])["version"]);}catch(Exception){}
+                }
+            }return null;
+        }
         static string UnitDetails(string left,string right,string l,string r) {
             var a=Units(left,l);var b=Units(right,r);var clocks=a.Keys.Intersect(b.Keys).OrderBy(c=>c).ToArray();
             if(clocks.Length==0)return "개별 유닛의 공통 프레임이 없습니다. 구버전 또는 기록 누락일 수 있습니다.";
@@ -110,7 +171,10 @@ namespace Amagadon {
         public static string Compare(string left,string right,string leftRecord,string rightRecord) {
             var a=Frames(left,leftRecord);var b=Frames(right,rightRecord);var clocks=a.Keys.Intersect(b.Keys).OrderBy(x=>x).ToArray();
             if(clocks.Length==0)return "공통 프레임이 없습니다. 같은 경기의 양측 리포트인지 확인해주세요.";
-            var text=new StringBuilder();text.AppendLine("공통 프레임 "+clocks.Length+"개 ("+clocks.First()+" ~ "+clocks.Last()+")");
+            var text=new StringBuilder();
+            string lv=null,rv=null;try{lv=Version(left,leftRecord);rv=Version(right,rightRecord);}catch(Exception){}
+            if(lv!=rv)text.AppendLine("주의: 양측 런처 버전이 다릅니다 ("+(lv??"알 수 없음")+" / "+(rv??"알 수 없음")+"). 런타임 패치가 다를 수 있으므로 같은 버전 경기로 다시 비교하세요.\r\n");
+            text.AppendLine("공통 프레임 "+clocks.Length+"개 ("+clocks.First()+" ~ "+clocks.Last()+")");
             foreach(string key in new[]{"unitHash","orderHash","engineRngIndex"}) {
                 long? first=clocks.Where(c=>a[c].ContainsKey(key)&&b[c].ContainsKey(key)&&Convert.ToString(a[c][key])!=Convert.ToString(b[c][key])).Select(c=>(long?)c).FirstOrDefault();
                 text.AppendLine(first.HasValue?"최초 기록 차이: 프레임 "+first.Value+" / "+key+" · 좌측="+a[first.Value][key]+" 우측="+b[first.Value][key]:key+": 제공된 공통 기록은 같습니다 (누락 필드 제외).");
@@ -118,6 +182,7 @@ namespace Amagadon {
             text.AppendLine("같은 경기인지 확인해주세요. 기록 범위 밖의 문제는 배제할 수 없으며, 상태 차이가 곧 원인은 아닙니다.");
             text.AppendLine("엔진 난수 인덱스와 PC별 CRT 난수는 구분합니다. 이 결과의 난수 비교는 엔진 인덱스 기준입니다.");
             try{text.AppendLine(UnitDetails(left,right,leftRecord,rightRecord));}catch(Exception ex){text.AppendLine("개별 유닛 분석 실패: "+ex.Message);}
+            try{text.AppendLine(HiddenDetails(left,right,leftRecord,rightRecord));}catch(Exception ex){text.AppendLine("숨은 상태 분석 실패: "+ex.Message);}
             return text.ToString();
         }
         public static void Open(IWin32Window owner) {
