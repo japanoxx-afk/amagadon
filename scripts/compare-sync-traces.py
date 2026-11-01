@@ -5,6 +5,21 @@ Reports evidence, not a proven cause. Does not upload or modify either ZIP.
 import argparse,json,struct,zipfile
 from pathlib import Path
 
+STATE_FIELDS=('ore','hydrogen','constructionTarget','pendingMode','buildingKind','placementFlag','modeBc28','cursorBcf4','cursorBd48X','cursorBd48Y','cursorBe00X','cursorBe00Y')
+def decode_hidden(raw):
+ if len(raw)!=512 or struct.unpack_from('<2I',raw)!=(0x31545348,1):return None
+ h=dict(zip(('width','height','bytes','gridStatus','manager711a'),struct.unpack_from('<5I',raw,8)))
+ h['players']={str(p+1):dict(zip(STATE_FIELDS,struct.unpack_from('<4i2H6i',raw,32+p*44))) for p in range(8)}
+ h['gridStripes']=list(struct.unpack_from('<16I',raw,384)) if h['gridStatus']==1 else None
+ return h
+
+def hidden_values(h):
+ for k in ('width','height','bytes','gridStatus','manager711a'):yield k,h[k]
+ for p,values in h['players'].items():
+  for k,v in values.items():yield 'player'+p+'.'+k,v
+ if h['gridStripes'] is not None:
+  for i,v in enumerate(h['gridStripes']):yield 'gridStripe'+str(i),v
+
 def load(path):
  with zipfile.ZipFile(path) as z:
   choices=[]
@@ -19,6 +34,7 @@ def load(path):
    if o<4096 or o+2048>len(raw):continue
    if struct.unpack_from('<I',raw,o)[0]!=seq or struct.unpack_from('<I',raw,o+76)[0]!=seq:continue
    if struct.unpack_from('<I',raw,o+88)[0]!=index['generation']:continue
+   row=dict(row);row['hiddenState']=decode_hidden(raw[o+1536:o+2048])
    frames[row['clock']]=(row,raw[o+128:o+1536])
   return name,index,frames
 
@@ -39,9 +55,15 @@ def load_units(path,sync_name):
   return frames
 
 def compare(a,b):
- an,ai,af=load(a);bn,bi,bf=load(b);common=sorted(af.keys()&bf.keys());result={'left':an,'right':bn,'commonFrames':len(common),'range':[common[0],common[-1]] if common else [],'firstStateDifference':None,'firstOrderDifference':None,'firstRandomDifference':None,'firstPacketDifference':None,'note':'Matches simulation clocks from selected sessions; verify both reports describe the same match. Differences are indicators, not proof of cause. Local input staging is deliberately excluded from packet comparison.'}
+ an,ai,af=load(a);bn,bi,bf=load(b);common=sorted(af.keys()&bf.keys());result={'left':an,'right':bn,'commonFrames':len(common),'range':[common[0],common[-1]] if common else [],'firstStateDifference':None,'firstOrderDifference':None,'firstRandomDifference':None,'firstPacketDifference':None,'note':'Matches simulation clocks from selected sessions; verify both reports describe the same match. Differences are indicators, not proof of cause. Local input staging is deliberately excluded from packet comparison. Idle cursor differences are expected; hidden-state differences are candidates, not automatically causal.'}
+ result['hiddenStateCommonFrames']=0;result['firstHiddenStateDifferences']={}
  for clock in common:
   x,xp=af[clock];y,yp=bf[clock]
+  if x.get('hiddenState') and y.get('hiddenState'):
+   result['hiddenStateCommonFrames']+=1
+   xv=dict(hidden_values(x['hiddenState']));yv=dict(hidden_values(y['hiddenState']))
+   for key in sorted(xv.keys()&yv.keys()):
+    if xv[key]!=yv[key] and key not in result['firstHiddenStateDifferences']:result['firstHiddenStateDifferences'][key]={'clock':clock,'left':xv[key],'right':yv[key]}
   if result['firstStateDifference'] is None and (x['unitHash']!=y['unitHash'] or x['unitCount']!=y['unitCount']):result['firstStateDifference']={'clock':clock,'leftHash':x['unitHash'],'rightHash':y['unitHash'],'players':[p for p in range(10) if x['playerHashes'][p]!=y['playerHashes'][p]]}
   if result['firstOrderDifference'] is None and 'orderHash' in x and 'orderHash' in y and x['orderHash']!=y['orderHash']:result['firstOrderDifference']={'clock':clock,'leftHash':x['orderHash'],'rightHash':y['orderHash'],'players':[p+1 for p in range(8) if x['playerOrderHashes'][p]!=y['playerOrderHashes'][p]]}
   if result['firstRandomDifference'] is None and any(x[k]!=y[k] for k in ('engineRngIndex','crtRng','fpuControl')):result['firstRandomDifference']={'clock':clock,'left':{k:x[k] for k in ('engineRngIndex','crtRng','fpuControl')},'right':{k:y[k] for k in ('engineRngIndex','crtRng','fpuControl')}}

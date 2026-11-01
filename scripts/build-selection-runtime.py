@@ -24,11 +24,11 @@ def reserve(name):
  global cursor
  blocks[name]={'address':BASE+cursor};cursor+=0x600
  return blocks[name]['address']
-for name in ('add','sync','select','rectangle','rect_native','first_accept','second_accept','rescan','wire','before','right','order','batch','group','group_native','key','hud','filter','reset','prune','terrain_visibility','resource_text','observer_view','replay_hud_gate','observer_visibility','replay_voice','minimap_resources','harvest_volume','world_resources','minimap_resource_sight','minimap_resource_color','hotkey_map','multiplayer_music','sync_trace','trace_barrier','skirmish_init','construction_guard','trace_units','match_music'):
+for name in ('add','sync','select','rectangle','rect_native','first_accept','second_accept','rescan','wire','before','right','order','batch','group','group_native','key','hud','filter','reset','prune','terrain_visibility','resource_text','observer_view','replay_hud_gate','observer_visibility','replay_voice','minimap_resources','harvest_volume','world_resources','minimap_resource_sight','minimap_resource_color','hotkey_map','multiplayer_music','sync_trace','trace_barrier','skirmish_init','construction_guard','trace_units','match_music','state_trace'):
  reserve(name)
 def at(name):return blocks[name]['address']
 def code(name,source):
- source=source.replace('jz flags','jz draw_flags').replace('flags:','draw_flags:');result=bytes(ks.asm(source,at(name))[0]);assert len(result)<=0x800,(name,len(result));blocks[name]['code']=result;blocks[name]['asm']=source
+ source=source.replace('jz flags','jz draw_flags').replace('flags:','draw_flags:');result=bytes(ks.asm(source,at(name))[0]);assert len(result)<=0x600,(name,len(result));blocks[name]['code']=result;blocks[name]['asm']=source
 
 def hook(site,name,before):hooks.append((site,at(name),bytes.fromhex(before)))
 code('add',f'''
@@ -1425,7 +1425,9 @@ hook(0x4bc147,'harvest_volume','8b4c241c51')
 trace_spec=importlib.util.spec_from_file_location('sync_trace',Path(__file__).with_name('build-sync-trace.py'));trace=importlib.util.module_from_spec(trace_spec);trace_spec.loader.exec_module(trace)
 unit_spec=importlib.util.spec_from_file_location('unit_trace',Path(__file__).with_name('build-unit-trace.py'));unit_trace=importlib.util.module_from_spec(unit_spec);unit_spec.loader.exec_module(unit_trace)
 code('trace_units',unit_trace.assembly(BASE))
-code('sync_trace',trace.assembly(BASE,at('trace_units')))
+state_spec=importlib.util.spec_from_file_location('state_trace',Path(__file__).with_name('build-state-trace.py'));state_trace=importlib.util.module_from_spec(state_spec);state_spec.loader.exec_module(state_trace)
+code('state_trace',state_trace.assembly())
+code('sync_trace',trace.assembly(BASE,at('trace_units'),at('state_trace')))
 code('trace_barrier',f"call {at('sync_trace')}\nmov eax,0x22260\njmp 0x454491")
 hook(0x45448c,'trace_barrier','b860220200')
 guard_spec=importlib.util.spec_from_file_location('construction_guard',Path(__file__).with_name('build-construction-guard.py'));guard=importlib.util.module_from_spec(guard_spec);guard_spec.loader.exec_module(guard)

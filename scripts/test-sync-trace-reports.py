@@ -2,12 +2,16 @@
 import importlib.util,json,struct,tempfile,zipfile
 from pathlib import Path
 spec=importlib.util.spec_from_file_location('compare',Path(__file__).with_name('compare-sync-traces.py'));mod=importlib.util.module_from_spec(spec);spec.loader.exec_module(mod)
-def report(path,different=False,torn=False):
+def report(path,different=False,torn=False,hidden=True):
  raw=bytearray(4096+1024*2048);rows=[]
  for seq,clock in ((1,10),(2,11)):
   o=4096+seq*2048;struct.pack_into('<I',raw,o,seq);struct.pack_into('<I',raw,o+76,seq if not torn else 0);struct.pack_into('<I',raw,o+88,1)
   changed=different and clock==11;hashes=[0]*10;hashes[2]=2 if changed else 1
   rows.append(dict(offset=o,sequence=seq,clock=clock,unitHash=2 if changed else 1,unitCount=3,playerHashes=hashes,engineRngIndex=5 if changed else 4,crtRng=9,fpuControl=0x27f,orderHash=2 if changed else 1,playerOrderHashes=[0,2 if changed else 1]+[0]*6))
+  if hidden:
+   struct.pack_into('<8I',raw,o+1536,0x31545348,1,16,16,512,1,0,0)
+   struct.pack_into('<i',raw,o+1568+44,99 if changed else 100)
+   struct.pack_into('<I',raw,o+1920+7*4,123 if changed else 122)
   if changed:raw[o+128+768+2*64+3]=1
  index=dict(format=1,frozen=True,generation=1,stableFrames=rows)
  unitraw=bytearray(4096+3*54464);unitrows=[]
@@ -26,4 +30,7 @@ with tempfile.TemporaryDirectory() as d:
  assert r['firstEngineRandomDifference']['clock']==11
  assert [v['clock'] for v in r['unitTransitionHistory']]==[10,11]
  assert mod.compare(a,c)['commonFrames']==0
+ assert r['hiddenStateCommonFrames']==2
+ assert r['firstHiddenStateDifferences']=={'player2.ore':{'clock':11,'left':100,'right':99},'gridStripe7':{'clock':11,'left':122,'right':123}}
+ report(c,hidden=False);assert mod.compare(a,c)['hiddenStateCommonFrames']==0
 print('PASS report comparison: common clocks, first unit/player/RNG/command differences and torn slots')

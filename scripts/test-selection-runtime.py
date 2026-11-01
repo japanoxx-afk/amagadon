@@ -29,8 +29,8 @@ checks=0
 def w(u,a,v):u.mem_write(a,struct.pack('<I',v&0xffffffff))
 def r(u,a):return struct.unpack('<I',u.mem_read(a,4))[0]
 def asm(u,a,s):u.mem_write(a,bytes(K.asm(s,a)[0]))
-def run(u,a,b):
- u.emu_start(a,b,count=2000000)
+def run(u,a,b,count=2000000):
+ u.emu_start(a,b,count=count)
  assert u.reg_read(UC_X86_REG_EIP)==b,hex(u.reg_read(UC_X86_REG_EIP))
 def call(u,name,args):
  u.reg_write(UC_X86_REG_ESP,STACK);u.mem_write(STACK,struct.pack('<'+'I'*(len(args)+1),RETURN,*args));run(u,M['blocks'][name],RETURN)
@@ -484,3 +484,49 @@ for multi in (0,1):
  u=fresh(1);w(u,0x513ed4,0);w(u,STACK,0x4d5054);asm(u,0x45348e,f"jmp {M['blocks']['match_music']}")
  run(u,0x45348e,0x4d5054);assert u.reg_read(UC_X86_REG_ESP)==STACK+4
 print('PASS installed new-match CALL preserves caller stack; former JMP-to-string fault reproduced')
+
+# Hidden-state extension: enter at the actual installed JMP site, then CALL
+# through trace_barrier/sync_trace/state_trace and return to original code.
+def fnv(data):
+ h=0x811c9dc5
+ for b in data:h=((h^b)*0x1000193)&0xffffffff
+ return h
+for tiles_w,tiles_h in ((1,1),(5,7),(16,17),(256,256),(0,5),(257,5)):
+ u=fresh(1);grid=0x3800000;w(u,0x4f9de4,grid)
+ u.mem_write(grid+0xe6,struct.pack('<HH',tiles_w,tiles_h))
+ width,height=tiles_w*4,tiles_h*4
+ valid=0<width<=1024 and 0<height<=1024
+ data=bytes((i*31+i//2048)%256 for i in range(2048*height))
+ u.mem_write(grid+0x12f808,data)
+ w(u,B+0x8001c,1);w(u,0x513ed4,1);w(u,0x4f8a10,0xffffffff);w(u,0x503c6c,123)
+ for player in range(1,9):
+  for off in (0xa8c0,0xa8e8,0x2221c):w(u,MANAGER+off+player*4,off+player)
+  for addr in (0x51bc50,0x51bc28,0x51bcf4):w(u,addr+player*4,addr+player)
+  for addr in (0x4fa618,0x4f9e40):u.mem_write(addr+player*2,struct.pack('<H',player+10))
+  for addr in (0x51bd48,0x51be00):u.mem_write(addr+player*8,struct.pack('<ii',-player,player*10))
+ u.mem_write(MANAGER+0x711a,b'\x34\x12')
+ manager_before=bytes(u.mem_read(MANAGER,0x25000));global_before=bytes(u.mem_read(0x4f0000,0x40000))
+ regs=[UC_X86_REG_EBX,UC_X86_REG_ECX,UC_X86_REG_EDX,UC_X86_REG_ESI,UC_X86_REG_EDI,UC_X86_REG_EBP]
+ for i,reg in enumerate(regs):u.reg_write(reg,0x11220000+i)
+ saved=[u.reg_read(reg) for reg in regs];u.reg_write(UC_X86_REG_EFLAGS,0x246)
+ run(u,0x45448c,0x454491,count=20000000)
+ assert u.reg_read(UC_X86_REG_EAX)==0x22260 and [u.reg_read(reg) for reg in regs]==saved
+ assert u.reg_read(UC_X86_REG_ESP)==STACK and u.reg_read(UC_X86_REG_EFLAGS)==0x246
+ slot=B+0x81000+2048;ext=slot+1536
+ assert r(u,slot)==r(u,slot+76)==1 and r(u,slot+88)==1
+ assert [r(u,ext+i) for i in (0,4,8,12,20,24)]==[0x31545348,1,width,height,1 if valid else 2,0x1234]
+ for player in range(1,9):
+  values=struct.unpack('<4i2H6i',u.mem_read(ext+32+(player-1)*44,44))
+  assert values==(0xa8c0+player,0xa8e8+player,0x2221c+player,0x51bc50+player,player+10,player+10,0x51bc28+player,0x51bcf4+player,-player,player*10,-player,player*10)
+ if valid:
+  for stripe in range(16):
+   expected=fnv(b''.join(data[y*2048:y*2048+width*2] for y in range(stripe*height//16,(stripe+1)*height//16)))
+   assert r(u,ext+384+stripe*4)==expected,(tiles_w,tiles_h,stripe)
+ assert bytes(u.mem_read(MANAGER,0x25000))==manager_before
+ assert bytes(u.mem_read(0x4f0000,0x40000))==global_before
+ assert bytes(u.mem_read(grid+0x12f808,len(data)))==data
+ # OFF must not dereference even a deliberately invalid map pointer.
+ w(u,B+0x8001c,0);w(u,0x4f9de4,0xdead0000);w(u,0x503c6c,124)
+ before=bytes(u.mem_read(B+0x81000,4096));run(u,0x45448c,0x454491)
+ assert bytes(u.mem_read(B+0x81000,4096))==before
+print('PASS installed hidden-state trace: all eight players, fixed grid pitch, 16 FNV stripes, bounds, diagnostic OFF, original registers/flags/stack/return and read-only simulation')
