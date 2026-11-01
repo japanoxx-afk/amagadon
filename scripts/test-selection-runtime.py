@@ -319,3 +319,81 @@ run(u,0x454487,0x408300);assert r(u,B+0x80004)==1 and r(u,u.reg_read(UC_X86_REG_
 u=fresh(1);u.mem_map(0,4096);w(u,0xe10+3*4,DEFS);w(u,DEFS+20,0x12345678);w(u,0x4f8a10,3);w(u,B+0x80000+28,1);w(u,0x513ed4,1);w(u,0x503c6c,7)
 call(u,'sync_trace',[]);assert r(u,B+0x81000+2048+84)==0x12345678 and r(u,DEFS+20)==0x12345678
 print('PASS installed per-tick command barrier and read-only CRT TLS seed')
+
+# New skirmish initialization: closed/open slots stay absent, computers receive
+# the flag consumed by the native build-plan scheduler, local player is retained.
+for local in (1,4):
+ for kinds in ([3,2,0,1,2,0,0,0],[3,0,0,0,0,0,0,0]):
+  u=fresh(0,local);u.mem_write(0x504f72,b'\1');u.mem_write(0x513c64,bytes(kinds));u.mem_write(0x513c80,b'\2'*8);u.mem_write(MANAGER+0x240f1,b'\1'*8)
+  run(u,0x402bbe,0x402bc3)
+  for p,kind in enumerate(kinds,1):
+   active=1 if p==local or kind==3 else (2 if kind==2 else 0)
+   ai=1 if kind==2 and p!=local else 0
+   assert u.mem_read(0x513c7f+p,1)==bytes([active]);assert u.mem_read(MANAGER+0x240f0+p,1)==bytes([ai])
+  # Real spawn gate must skip a former computer now set Closed.
+  u.reg_write(UC_X86_REG_EBX,3);run(u,0x404d96,0x4051a8)
+  # Native scheduler must enter only computer brains.
+  calls=[]
+  def ai_call(uc,a,size,data):
+   if a==0x454ee0:
+    calls.append(uc.reg_read(UC_X86_REG_EDI));sp=uc.reg_read(UC_X86_REG_ESP);uc.reg_write(UC_X86_REG_EIP,r(uc,sp));uc.reg_write(UC_X86_REG_ESP,sp+4)
+  handle=u.hook_add(UC_HOOK_CODE,ai_call);run(u,0x48cc06,0x48cc5e);u.hook_del(handle)
+  assert calls==[p for p,kind in enumerate(kinds,1) if kind==2 and p!=local]
+# Campaign and multiplayer initialization retain original slot/AI state.
+for multi,mode in ((1,1),(0,2),(1,2)):
+ u=fresh(0);w(u,0x513ed4,multi);u.mem_write(0x504f72,bytes([mode]));u.mem_write(0x513c80,b'\2'*8);u.mem_write(MANAGER+0x240f1,b'\1'*8);run(u,0x402bbe,0x402bc3);assert u.mem_read(0x513c80,8)==b'\2'*8 and u.mem_read(MANAGER+0x240f1,8)==b'\1'*8
+# Actual native worker classifier, both directions, all three races, option OFF.
+for kind in (0x12,0x13,0x14,0x113,0x114,0x21c,0x21d,0x21e,0x15,0x11f,0x223):
+ for enabled in (0,1):
+  for key in (46,47):
+   u=fresh(1);u.mem_write(UNITS+12,struct.pack('<H',kind));w(u,MANAGER+0x7218+64,0);w(u,B+0x77400,enabled);u.reg_write(UC_X86_REG_ESI,key);call(u,'hotkey_map',[])
+   expected=key^1 if enabled and kind in (0x12,0x13,0x14,0x113,0x114,0x21c,0x21d,0x21e) else key
+   assert u.reg_read(UC_X86_REG_ESI)==expected,(hex(kind),enabled,key)
+print('PASS skirmish Closed spawn exclusion, native AI scheduler activation, campaign/multiplayer isolation, optional B/V swap for all three native worker types')
+
+# Execute the original AI planner and its original order writer with controlled
+# world queries. Covers production -> construction -> attack for all race plans.
+archive=Path(r'C:\Users\seo\Downloads\armaggeddon\armaggeddon');hed=(archive/'Armageddon.HED').read_bytes()
+with (archive/'Armageddon.MFP').open('rb') as archive_file:
+ for entry in range(9):
+  offset=struct.unpack_from('<I',hed,8+entry*72)[0];size=struct.unpack_from('<I',hed,8+entry*72+68)[0];archive_file.seek(offset);lines=archive_file.read(size).splitlines()
+  first=list(map(int,lines[0][70:].split()));second=list(map(int,lines[1][70:].split()));worker,parent,race,action,qty=first;building=second[0]
+  assert action==1 and second[3]==0
+  u=fresh(0);brain=DEFS+0x2000;plan=DEFS+0x4000;player=2
+  u.mem_write(MANAGER+0x25137+player,b'\1');w(u,brain+20,player);w(u,brain+24,4);w(u,brain+0xfc,plan);w(u,brain+0x28+(worker&255)*4,1)
+  for i,row in enumerate([(race,1,worker,parent,qty),(race,0,building,0,0),(race,3,0,1,0),(race,4,0,0,0)]):u.mem_write(plan+i*20,struct.pack('<5I',*row))
+  world={'stage':0}
+  def ai_world(uc,a,size,data):
+   result=None;args=0
+   if a in (0x455830,0x455c90):result=0
+   elif a==0x450cd0:
+    requested=r(uc,uc.reg_read(UC_X86_REG_ESP)+8)&0xffff;args=8
+    result=0 if world['stage']==0 else (255 if world['stage']==2 or requested==worker else 0)
+   elif a==0x4552a0:result=1;args=4
+   elif a==0x476ad0:result=0
+   elif a in (0x451090,0x4510c0):result=0;args=8
+   elif a==0x4295c0:result=1
+   if result is not None:
+    sp=uc.reg_read(UC_X86_REG_ESP);uc.reg_write(UC_X86_REG_EAX,result);uc.reg_write(UC_X86_REG_EIP,r(uc,sp));uc.reg_write(UC_X86_REG_ESP,sp+4+args)
+  u.hook_add(UC_HOOK_CODE,ai_world)
+  def planner():
+   w(u,STACK,RETURN);u.reg_write(UC_X86_REG_ESP,STACK);u.reg_write(UC_X86_REG_ECX,brain);run(u,0x454ee0,RETURN);assert u.reg_read(UC_X86_REG_ESP)==STACK+4
+  planner();assert u.mem_read(0x504dd8+player*16,1)==b'\1' and r(u,0x504ddc+player*16)==worker,(entry,worker,r(u,brain+28),bytes(u.mem_read(0x504dd8+player*16,12)).hex())
+  world['stage']=1;planner();assert u.mem_read(0x504dd8+player*16,1)==b'\1' and r(u,0x504ddc+player*16)==building
+  world['stage']=2;planner();assert u.mem_read(0x504dd8+player*16,1)==b'\2' and r(u,brain+28)==3
+print('PASS original AI plans: all 9 Earth/Elca/EAD variants issue native production and construction orders, then advance to attack (world perception/affordability queries controlled)')
+# Initialization trampoline preserves caller state except its displaced MOV EDX.
+u=fresh(0);u.mem_write(0x504f72,b'\1');u.mem_write(0x513c64,b'\3\2\0\0\0\0\0\0')
+regs=[UC_X86_REG_EAX,UC_X86_REG_EBX,UC_X86_REG_ECX,UC_X86_REG_ESI,UC_X86_REG_EDI,UC_X86_REG_EBP]
+for i,reg in enumerate(regs):u.reg_write(reg,0x123400+i)
+before=[u.reg_read(reg) for reg in regs];u.reg_write(UC_X86_REG_EFLAGS,0x246);run(u,0x402bbe,0x402bc3)
+assert [u.reg_read(reg) for reg in regs]==before and u.reg_read(UC_X86_REG_EDX)==0x513ca0 and u.reg_read(UC_X86_REG_ESP)==STACK and u.reg_read(UC_X86_REG_EFLAGS)==0x246
+# B/V remains unchanged for no selection, dead/enemy worker, chat and non-game UI.
+for scenario in ('empty','dead','enemy','chat','menu'):
+ u=fresh(1);u.mem_write(UNITS+12,struct.pack('<H',0x12));w(u,MANAGER+0x7218+64,0 if scenario!='empty' else -1);w(u,B+0x77400,1)
+ if scenario=='dead':u.mem_write(UNITS+0x13b8,b'\0')
+ if scenario=='enemy':u.mem_write(UNITS+60,b'\2')
+ if scenario=='chat':u.mem_write(0x5030c9,b'\1')
+ if scenario=='menu':u.mem_write(0x504f48,b'\2')
+ u.reg_write(UC_X86_REG_ESI,46);call(u,'hotkey_map',[]);assert u.reg_read(UC_X86_REG_ESI)==46
+print('PASS skirmish trampoline caller preservation; build-key context/ownership/dead-selection guards')

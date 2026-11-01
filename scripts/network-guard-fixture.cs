@@ -10,7 +10,7 @@ class Test {
   File.WriteAllText(args[0],new JavaScriptSerializer().Serialize(NetworkGuard.Build(0x1000000).Select(e=>new {address=e.Key,bytes=Convert.ToBase64String(e.Value)}).ToArray()));
   foreach(string exe in args.Skip(1)) {string before=Core.Hash(exe);var s=new Startup{cb=Marshal.SizeOf(typeof(Startup))};Info p;
    if(!CreateProcess(exe,new StringBuilder("\""+exe+"\""),IntPtr.Zero,IntPtr.Zero,false,4,IntPtr.Zero,Path.GetDirectoryName(exe),ref s,out p))throw new Exception("Create suspended failed");
-   try {int selection=NetworkGuard.Apply(p.process,exe);
+   try {Hotkeys.SwapBuildKeys=true;int selection=NetworkGuard.Apply(p.process,exe);byte[] buildKeys=new byte[4];IntPtr keysRead;if(!ReadProcessMemory(p.process,new IntPtr(selection+0x77400),buildKeys,4,out keysRead)||BitConverter.ToInt32(buildKeys,0)!=1)throw new Exception("Saved B/V option not installed");
     byte[] ring=new byte[4096+2048*1024];Action<int,int> number=(o,v)=>Buffer.BlockCopy(BitConverter.GetBytes(v),0,ring,o,4);number(0,0x31525453);number(4,1);number(12,1);number(16,61);number(20,1);number(6144,1);number(6148,60);number(6144+76,1);number(6144+88,1);
     typeof(NetworkGuard).GetMethod("Write",System.Reflection.BindingFlags.Static|System.Reflection.BindingFlags.NonPublic).Invoke(null,new object[]{p.process,selection+0x80000,ring});
     string traceFolder=Path.Combine(Path.GetDirectoryName(args[0]),"trace-fixture-"+Guid.NewGuid().ToString("N"));Directory.CreateDirectory(traceFolder);

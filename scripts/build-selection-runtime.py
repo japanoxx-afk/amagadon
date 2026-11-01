@@ -24,7 +24,7 @@ def reserve(name):
  global cursor
  blocks[name]={'address':BASE+cursor};cursor+=0x600
  return blocks[name]['address']
-for name in ('add','sync','select','rectangle','rect_native','first_accept','second_accept','rescan','wire','before','right','order','batch','group','group_native','key','hud','filter','reset','prune','terrain_visibility','resource_text','observer_view','replay_hud_gate','observer_visibility','replay_voice','minimap_resources','harvest_volume','world_resources','minimap_resource_sight','minimap_resource_color','hotkey_map','multiplayer_music','sync_trace','trace_barrier'):
+for name in ('add','sync','select','rectangle','rect_native','first_accept','second_accept','rescan','wire','before','right','order','batch','group','group_native','key','hud','filter','reset','prune','terrain_visibility','resource_text','observer_view','replay_hud_gate','observer_visibility','replay_voice','minimap_resources','harvest_volume','world_resources','minimap_resource_sight','minimap_resource_color','hotkey_map','multiplayer_music','sync_trace','trace_barrier','skirmish_init'):
  reserve(name)
 def at(name):return blocks[name]['address']
 def code(name,source):
@@ -910,6 +910,47 @@ jmp 0x4a6228
 hook(0x4a621f,'minimap_resources','8b43148b0d78485000')
 
 # A render-only resource marker must not inherit neutral-player black.
+# Normalize only new single-player skirmish slots, before start-unit spawning.
+code('skirmish_init',"""
+pushfd
+pushad
+cmp dword ptr [0x513ed4],0
+jne done
+cmp byte ptr [0x504f72],1
+jne done
+mov ebx,[0x504a10]
+test ebx,ebx
+jz done
+movzx ebp,byte ptr [0x4e7270]
+mov esi,1
+slot:
+mov byte ptr [ebx+esi+0x240f0],0
+xor eax,eax
+cmp esi,ebp
+je human
+movzx edx,byte ptr [esi+0x513c63]
+cmp edx,2
+je computer
+cmp edx,3
+jne store
+human:
+mov eax,1
+jmp store
+computer:
+mov eax,2
+mov byte ptr [ebx+esi+0x240f0],1
+store:
+mov [esi+0x513c7f],al
+inc esi
+cmp esi,8
+jbe slot
+done:
+popad
+popfd
+mov edx,0x513ca0
+jmp 0x402bc3
+""")
+hook(0x402bbe,'skirmish_init','baa03c5100')
 code('hotkey_map',f"""
 cmp byte ptr [0x504f48],4
 jne done
@@ -919,6 +960,39 @@ cmp byte ptr [0x5030c9],0
 jne done
 cmp esi,255
 ja done
+cmp dword ptr [{BASE+0x77400}],1
+jne generic
+cmp esi,46
+je build_key
+cmp esi,47
+jne generic
+build_key:
+mov ebx,[0x504a10]
+test ebx,ebx
+jz done
+movzx eax,byte ptr [0x4e7270]
+shl eax,6
+mov ecx,[ebx+eax+0x7218]
+cmp ecx,[ebx+4]
+jae generic
+cmp ecx,1700
+jae generic
+mov eax,[ebx+ecx*4+8]
+test eax,eax
+jz generic
+cmp byte ptr [eax+0x13b8],0
+je generic
+movzx edx,byte ptr [0x4e7270]
+cmp [eax+0x3c],dl
+jne generic
+push ecx
+call 0x40a210
+add esp,4
+test eax,eax
+jz generic
+xor esi,1
+jmp done
+generic:
 movzx edx,byte ptr [esi+{BASE+0x77000}]
 mov ebx,[0x504a10]
 test ebx,ebx
@@ -1370,6 +1444,7 @@ namespace Amagadon {
    result.Add(cave,payload);
    result.Add(cave+0x8001c,BitConverter.GetBytes(NetworkGuard.TraceLogging?1:0));
    result.Add(cave+0x77000,Hotkeys.RuntimeTable());
+   result.Add(cave+0x77400,BitConverter.GetBytes(Hotkeys.SwapBuildKeys?1:0));
    result.Add(cave+0x76d00,System.Text.Encoding.ASCII.GetBytes("BGM\\\\04-into the war.wav\\0"));
    result.Add(cave+0x76108,BitConverter.GetBytes(Math.Max(0,Math.Min(100,NetworkGuard.HarvestVolume))));
 HOOKS

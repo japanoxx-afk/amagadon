@@ -2,6 +2,7 @@ using System;using System.Linq;using System.Drawing;using System.Windows.Forms;
 namespace Amagadon {
  public static class Hotkeys {
   public static int[][] Profiles;
+  public static bool SwapBuildKeys;
   static readonly string[] Names=("Esc|1|2|3|4|5|6|7|8|9|0|-|=|Backspace|Tab|Q|W|E|R|T|Y|U|I|O|P|[|]|Enter|Ctrl|A|S|D|F|G|H|J|K|L|;|'|`|Shift|\\|Z|X|C|V|B|N|M|,|.|/|Right Shift|Num *|Alt|Space|Caps Lock|F1|F2|F3|F4|F5|F6|F7|F8|F9|F10").Split('|');
   public static byte[] RuntimeTable(){var table=new byte[1024];if(Profiles==null)return table;for(int p=0;p<Math.Min(4,Profiles.Length);p++)if(Profiles[p]!=null)for(int i=0;i<Math.Min(256,Profiles[p].Length);i++){int v=Profiles[p][i];if(v>0&&v<=Names.Length)table[p*256+i]=(byte)v;}return table;}
   public static void Edit(IWin32Window owner,Settings settings){

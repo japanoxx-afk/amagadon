@@ -82,8 +82,12 @@ namespace Amagadon {
         }
         static object MatchState(Process p) {
             Func<int,int,int?> read=(address,size)=>{var b=new byte[size];IntPtr n;return ReadProcessMemory(p.Handle,new IntPtr(address),b,size,out n)&&n.ToInt64()==size?(int?)(size==1?b[0]:BitConverter.ToInt32(b,0)):null;};
+            var computers=new List<object>();int manager=read(0x504a10,4).GetValueOrDefault();
+            if(read(0x504f48,1)==4 && read(0x504f72,1)==1 && read(0x513ed4,4)==0 && manager>0)for(int slot=1;slot<=8;slot++){
+                int brain=read(0x504ea0+slot*4,4).GetValueOrDefault();computers.Add(new {slot=slot,kind=read(0x513c63+slot,1),active=read(0x513c7f+slot,1),aiEnabled=read(manager+0x240f0+slot,1),planLength=brain>0?read(brain+0x18,4):null,planStep=brain>0?read(brain+0x1c,4):null});
+            }
             // Raw engine values, not inferred victory/defeat labels. No player names or chat.
-            return new {mode=read(0x504f48,1),multiplayer=read(0x513ed4,4),crazyZone=read(0x513ed0,4),
+            return new {skirmish=computers,mode=read(0x504f48,1),multiplayer=read(0x513ed4,4),crazyZone=read(0x513ed0,4),
                 endFlag=read(0x507bf4,4),terminationWait=read(0x51a660,4),dialog=read(0x507bf8,4),result=read(0x51a668,4),lobbyCountdown=read(0x50e753,1),startPending=read(0x507b20,4),
                 startedAt=read(0x51a690,4),minimumDuration=read(0x51a68c,4),
                 localPlayer=read(0x4e7270,1),nativeSyncErrors=read(0x51a8e4,1),simulationClock=read(0x503c6c,4),nativeMouseX=read(0x4e89d8,4),nativeMouseY=read(0x4e89dc,4),

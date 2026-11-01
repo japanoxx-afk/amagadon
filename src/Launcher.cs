@@ -12,8 +12,8 @@ using System.Threading.Tasks;
 using System.Web.Script.Serialization;
 using System.Windows.Forms;
 
-[assembly: System.Reflection.AssemblyVersion("0.3.51.0")]
-[assembly: System.Reflection.AssemblyInformationalVersion("0.3.51")]
+[assembly: System.Reflection.AssemblyVersion("0.3.52.0")]
+[assembly: System.Reflection.AssemblyInformationalVersion("0.3.52")]
 namespace Amagadon {
     public class Settings {
         public string GamePath="";
@@ -24,14 +24,15 @@ namespace Amagadon {
         public int InputProfile=0;
         public int HarvestVolume=100;
         public int[][] HotkeyProfiles;
+        public bool SwapBuildKeys=false;
         public int ScreenProfile=0;
         public string ZoneAddress="127.0.0.1";
         public int ZonePort=9000;
     }
     public class Backup { public string Directory; public string[] Existing; }
     public static class Core {
-        public const string Version = "0.3.51";
-        public const string DisplayVersion = "0.3.51";
+        public const string Version = "0.3.52";
+        public const string DisplayVersion = "0.3.52";
         public static readonly string Home = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "AmagadonLauncher");
         public static readonly JavaScriptSerializer Json = new JavaScriptSerializer();
         public static string Hash(string path) { using(var h=SHA256.Create()) using(var f=File.OpenRead(path)) return BitConverter.ToString(h.ComputeHash(f)).Replace("-", "").ToLowerInvariant(); }
@@ -95,6 +96,7 @@ namespace Amagadon {
         TextBox path=new TextBox(); ComboBox resolution=new ComboBox(),output=new ComboBox(),aspect=new ComboBox(),renderer=new ComboBox();
         CheckBox diagnostic=new CheckBox(),mouseCompatibility=new CheckBox(),autoReplay=new CheckBox(),compat=new CheckBox(),fullscreen=new CheckBox(),confine=new CheckBox();
         bool gameRunning; Button replay; ReplaySession activeReplay; Label status=new Label(); Button game,editor,update; Settings settings;
+        CheckBox swapBuildKeys=new CheckBox();
         TrackBar harvestVolume=new TrackBar();Label harvestValue=new Label();
         readonly CrazyZoneHost zoneHost=new CrazyZoneHost();
         string Base { get { return AppDomain.CurrentDomain.BaseDirectory; } }
@@ -130,10 +132,11 @@ namespace Amagadon {
             AddLabel("자원 채취 소리 · 다음 게임 실행 시 적용",32,870);
             harvestVolume.SetBounds(32,901,560,40);harvestVolume.Minimum=0;harvestVolume.Maximum=100;harvestVolume.TickFrequency=10;harvestVolume.SmallChange=5;harvestVolume.LargeChange=10;Controls.Add(harvestVolume);
             harvestValue.SetBounds(610,907,110,30);Controls.Add(harvestValue);harvestVolume.ValueChanged+=delegate {harvestValue.Text=harvestVolume.Value==0?"음소거":"볼륨 "+harvestVolume.Value+"%";};
-            AutoScrollMinSize=new Size(740,1020);
-            status.SetBounds(32,953,694,55); status.ForeColor=Color.FromArgb(158,174,194); Controls.Add(status);
+            swapBuildKeys.Text="건설 단축키 B/V 교환 · 기본 건설 B / 고급 건설 V";swapBuildKeys.SetBounds(32,950,694,38);Controls.Add(swapBuildKeys);
+            AutoScrollMinSize=new Size(740,1070);
+            status.SetBounds(32,1003,694,55); status.ForeColor=Color.FromArgb(158,174,194); Controls.Add(status);
             settings=new Settings(); try { string f=Path.Combine(Core.Home,"settings.json"); if(File.Exists(f)) settings=Core.Json.Deserialize<Settings>(File.ReadAllText(f)); } catch(Exception ex) { Core.Log(ex.Message); }
-            Hotkeys.Profiles=settings.HotkeyProfiles;
+            Hotkeys.Profiles=settings.HotkeyProfiles;swapBuildKeys.Checked=settings.SwapBuildKeys;Hotkeys.SwapBuildKeys=settings.SwapBuildKeys;
             Core.MigrateScreen(settings);
             Core.MigrateInput(settings);
             harvestVolume.Value=Math.Max(0,Math.Min(100,settings.HarvestVolume));harvestValue.Text="볼륨 "+harvestVolume.Value+"%";
@@ -158,6 +161,7 @@ namespace Amagadon {
         void AddLabel(string text,int x,int y) { Controls.Add(new Label{Text=text,AutoSize=true,Location=new Point(x,y)}); }
         Button Button(string text,int x,int y,int w,int h) { var b=new Button{Text=text,BackColor=Color.FromArgb(33,43,57),ForeColor=ForeColor,FlatStyle=FlatStyle.Flat,Cursor=Cursors.Hand}; b.FlatAppearance.BorderSize=0; b.SetBounds(x,y,w,h); Controls.Add(b); return b; }
         void Save() {
+            settings.SwapBuildKeys=swapBuildKeys.Checked;Hotkeys.SwapBuildKeys=settings.SwapBuildKeys;
             settings.HarvestVolume=harvestVolume.Value;NetworkGuard.HarvestVolume=settings.HarvestVolume;
             settings.GamePath=String.IsNullOrWhiteSpace(path.Text)?"":Path.GetFullPath(path.Text.Trim()); settings.NativeHD=resolution.SelectedIndex==1;settings.OutputHD=output.SelectedIndex==1; settings.Compatibility=compat.Checked;
             settings.DiagnosticLogging=diagnostic.Checked;NetworkGuard.TraceLogging=settings.DiagnosticLogging;settings.MouseCompatibility=mouseCompatibility.Checked;settings.AutoReplay=autoReplay.Checked;settings.Fullscreen=fullscreen.Checked;settings.MaintainAspect=aspect.SelectedIndex==0;settings.ConfineMouse=confine.Checked;settings.Renderer=new[]{"auto","gdi","direct3d9","opengl"}[renderer.SelectedIndex];
