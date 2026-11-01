@@ -89,13 +89,13 @@ def notification(first,paused=0,patched=True,foreground=True,enabled=1):
  u.hook_add(UC_HOOK_CODE,hook);u.emu_start(0x4909a0,STOP,count=10000);preserved(u,4)
  return waits,reads
 assert notification(258,patched=False)==([0xffffffff],[])
-assert notification(258)==([100,100],[1])
-assert notification(0)==([100,100],[1])
-assert notification(258,paused=1)==([100,100],[1]) # restore a missed activation only when truly foreground
-assert notification(258,foreground=False)==([100,100],[])
-assert notification(0,foreground=False)==([100,100],[])
-assert notification(258,enabled=0)==([100,100],[])
-assert notification(0xffffffff)==([100],[])
+assert notification(258)==([16,16],[1])
+assert notification(0)==([16,16],[1])
+assert notification(258,paused=1)==([16,16],[1]) # restore a missed activation only when truly foreground
+assert notification(258,foreground=False)==([16,16],[])
+assert notification(0,foreground=False)==([16,16],[])
+assert notification(258,enabled=0)==([16,16],[])
+assert notification(0xffffffff)==([16],[])
 print('PASS: original WA_CLICKACTIVE freeze and zero-event INPUTLOST/NOTACQUIRED reproduced; activation/refocus, bounded read/reacquire/retry, overflow/error data safety, notification timeout recovery, inactive gating and exact stack/register restoration')
 
 def keyboard(results,acquire=0,foreground=True,patched=True):
@@ -159,6 +159,9 @@ assert pacing(100,10,[110])==['clock']
 assert pacing(100,0,[100])==['clock']
 assert pacing(0xfffffff0,32,[0,16])==['clock','yield','clock']
 assert pacing(100,10,[101,102,103,110])==['clock','yield','clock','clock','yield','clock']
+if '--input-only' in sys.argv:
+ print('PASS: focused input/pacing suite complete; layout regressions are separate')
+ sys.exit(0)
 print('PASS: native frame deadline unchanged, no yield when due, repeated waits and unsigned clock wraparound')
 
 # Execute translated RECT initialization through the original call convention.

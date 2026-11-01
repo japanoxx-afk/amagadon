@@ -13,7 +13,7 @@ namespace Amagadon {
    result.Add(cave+0x8001c,BitConverter.GetBytes(NetworkGuard.TraceLogging?1:0));
    result.Add(cave+0x77000,Hotkeys.RuntimeTable());
    result.Add(cave+0x77400,BitConverter.GetBytes(Hotkeys.SwapBuildKeys?1:0));
-   result.Add(cave+0x76d00,System.Text.Encoding.ASCII.GetBytes("BGM\\04-into the war.wav\0"));
+   result.Add(cave+0x76d00,NetworkGuard.Hex("42474d5c30342d696e746f20746865207761722e77617600"));
    result.Add(cave+0x76108,BitConverter.GetBytes(Math.Max(0,Math.Min(100,NetworkGuard.HarvestVolume))));
    {byte[] b=Enumerable.Repeat((byte)0x90,7).ToArray();b[0]=233;Buffer.BlockCopy(BitConverter.GetBytes(unchecked(cave+7680-4513156)),0,b,1,4);result.Add(0x44dd7f,b);}
    {byte[] b=Enumerable.Repeat((byte)0x90,5).ToArray();b[0]=233;Buffer.BlockCopy(BitConverter.GetBytes(unchecked(cave+9216-4513568)),0,b,1,4);result.Add(0x44df1b,b);}

@@ -287,7 +287,11 @@ print('PASS start camera once-per-match/local ownership; common/race hotkeys/cha
 # BGM fallback preserves authored paths and the original cdecl argument layout.
 for empty in (False,True):
  u=fresh(1);u.mem_write(0x504b68,b'\0' if empty else b'BGM\\Menu.wav\0');w(u,STACK+4,0x504b68);run(u,M['blocks']['multiplayer_music'],0x4bc350);assert r(u,STACK+4)==(B+0x76d00 if empty else 0x504b68);assert u.reg_read(UC_X86_REG_ESP)==STACK
-print('PASS BGM fallback only for empty/null path; native cdecl frame retained')
+if compiled:
+ expected=b'BGM\\04-into the war.wav\0'
+ assert compiled[B+0x76d00]==expected
+ assert (Path(r'C:\Users\seo\Downloads\armaggeddon\armaggeddon')/expected[:-1].decode('ascii')).is_file()
+print('PASS BGM fallback pointer, exact installed NUL-terminated path and existing music asset; native cdecl frame retained')
 
 # Native command-boundary diagnostics: bounded ring, freeze, reset, and no writes
 # to authoritative unit/command/RNG state. Diagnostic memory is outside replay data.

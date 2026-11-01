@@ -106,7 +106,7 @@ namespace Amagadon {
                 {0x4905ea,Detour(0x4905ea,cave+1536,7)},
                 {0x490da1,Detour(0x490da1,cave+1856,7)},
                 {0x494f33,Detour(0x494f33,cave,7)},{0x4906f5,Detour(0x4906f5,cave+128,39)},
-                {0x4909ac,NetworkGuard.Hex("6a64")},{0x4909fb,NetworkGuard.Hex("6a64")},
+                {0x4909ac,NetworkGuard.Hex("6a10")},{0x4909fb,NetworkGuard.Hex("6a10")},
                 {0x4909af,Detour(0x4909af,cave+512,6)},{0x4909fe,Detour(0x4909fe,cave+512,6)}
             };
         }
@@ -120,7 +120,7 @@ namespace Amagadon {
             var edits=Build(memory.ToInt32());NetworkGuard.Write(process,memory.ToInt32(),edits[memory.ToInt32()]);uint previous;
             if(!VirtualProtectEx(process,memory,new UIntPtr(4096),0x20,out previous))throw new IOException("입력 복구 코드 보호 설정 실패");
             foreach(var edit in edits)if(edit.Key!=memory.ToInt32())NetworkGuard.Write(process,edit.Key,edit.Value);
-            Core.Log("Input recovery applied: click activation, bounded mouse/keyboard reacquire/retry, transient startup recovery, 100ms notification fallback; counters=0x"+(memory.ToInt32()+4096).ToString("X8"));
+            Core.Log("Input recovery applied: click activation, bounded mouse/keyboard reacquire/retry, transient startup recovery, 16ms notification fallback; counters=0x"+(memory.ToInt32()+4096).ToString("X8"));
         }
     }
 }
