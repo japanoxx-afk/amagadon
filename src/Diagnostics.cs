@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
@@ -279,7 +279,7 @@ namespace Amagadon {
                 if(attached && !DebugSetProcessKillOnExit(false)) {DebugActiveProcessStop((uint)pid);attached=false;}
                 Write(folder,"crash-monitor",new {attached=attached,error=attached?0:Marshal.GetLastWin32Error()});
                 File.WriteAllText(Path.Combine(folder,"ready.txt"),attached?"attached":"telemetry-only");
-                bool initialBreak=true,captured=false;var detector=new StallDetector();int exceptions=0;var sampleClock=Stopwatch.StartNew();long lastSample=-5000,lastMatch=-250,lastCapture=-30000;string previousMatch=null;bool divergenceCaptured=false;uint lastConstructionGuard=0;
+                bool initialBreak=true,captured=false;var detector=new StallDetector();int exceptions=0;var sampleClock=Stopwatch.StartNew();long lastSample=-5000,lastMatch=-250,lastCapture=-30000;string previousMatch=null;bool divergenceCaptured=false;bool sawDivergence=false;uint lastConstructionGuard=0;
                 var recentMatch=new Queue<object>();object lastMatchState=null,lastNetworkState=null;DateTime? lastStateUtc=null;bool sawUnhandledException=false;int? debugExit=null;
                 while(true) {
                     if(sampleClock.ElapsedMilliseconds-lastCapture>=30000) {
@@ -296,7 +296,7 @@ namespace Amagadon {
                                 int size=address==0x504f48||address==0x51a8e4?1:4;byte[] b=new byte[size];IntPtr n;
                                 values.Add(ReadProcessMemory(p.Handle,new IntPtr(address),b,size,out n)&&n.ToInt64()==size?(int?)(size==1?b[0]:BitConverter.ToInt32(b,0)):null);
                             }
-                            if(values[0]==4 && values[4].GetValueOrDefault()>0 && !divergenceCaptured){divergenceCaptured=true;try{Write(folder,"sync-trace-captured",CaptureSyncTrace(p,folder,"first-divergence"));}catch(Exception ex){Write(folder,"sync-trace-save-error",ex.Message);}try{Write(folder,"first-sync-divergence",DivergenceState(p));}catch(Exception ex){Write(folder,"sync-divergence-error",ex.Message);}}
+                            if(values[0]==4 && values[4].GetValueOrDefault()>0 && !divergenceCaptured){divergenceCaptured=true;sawDivergence=true;try{Write(folder,"sync-trace-captured",CaptureSyncTrace(p,folder,"first-divergence"));}catch(Exception ex){Write(folder,"sync-trace-save-error",ex.Message);}try{Write(folder,"first-sync-divergence",DivergenceState(p));}catch(Exception ex){Write(folder,"sync-divergence-error",ex.Message);}}
                             if(values[0].GetValueOrDefault()!=4)divergenceCaptured=false;
                             string current=Core.Json.Serialize(values);
                             if(values[0].HasValue) {
@@ -343,7 +343,8 @@ namespace Amagadon {
                 try {string logName="DDrawCompat-"+Path.GetFileNameWithoutExtension(name)+".log";string log=Path.Combine(binaryFolder,logName);if(EditorPatch.IsEditor(name) && File.Exists(log) && new FileInfo(log).Length<=8*1024*1024)File.Copy(log,Path.Combine(folder,logName),true);}catch(Exception ex) {Write(folder,"editor-log-copy-error",ex.Message);}
                 foreach(string logName in new[]{"ipxwrapper.log","dplayx.log","directplay.log"})try {string file=Path.Combine(binaryFolder,logName);if(File.Exists(file)&&new FileInfo(file).Length<=8*1024*1024)File.Copy(file,Path.Combine(folder,logName),true);}catch(Exception ex){Write(folder,"network-log-error",ex.Message);}
                 Write(folder,"process-end",new {exit="0x"+p.ExitCode.ToString("X8")});
-            }return 0;}catch(Exception ex) {Write(folder,"monitor-error",ex.ToString());return 1;}
+                try {DiagnosticReports.SaveSession(folder,sawUnhandledException?"미처리 예외 감지":sawDivergence?"동기화 불일치 감지":"프로세스 종료 / 정상 여부 미판정");}catch(Exception ex){Write(folder,"automatic-report-error",ex.Message);}
+            }return 0;}catch(Exception ex) {Write(folder,"monitor-error",ex.ToString());try{DiagnosticReports.SaveSession(folder,"진단 감시 중단 / 마지막 저장 기록");}catch(Exception saveError){Write(folder,"automatic-report-error",saveError.Message);}return 1;}
             finally {if(attached)DebugActiveProcessStop((uint)pid);Marshal.FreeHGlobal(buffer);}
         }
         public static string Report(string game,string destination) {

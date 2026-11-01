@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Drawing;
@@ -12,8 +12,8 @@ using System.Threading.Tasks;
 using System.Web.Script.Serialization;
 using System.Windows.Forms;
 
-[assembly: System.Reflection.AssemblyVersion("0.3.59.0")]
-[assembly: System.Reflection.AssemblyInformationalVersion("0.3.59")]
+[assembly: System.Reflection.AssemblyVersion("0.3.60.0")]
+[assembly: System.Reflection.AssemblyInformationalVersion("0.3.60")]
 namespace Amagadon {
     public class Settings {
         public string GamePath="";
@@ -31,8 +31,8 @@ namespace Amagadon {
     }
     public class Backup { public string Directory; public string[] Existing; }
     public static class Core {
-        public const string Version = "0.3.59";
-        public const string DisplayVersion = "0.3.59";
+        public const string Version = "0.3.60";
+        public const string DisplayVersion = "0.3.60";
         public static readonly string Home = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "AmagadonLauncher");
         public static readonly JavaScriptSerializer Json = new JavaScriptSerializer();
         public static string Hash(string path) { using(var h=SHA256.Create()) using(var f=File.OpenRead(path)) return BitConverter.ToString(h.ComputeHash(f)).Replace("-", "").ToLowerInvariant(); }
@@ -133,8 +133,9 @@ namespace Amagadon {
             harvestVolume.SetBounds(32,901,560,40);harvestVolume.Minimum=0;harvestVolume.Maximum=100;harvestVolume.TickFrequency=10;harvestVolume.SmallChange=5;harvestVolume.LargeChange=10;Controls.Add(harvestVolume);
             harvestValue.SetBounds(610,907,110,30);Controls.Add(harvestValue);harvestVolume.ValueChanged+=delegate {harvestValue.Text=harvestVolume.Value==0?"음소거":"볼륨 "+harvestVolume.Value+"%";};
             swapBuildKeys.Text="건설 단축키 B/V 교환 · 기본 건설 B / 고급 건설 V";swapBuildKeys.SetBounds(32,950,694,38);Controls.Add(swapBuildKeys);
-            AutoScrollMinSize=new Size(740,1070);
-            status.SetBounds(32,1003,694,55); status.ForeColor=Color.FromArgb(158,174,194); Controls.Add(status);
+            var autoReports=Button("자동 진단 ZIP / 양측 비교",32,995,694,36);autoReports.Click+=delegate {DiagnosticReports.Open(this);};
+            AutoScrollMinSize=new Size(740,1120);
+            status.SetBounds(32,1045,694,55); status.ForeColor=Color.FromArgb(158,174,194); Controls.Add(status);
             settings=new Settings(); try { string f=Path.Combine(Core.Home,"settings.json"); if(File.Exists(f)) settings=Core.Json.Deserialize<Settings>(File.ReadAllText(f)); } catch(Exception ex) { Core.Log(ex.Message); }
             Hotkeys.Profiles=settings.HotkeyProfiles;swapBuildKeys.Checked=settings.SwapBuildKeys;Hotkeys.SwapBuildKeys=settings.SwapBuildKeys;
             Core.MigrateScreen(settings);
