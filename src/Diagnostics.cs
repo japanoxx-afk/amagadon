@@ -279,9 +279,12 @@ namespace Amagadon {
                 if(attached && !DebugSetProcessKillOnExit(false)) {DebugActiveProcessStop((uint)pid);attached=false;}
                 Write(folder,"crash-monitor",new {attached=attached,error=attached?0:Marshal.GetLastWin32Error()});
                 File.WriteAllText(Path.Combine(folder,"ready.txt"),attached?"attached":"telemetry-only");
-                bool initialBreak=true,captured=false;var detector=new StallDetector();int exceptions=0;var sampleClock=Stopwatch.StartNew();long lastSample=-5000,lastMatch=-250,lastCapture=-30000;string previousMatch=null;bool divergenceCaptured=false;bool sawDivergence=false;uint lastConstructionGuard=0;
+                bool initialBreak=true,captured=false;var detector=new StallDetector();long handledExceptions=0,reportedExceptions=0;uint lastExceptionCode=0,lastExceptionAddress=0;var sampleClock=Stopwatch.StartNew();long lastSample=-5000,lastMatch=-250,lastCapture=-30000;string previousMatch=null;bool divergenceCaptured=false;bool sawDivergence=false;uint lastConstructionGuard=0;
                 var recentMatch=new Queue<object>();object lastMatchState=null,lastNetworkState=null;DateTime? lastStateUtc=null;bool sawUnhandledException=false;int? debugExit=null;
                 while(true) {
+                    // Drain pending debugger events before telemetry: a pending event suspends the target.
+                    bool pendingDebugEvent=attached && WaitForDebugEvent(buffer,0);
+                    if(!pendingDebugEvent) {
                     if(sampleClock.ElapsedMilliseconds-lastCapture>=30000) {
                         lastCapture=sampleClock.ElapsedMilliseconds;
                         try {Write(folder,"capture-environment",new {affinity=p.ProcessorAffinity.ToInt64(),modules=p.Modules.Cast<ProcessModule>().Select(m=>m.ModuleName).Where(n=>n.IndexOf("obs",StringComparison.OrdinalIgnoreCase)>=0||n.IndexOf("capture",StringComparison.OrdinalIgnoreCase)>=0||n.IndexOf("graphics-hook",StringComparison.OrdinalIgnoreCase)>=0).ToArray()});}catch(Exception ex) {Write(folder,"capture-environment-error",ex.Message);}
@@ -312,7 +315,9 @@ namespace Amagadon {
                         }catch(Exception ex) {Write(folder,"match-sample-error",ex.Message);}
                     }
                     if(sampleClock.ElapsedMilliseconds-lastSample>=5000) {
-                        lastSample=sampleClock.ElapsedMilliseconds;Snapshot(p,folder,!EditorPatch.IsEditor(name),engineMouse,detector,ref captured);
+                        lastSample=sampleClock.ElapsedMilliseconds;
+                        if(handledExceptions!=reportedExceptions){Write(folder,"first-chance-summary",new {total=handledExceptions,sinceLast=handledExceptions-reportedExceptions,lastCode="0x"+lastExceptionCode.ToString("X8"),lastAddress="0x"+lastExceptionAddress.ToString("X8"),note="First-chance exceptions are passed to the application; not proof of a crash."});reportedExceptions=handledExceptions;}
+                        Snapshot(p,folder,!EditorPatch.IsEditor(name),engineMouse,detector,ref captured);
                         // Persist a bounded rolling copy before a crash/forced monitor exit.
                         // Atomic replacement leaves the previous valid copy on write failure.
                         try {
@@ -324,6 +329,7 @@ namespace Amagadon {
                     }
                     if(!attached) {if(p.HasExited)break;Thread.Sleep(engineMouse?250:1000);continue;}
                     if(!WaitForDebugEvent(buffer,engineMouse?250U:1000U)) {if(p.HasExited)break;continue;}
+                    }
                     uint kind=unchecked((uint)Marshal.ReadInt32(buffer)),tid=unchecked((uint)Marshal.ReadInt32(buffer,8)),status=0x10002;
                     bool exited=false;
                     try {
@@ -331,13 +337,15 @@ namespace Amagadon {
                             uint code=unchecked((uint)Marshal.ReadInt32(buffer,12));bool first=Marshal.ReadInt32(buffer,92)!=0;
                             bool bootstrap=initialBreak && first && code==0x80000003;if(bootstrap)initialBreak=false;
                             status=bootstrap?0x10002U:0x80010001U;
-                            if(!bootstrap && (exceptions++<100 || !first))Write(folder,"exception",new {code="0x"+code.ToString("X8"),address="0x"+unchecked((uint)Marshal.ReadInt32(buffer,24)).ToString("X8"),thread=tid,firstChance=first});
+                            if(!bootstrap && first){handledExceptions++;lastExceptionCode=code;lastExceptionAddress=unchecked((uint)Marshal.ReadInt32(buffer,24));}
+                            if(!first)Write(folder,"exception",new {code="0x"+code.ToString("X8"),address="0x"+unchecked((uint)Marshal.ReadInt32(buffer,24)).ToString("X8"),thread=tid,firstChance=false});
                             if(!first) {sawUnhandledException=true;if(engineMouse) {try{lastConstructionGuard=CaptureConstructionGuard(p,folder,lastConstructionGuard);Write(folder,"sync-trace-captured",CaptureSyncTrace(p,folder,"crash"));}catch(Exception ex){Write(folder,"sync-trace-save-error",ex.Message);}Write(folder,"network-at-crash",NetworkState(p));Write(folder,"match-at-crash",MatchState(p));Write(folder,"input-at-crash",InputState(p));}try {Dump(p,tid,buffer,folder);}catch(Exception ex) {Write(folder,"dump-error",ex.Message);}}
                         } else if(kind==3 || kind==6) {IntPtr f=Marshal.ReadIntPtr(buffer,12);if(f!=IntPtr.Zero && f!=new IntPtr(-1))CloseHandle(f);}
                         else if(kind==5) {if(engineMouse)try{lastConstructionGuard=CaptureConstructionGuard(p,folder,lastConstructionGuard);Write(folder,"sync-trace-captured",CaptureSyncTrace(p,folder,"exit"));}catch(Exception ex){Write(folder,"sync-trace-save-error",ex.Message);}debugExit=Marshal.ReadInt32(buffer,12);Write(folder,"exit",new {code="0x"+unchecked((uint)debugExit.Value).ToString("X8")});exited=true;}
                     } finally {if(!ContinueDebugEvent((uint)pid,tid,status))Write(folder,"continue-error",Marshal.GetLastWin32Error());}
                     if(exited)break;
                 }
+                Write(folder,"first-chance-summary",new {total=handledExceptions,sinceLast=handledExceptions-reportedExceptions,lastCode="0x"+lastExceptionCode.ToString("X8"),lastAddress="0x"+lastExceptionAddress.ToString("X8")});
                 Write(folder,"process-end-context",new {lastStateUtc=lastStateUtc,debugExit=debugExit,unhandledException=sawUnhandledException,match=lastMatchState,network=lastNetworkState,history=recentMatch.ToArray(),note="Cached state before exit; exit code zero does not prove a normal match completion."});
                 p.WaitForExit();
                 try {string logName="DDrawCompat-"+Path.GetFileNameWithoutExtension(name)+".log";string log=Path.Combine(binaryFolder,logName);if(EditorPatch.IsEditor(name) && File.Exists(log) && new FileInfo(log).Length<=8*1024*1024)File.Copy(log,Path.Combine(folder,logName),true);}catch(Exception ex) {Write(folder,"editor-log-copy-error",ex.Message);}
