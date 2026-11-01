@@ -190,9 +190,13 @@ namespace Amagadon {
                     if(result==0 && clients.Any(x=>x!=c && x.Name!=null && x.Name.Equals(name,StringComparison.OrdinalIgnoreCase)))result=3;
                     Reply(c,op==3?4:6,result);
                     Log(op==5?"registration-result":"authentication-result",new {client=c.Id,result=result});
-                    if(op==3 && result==0) {c.Name=accounts[name].Name;Log("login",new {client=c.Id});}
+                    // The original registration success caller goes straight to channel
+                    // enumeration (op 8), without sending a separate login (op 3).
+                    // Attach identity only after durable account creation/authentication.
+                    if(result==0) {c.Name=accounts[name].Name;Log("login",new {client=c.Id,source=op==5?"registration":"authentication"});}
                     return;
                 }
+                if(c.Name==null)Log("unauthenticated-command",new {client=c.Id,op=op});
                 RequireLogin(c);
                 switch(op) {
                     case 8:

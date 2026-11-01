@@ -1,4 +1,4 @@
-﻿# Crazy Zone 사설 서버 (0.3.15)
+# Crazy Zone 사설 서버 (0.3.15)
 
 런처의 **Crazy Zone 서버 / 접속**에서 서버 시작·종료와 게임 접속을 지원한다. Python이나 별도 서버 프로그램 설치 없이 런처에 포함된 C# TCP 서버가 동작한다. 창을 닫아도 서버는 런처가 종료될 때까지 유지된다.
 
@@ -80,3 +80,9 @@ CrazyZonePatch가 적용되는 사설 모드에서만 0x495637/0x49583f 호출�
 Observed native quit request consumed with `51a660=2`, `507bf4=0`, multiplayer=1. Hook host-only continuation `483d24`: preserve native termination state and registers/flags; verify local DirectPlay ID matches slot zero, human slot zero, and no other human slots. Set native end flag 1, allowing the ordinary outer-loop cleanup. Real peers keep native termination synchronization. Regression covers old stuck flag, repaired AI case, remote human and mismatched identity. This is not a force-process-exit patch.
 
 HD layout runtime hooks are limited to current recipe hash. `46d95e` supplies a SetRect wrapper for main F10 and confirmation containers (indices 1,7–10); draw and hit tests share their translated RECT. Save/load entry fields have separate hardcoded text coordinates and are excluded. Message-list call `4a611d` gets the HUD offset. Original EXE and replay file hashes remain unchanged.
+
+## 0.3.54 가입 직후 인증 상태
+
+제보 시점 서버 로그에는 op 5 가입 결과 0 직후 `Login required`와 연결 종료가 남았다. 기존 서버는 op 3 성공에서만 연결의 Name을 지정했다. op 5 성공에서도 저장된 계정의 정규 이름으로 연결을 인증한다. 따라서 가입 후 별도 로그인 없이 이어지는 채널/접속자 요청도 처리한다. 실패한 가입이나 잘못된 암호에는 인증을 부여하지 않는다. 비인증 요청 차단 시 명령 번호만 추가 기록하며 계정명·암호·해시는 기록하지 않는다.
+
+`scripts/test-crazy-zone.py`는 실제 TCP에서 가입 후 즉시 op 8/17을 보내 연결 유지와 목록 반환을 확인한다. 중복 가입 거부, 틀린 암호 거부, 기존 계정 재로그인, 대소문자 무관한 계정 조회 및 서버 재시작 후 저장된 암호 검증도 검사한다. 운영 계정의 암호는 변경하지 않는다. 운영 서버는 실행 중인 구버전 코드를 자동 교체하지 않으므로 업데이트 후 서버 재시작이 필요하다.

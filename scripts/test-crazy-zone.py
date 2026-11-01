@@ -96,6 +96,12 @@ with tempfile.TemporaryDirectory(prefix='amagadon-zone-') as temp:
         registration=connect(port)
         for byte in register_wire:registration.sendall(bytes([byte]))
         assert exact(registration,2)==b'\x06\x00'
+        # Native success flow requests channels immediately; no op 3 login.
+        registration.sendall(request(8));assert exact(registration,5)==b'\x09'+bytes(4)
+        assert blob(registration,10)==struct.pack('<I',1)+b'Lobby\0';assert exact(registration,1)==b'\x0b'
+        registration.sendall(request(17));assert b'RegisterUser\0' in blob(registration,16)
+        registration.close()
+        registration=connect(port)
         registration.sendall(register_wire);assert exact(registration,2)==b'\x06\x01'
         assert login(registration,'RegisterUser','wrong')==b'\x04\x02'
         assert login(registration,'RegisterUser')==b'\x04\x00';registration.close()
@@ -257,6 +263,11 @@ with tempfile.TemporaryDirectory(prefix='amagadon-zone-') as temp:
             if (d/'port.txt').exists():break
             time.sleep(.05)
         again=connect(int((d/'port.txt').read_text()));assert login(again,'TestHost','wrong')==b'\x04\x02';assert login(again,'TestHost')==b'\x04\x00';again.close()
+        registered=connect(int((d/'port.txt').read_text()))
+        assert login(registered,'registeruser','wrong')==b'\x04\x02'
+        assert login(registered,'registeruser')==b'\x04\x00'
+        registered.sendall(request(8));assert exact(registered,5)==b'\x09'+bytes(4)
+        blob(registered,10);assert exact(registered,1)==b'\x0b';registered.close()
         assert all('testpass' not in f.read_text(encoding='utf-8-sig') for f in d.glob('server-*.jsonl'))
         print('PASS: real TCP fragmentation/coalescing, two accounts, bad/duplicate login, channels/users/chat/rooms, malformed/partial clients, heartbeat, restart/persisted hashes, credential-free logs; original x86 builders/consumers and patched endpoint/stack')
     finally:
