@@ -55,6 +55,13 @@ def compare(a,b):
  for clock in sorted(au.keys()&bu.keys()):
   differences=[{'id':i,'left':au[clock].get(i),'right':bu[clock].get(i)} for i in sorted(au[clock].keys()|bu[clock].keys()) if au[clock].get(i)!=bu[clock].get(i)]
   if differences:result['firstUnitDifference']={'clock':clock,'count':len(differences),'units':differences[:16]};break
+ result['firstEngineRandomDifference']=next(({'clock':c,'left':af[c][0]['engineRngIndex'],'right':bf[c][0]['engineRngIndex']} for c in common if af[c][0]['engineRngIndex']!=bf[c][0]['engineRngIndex']),None)
+ result['unitTransitionHistory']=[]
+ if result['firstUnitDifference']:
+  first=result['firstUnitDifference'];ids=[v['id'] for v in first['units']]
+  for clock in sorted(au.keys()&bu.keys()):
+   if first['clock']-2<=clock<=first['clock']+2:
+    result['unitTransitionHistory'].append({'clock':clock,'units':[{'id':i,'left':au[clock].get(i),'right':bu[clock].get(i)} for i in ids]})
  return result
 if __name__=='__main__':
  parser=argparse.ArgumentParser(description=__doc__);parser.add_argument('left',type=Path);parser.add_argument('right',type=Path);args=parser.parse_args()

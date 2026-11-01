@@ -23,5 +23,7 @@ with tempfile.TemporaryDirectory() as d:
  r=mod.compare(a,a);assert r['commonFrames']==2 and r['firstStateDifference'] is None
  r=mod.compare(a,b);assert r['firstStateDifference']==dict(clock=11,leftHash=1,rightHash=2,players=[2]);assert r['firstOrderDifference']==dict(clock=11,leftHash=1,rightHash=2,players=[2]);assert r['firstRandomDifference']['clock']==11;assert r['firstPacketDifference']['players']==[dict(player=2,differentBytes=[3])]
  assert r['firstUnitDifference']['clock']==11 and r['firstUnitDifference']['units'][0]['id']==0 and r['firstUnitDifference']['units'][0]['left']['active']==1 and r['firstUnitDifference']['units'][0]['right']['active']==0
+ assert r['firstEngineRandomDifference']['clock']==11
+ assert [v['clock'] for v in r['unitTransitionHistory']]==[10,11]
  assert mod.compare(a,c)['commonFrames']==0
 print('PASS report comparison: common clocks, first unit/player/RNG/command differences and torn slots')
