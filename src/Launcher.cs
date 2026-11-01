@@ -12,8 +12,8 @@ using System.Threading.Tasks;
 using System.Web.Script.Serialization;
 using System.Windows.Forms;
 
-[assembly: System.Reflection.AssemblyVersion("0.3.50.0")]
-[assembly: System.Reflection.AssemblyInformationalVersion("0.3.50")]
+[assembly: System.Reflection.AssemblyVersion("0.3.51.0")]
+[assembly: System.Reflection.AssemblyInformationalVersion("0.3.51")]
 namespace Amagadon {
     public class Settings {
         public string GamePath="";
@@ -30,8 +30,8 @@ namespace Amagadon {
     }
     public class Backup { public string Directory; public string[] Existing; }
     public static class Core {
-        public const string Version = "0.3.50";
-        public const string DisplayVersion = "0.3.50";
+        public const string Version = "0.3.51";
+        public const string DisplayVersion = "0.3.51";
         public static readonly string Home = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "AmagadonLauncher");
         public static readonly JavaScriptSerializer Json = new JavaScriptSerializer();
         public static string Hash(string path) { using(var h=SHA256.Create()) using(var f=File.OpenRead(path)) return BitConverter.ToString(h.ComputeHash(f)).Replace("-", "").ToLowerInvariant(); }
@@ -130,9 +130,8 @@ namespace Amagadon {
             AddLabel("자원 채취 소리 · 다음 게임 실행 시 적용",32,870);
             harvestVolume.SetBounds(32,901,560,40);harvestVolume.Minimum=0;harvestVolume.Maximum=100;harvestVolume.TickFrequency=10;harvestVolume.SmallChange=5;harvestVolume.LargeChange=10;Controls.Add(harvestVolume);
             harvestValue.SetBounds(610,907,110,30);Controls.Add(harvestValue);harvestVolume.ValueChanged+=delegate {harvestValue.Text=harvestVolume.Value==0?"음소거":"볼륨 "+harvestVolume.Value+"%";};
-            var hotkeys=Button("핫키 설정 · 공통 / 진영별",32,953,338,40);hotkeys.Click+=delegate {if(gameRunning || checkingUpdate)return;Hotkeys.Edit(this,settings);Save();};
-            AutoScrollMinSize=new Size(740,1070);
-            status.SetBounds(32,1003,694,55); status.ForeColor=Color.FromArgb(158,174,194); Controls.Add(status);
+            AutoScrollMinSize=new Size(740,1020);
+            status.SetBounds(32,953,694,55); status.ForeColor=Color.FromArgb(158,174,194); Controls.Add(status);
             settings=new Settings(); try { string f=Path.Combine(Core.Home,"settings.json"); if(File.Exists(f)) settings=Core.Json.Deserialize<Settings>(File.ReadAllText(f)); } catch(Exception ex) { Core.Log(ex.Message); }
             Hotkeys.Profiles=settings.HotkeyProfiles;
             Core.MigrateScreen(settings);
@@ -161,7 +160,7 @@ namespace Amagadon {
         void Save() {
             settings.HarvestVolume=harvestVolume.Value;NetworkGuard.HarvestVolume=settings.HarvestVolume;
             settings.GamePath=String.IsNullOrWhiteSpace(path.Text)?"":Path.GetFullPath(path.Text.Trim()); settings.NativeHD=resolution.SelectedIndex==1;settings.OutputHD=output.SelectedIndex==1; settings.Compatibility=compat.Checked;
-            settings.DiagnosticLogging=diagnostic.Checked;settings.MouseCompatibility=mouseCompatibility.Checked;settings.AutoReplay=autoReplay.Checked;settings.Fullscreen=fullscreen.Checked;settings.MaintainAspect=aspect.SelectedIndex==0;settings.ConfineMouse=confine.Checked;settings.Renderer=new[]{"auto","gdi","direct3d9","opengl"}[renderer.SelectedIndex];
+            settings.DiagnosticLogging=diagnostic.Checked;NetworkGuard.TraceLogging=settings.DiagnosticLogging;settings.MouseCompatibility=mouseCompatibility.Checked;settings.AutoReplay=autoReplay.Checked;settings.Fullscreen=fullscreen.Checked;settings.MaintainAspect=aspect.SelectedIndex==0;settings.ConfineMouse=confine.Checked;settings.Renderer=new[]{"auto","gdi","direct3d9","opengl"}[renderer.SelectedIndex];
             Directory.CreateDirectory(Core.Home); File.WriteAllText(Path.Combine(Core.Home,"settings.json"),Core.Json.Serialize(settings));
         }
         void Error(Exception ex) { status.Text=ex.Message; Core.Log(ex.ToString()); MessageBox.Show(this,ex.Message,"실행 오류",MessageBoxButtons.OK,MessageBoxIcon.Warning); }

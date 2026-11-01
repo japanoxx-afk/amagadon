@@ -107,7 +107,7 @@ namespace Amagadon {
                     string session=Path.Combine(Home,DateTime.Now.ToString("yyyyMMdd-HHmmss-fff")+"-"+pid);Directory.CreateDirectory(session);
                     Write(session,"start",new {pid=pid,version=Core.DisplayVersion,executable=executable,sha256=Core.Hash(executable),settings=settings,os=Environment.OSVersion.ToString(),processors=Environment.ProcessorCount,systemDpiAware=IsProcessDPIAware(),screens=System.Windows.Forms.Screen.AllScreens.Select(screen=>new {bounds=screen.Bounds,primary=screen.Primary}).ToArray()});
                     try {using(var key=Microsoft.Win32.Registry.LocalMachine.OpenSubKey(@"SOFTWARE\Microsoft\Windows NT\CurrentVersion"))Write(session,"windows-build",new {product=key.GetValue("ProductName"),build=key.GetValue("CurrentBuildNumber"),revision=key.GetValue("UBR"),release=key.GetValue("DisplayVersion")});}catch(Exception ex) {Write(session,"windows-build-error",ex.Message);}
-                    foreach(string n in new[]{"Armageddon.exe","ACE.exe","ACE.Compat.exe","ddraw.dll","binkw32.dll","Mss32.dll","dinput.dll","dinput8.dll"}) {
+                    foreach(string n in new[]{"Armageddon.exe","Armageddon.HED","Armageddon.MFP","ACE.exe","ACE.Compat.exe","ddraw.dll","binkw32.dll","Mss32.dll","dinput.dll","dinput8.dll"}) {
                         string candidate=Path.Combine(folder,n);if(!File.Exists(candidate))continue;
                         try {var version=FileVersionInfo.GetVersionInfo(candidate);Write(session,"binary",new {name=n,sha256=Core.Hash(candidate),bytes=new FileInfo(candidate).Length,version=version.FileVersion});}catch(Exception ex) {Write(session,"binary-error",new {name=n,error=ex.Message});}
                     }
@@ -176,6 +176,29 @@ namespace Amagadon {
                 Write(folder,"crash-dump",Path.GetFileName(dest));
             } finally {if(thread!=IntPtr.Zero)CloseHandle(thread);Marshal.FreeHGlobal(info);Marshal.FreeHGlobal(pointers);Marshal.FreeHGlobal(record);Marshal.FreeHGlobal(context);}
         }
+        // Native trace slots are committed with matching sequence markers. Re-read
+        // the ring to reject a slot overwritten while the helper was copying it.
+        internal static int[] StableTraceOffsets(byte[] first,byte[] second) {
+            const int header=4096,stride=2048,slots=1024;
+            if(first==null||second==null||first.Length!=header+stride*slots||second.Length!=first.Length)return new int[0];
+            if(BitConverter.ToUInt32(first,0)!=0x31525453||BitConverter.ToUInt32(second,0)!=0x31525453||BitConverter.ToUInt32(first,20)!=BitConverter.ToUInt32(second,20))return new int[0];
+            uint generation=BitConverter.ToUInt32(first,20),head=BitConverter.ToUInt32(first,4);var valid=new List<int>();
+            for(int i=0;i<slots;i++){int o=header+i*stride;uint seq=BitConverter.ToUInt32(first,o);if(seq!=0&&seq<=head&&head-seq<slots&&(seq&1023)==i&&seq==BitConverter.ToUInt32(first,o+76)&&seq==BitConverter.ToUInt32(second,o)&&seq==BitConverter.ToUInt32(second,o+76)&&BitConverter.ToUInt32(first,o+88)==generation)valid.Add(o);}
+            return valid.OrderBy(o=>BitConverter.ToUInt32(first,o)).ToArray();
+        }
+        static object CaptureSyncTrace(Process p,string folder,string reason) {
+            Func<int,int,byte[]> read=(a,n)=>{var b=new byte[n];IntPtr got;if(!ReadProcessMemory(p.Handle,new IntPtr(a),b,n,out got)||got.ToInt32()!=n)throw new IOException("동기화 이력 읽기 실패");return b;};
+            byte[] hook=read(0x48bc82,5);if(hook[0]!=0xe9)return new {available=false,reason="no-runtime-hook"};
+            int runtime=unchecked(0x48bc87+BitConverter.ToInt32(hook,1)-SelectionRuntime.BeforeOffset),address=runtime+0x80000,size=4096+2048*1024;
+            byte[] first=read(address,size),second=read(address,size);var offsets=StableTraceOffsets(first,second);
+            if(offsets.Length==0)return new {available=false,reason="no-committed-trace-slots"};
+            // Keep the raw ring and a decoded index together; decoded fields omit heap pointers.
+            string target=Path.Combine(folder,"sync-trace.dat"),pending=target+".partial";File.WriteAllBytes(pending,first);if(File.Exists(target))File.Replace(pending,target,null);else File.Move(pending,target);
+            var frames=offsets.Select(o=>new {sequence=BitConverter.ToUInt32(first,o),clock=BitConverter.ToUInt32(first,o+4),engineRngIndex=BitConverter.ToUInt32(first,o+8),frameInterval=BitConverter.ToUInt32(first,o+12),localPlayer=BitConverter.ToUInt32(first,o+16),syncErrors=BitConverter.ToUInt32(first,o+20),unitHash=BitConverter.ToUInt32(first,o+24),unitCount=BitConverter.ToUInt32(first,o+28),playerHashes=Enumerable.Range(0,10).Select(i=>BitConverter.ToUInt32(first,o+32+i*4)).ToArray(),fpuControl=BitConverter.ToUInt16(first,o+80),crtRng=BitConverter.ToUInt32(first,o+84),offset=o}).ToArray();
+            var index=new {format=1,reason=reason,generation=BitConverter.ToUInt32(first,20),frozen=BitConverter.ToUInt32(first,12)!=0,freezeClock=BitConverter.ToUInt32(first,16),slots=1024,stride=2048,commandsOffset=128,commandsBytes=1408,stableFrames=frames,notes="Simulation command barrier samples. Compare peers by generation/clock, excluding localPlayer. CRT RNG 0xffffffff means TLS slot unavailable. Ring duration depends on simulation speed. Raw slots must pass sequence validation."};
+            string json=Path.Combine(folder,"sync-trace.json"),part=json+".partial";File.WriteAllText(part,Core.Json.Serialize(index));if(File.Exists(json))File.Replace(part,json,null);else File.Move(part,json);
+            return new {available=true,reason=reason,frames=frames.Length,firstClock=frames[0].clock,lastClock=frames[frames.Length-1].clock,frozen=BitConverter.ToUInt32(first,12)!=0};
+        }
         static object DivergenceState(Process p) {
             Func<int,int,byte[]> read=(a,n)=>{var b=new byte[n];IntPtr got;if(!ReadProcessMemory(p.Handle,new IntPtr(a),b,n,out got)||got.ToInt32()!=n)throw new IOException("동기화 상태 읽기 실패");return b;};
             int clock=BitConverter.ToInt32(read(0x503c6c,4),0),manager=BitConverter.ToInt32(read(0x504a10,4),0);
@@ -214,12 +237,12 @@ namespace Amagadon {
                                 int size=address==0x504f48||address==0x51a8e4?1:4;byte[] b=new byte[size];IntPtr n;
                                 values.Add(ReadProcessMemory(p.Handle,new IntPtr(address),b,size,out n)&&n.ToInt64()==size?(int?)(size==1?b[0]:BitConverter.ToInt32(b,0)):null);
                             }
-                            if(values[4].GetValueOrDefault()>0 && !divergenceCaptured){divergenceCaptured=true;try{Write(folder,"first-sync-divergence",DivergenceState(p));}catch(Exception ex){Write(folder,"sync-divergence-error",ex.Message);}}
+                            if(values[0]==4 && values[4].GetValueOrDefault()>0 && !divergenceCaptured){divergenceCaptured=true;try{Write(folder,"sync-trace-captured",CaptureSyncTrace(p,folder,"first-divergence"));}catch(Exception ex){Write(folder,"sync-trace-save-error",ex.Message);}try{Write(folder,"first-sync-divergence",DivergenceState(p));}catch(Exception ex){Write(folder,"sync-divergence-error",ex.Message);}}
                             if(values[0].GetValueOrDefault()!=4)divergenceCaptured=false;
                             string current=Core.Json.Serialize(values);
                             if(values[0].HasValue) {
-                            lastMatchState=MatchState(p);lastStateUtc=DateTime.UtcNow;
-                            recentMatch.Enqueue(new {utc=lastStateUtc,state=lastMatchState});while(recentMatch.Count>120)recentMatch.Dequeue();
+                            lastMatchState=MatchState(p);lastNetworkState=NetworkState(p);lastStateUtc=DateTime.UtcNow;
+                            recentMatch.Enqueue(new {utc=lastStateUtc,state=lastMatchState,network=lastNetworkState});while(recentMatch.Count>120)recentMatch.Dequeue();
                             if(current!=previousMatch) {
                                 previousMatch=current;lastNetworkState=NetworkState(p);Write(folder,"match-transition",lastMatchState);Write(folder,"network-at-transition",lastNetworkState);
                                 // Dialog 14 is shared by several outcomes; retain raw values,
@@ -235,7 +258,7 @@ namespace Amagadon {
                         // Atomic replacement leaves the previous valid copy on write failure.
                         try {
                             string target=Path.Combine(folder,"recent-state.json"),pending=target+".partial";
-                            if(engineMouse)lastNetworkState=NetworkState(p);
+                            if(engineMouse){lastNetworkState=NetworkState(p);try{CaptureSyncTrace(p,folder,"periodic");}catch(Exception ex){Write(folder,"sync-trace-save-error",ex.Message);}}
                             File.WriteAllText(pending,Core.Json.Serialize(new {savedUtc=DateTime.UtcNow,lastStateUtc=lastStateUtc,match=lastMatchState,network=lastNetworkState,history=recentMatch.ToArray()}));
                             if(File.Exists(target))File.Replace(pending,target,null);else File.Move(pending,target);
                         }catch(Exception ex){Write(folder,"recent-state-save-error",ex.Message);}
@@ -250,9 +273,9 @@ namespace Amagadon {
                             bool bootstrap=initialBreak && first && code==0x80000003;if(bootstrap)initialBreak=false;
                             status=bootstrap?0x10002U:0x80010001U;
                             if(!bootstrap && (exceptions++<100 || !first))Write(folder,"exception",new {code="0x"+code.ToString("X8"),address="0x"+unchecked((uint)Marshal.ReadInt32(buffer,24)).ToString("X8"),thread=tid,firstChance=first});
-                            if(!first) {sawUnhandledException=true;if(engineMouse) {Write(folder,"network-at-crash",NetworkState(p));Write(folder,"match-at-crash",MatchState(p));Write(folder,"input-at-crash",InputState(p));}try {Dump(p,tid,buffer,folder);}catch(Exception ex) {Write(folder,"dump-error",ex.Message);}}
+                            if(!first) {sawUnhandledException=true;if(engineMouse) {try{Write(folder,"sync-trace-captured",CaptureSyncTrace(p,folder,"crash"));}catch(Exception ex){Write(folder,"sync-trace-save-error",ex.Message);}Write(folder,"network-at-crash",NetworkState(p));Write(folder,"match-at-crash",MatchState(p));Write(folder,"input-at-crash",InputState(p));}try {Dump(p,tid,buffer,folder);}catch(Exception ex) {Write(folder,"dump-error",ex.Message);}}
                         } else if(kind==3 || kind==6) {IntPtr f=Marshal.ReadIntPtr(buffer,12);if(f!=IntPtr.Zero && f!=new IntPtr(-1))CloseHandle(f);}
-                        else if(kind==5) {debugExit=Marshal.ReadInt32(buffer,12);Write(folder,"exit",new {code="0x"+unchecked((uint)debugExit.Value).ToString("X8")});exited=true;}
+                        else if(kind==5) {if(engineMouse)try{Write(folder,"sync-trace-captured",CaptureSyncTrace(p,folder,"exit"));}catch(Exception ex){Write(folder,"sync-trace-save-error",ex.Message);}debugExit=Marshal.ReadInt32(buffer,12);Write(folder,"exit",new {code="0x"+unchecked((uint)debugExit.Value).ToString("X8")});exited=true;}
                     } finally {if(!ContinueDebugEvent((uint)pid,tid,status))Write(folder,"continue-error",Marshal.GetLastWin32Error());}
                     if(exited)break;
                 }

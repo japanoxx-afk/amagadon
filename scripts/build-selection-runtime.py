@@ -17,14 +17,14 @@ TRACK=DATA+0x66020
 SUPPRESS=DATA+0x66024
 STAMP=DATA+0x66040
 TEXT=DATA+0x66080
-SIZE=0x78000
+SIZE=0x281000
 blocks={}; hooks=[]; cursor=0
 ks=Ks(KS_ARCH_X86,KS_MODE_32)
 def reserve(name):
  global cursor
  blocks[name]={'address':BASE+cursor};cursor+=0x600
  return blocks[name]['address']
-for name in ('add','sync','select','rectangle','rect_native','first_accept','second_accept','rescan','wire','before','right','order','batch','group','group_native','key','hud','filter','reset','prune','terrain_visibility','resource_text','observer_view','replay_hud_gate','observer_visibility','replay_voice','minimap_resources','harvest_volume','world_resources','minimap_resource_sight','minimap_resource_color','hotkey_map','multiplayer_music'):
+for name in ('add','sync','select','rectangle','rect_native','first_accept','second_accept','rescan','wire','before','right','order','batch','group','group_native','key','hud','filter','reset','prune','terrain_visibility','resource_text','observer_view','replay_hud_gate','observer_visibility','replay_voice','minimap_resources','harvest_volume','world_resources','minimap_resource_sight','minimap_resource_color','hotkey_map','multiplayer_music','sync_trace','trace_barrier'):
  reserve(name)
 def at(name):return blocks[name]['address']
 def code(name,source):
@@ -1332,6 +1332,10 @@ push ecx
 jmp 0x4bc14c
 ''')
 hook(0x4bc147,'harvest_volume','8b4c241c51')
+trace_spec=importlib.util.spec_from_file_location('sync_trace',Path(__file__).with_name('build-sync-trace.py'));trace=importlib.util.module_from_spec(trace_spec);trace_spec.loader.exec_module(trace)
+code('sync_trace',trace.assembly(BASE))
+code('trace_barrier',f"call {at('sync_trace')}\njmp 0x408300")
+hooks.append((0x454487,at('trace_barrier'),bytes.fromhex('e8743efbff')))
 payload=bytearray(0x10000);absolute=[];relative=[]
 md=Cs(CS_ARCH_X86,CS_MODE_32);md.detail=True
 for name,b in blocks.items():
@@ -1347,7 +1351,7 @@ for name,b in blocks.items():
     elif not branch and BASE<=op.imm<BASE+SIZE:
      assert ins.imm_size==4,(name,ins.mnemonic,ins.op_str,ins.imm_size);absolute.append(ins.address-BASE+ins.imm_offset)
 # Keep native CALL sites as calls, all other replacements as jumps.
-call_sites={0x48bd48,0x48bd41,0x4a690f,0x454e58}.union(terrain_sites).union(resource_sites).union(observer_sites).union(visibility_sites).union(voice_sites).union(world_resource_sites)
+call_sites={0x454487,0x48bd48,0x48bd41,0x4a690f,0x454e58}.union(terrain_sites).union(resource_sites).union(observer_sites).union(visibility_sites).union(voice_sites).union(world_resource_sites)
 meta={'base':BASE,'size':SIZE,'data':DATA,'counts':COUNTS,'lists':LISTS,'group_counts':GROUP_COUNTS,'groups':GROUPS,'pending':PENDING,'stamp':STAMP,'blocks':{n:b['address'] for n,b in blocks.items()},'absolute':sorted(set(absolute)),'relative':sorted(set(relative)),'hooks':[{'site':s,'target':t,'before':v.hex(),'opcode':0xe8 if s in call_sites else 0xe9} for s,t,v in hooks]}
 Path('.tools/selection-runtime.bin').write_bytes(payload)
 Path('.tools/selection-runtime.json').write_text(json.dumps(meta,indent=2))
@@ -1355,7 +1359,7 @@ import base64
 cs='''using System;using System.IO;using System.Linq;using System.Collections.Generic;using System.Runtime.InteropServices;
 namespace Amagadon {
  public static partial class SelectionRuntime {
-  public const int Protocol=1,AllocationSize=SIZEVALUE;
+  public const int Protocol=1,AllocationSize=SIZEVALUE,BeforeOffset=BEFOREVALUE;
   [DllImport("kernel32.dll",SetLastError=true)] static extern IntPtr VirtualAllocEx(IntPtr p,IntPtr a,UIntPtr s,uint type,uint protect);
   [DllImport("kernel32.dll",SetLastError=true)] static extern bool VirtualProtectEx(IntPtr p,IntPtr a,UIntPtr s,uint protect,out uint old);
   [DllImport("kernel32.dll",SetLastError=true)] static extern bool ReadProcessMemory(IntPtr p,IntPtr a,byte[] b,int s,out IntPtr n);
@@ -1364,6 +1368,7 @@ namespace Amagadon {
    foreach(int offset in new int[]{ABSOLUTE})Buffer.BlockCopy(BitConverter.GetBytes(unchecked(BitConverter.ToInt32(payload,offset)+delta)),0,payload,offset,4);
    foreach(int offset in new int[]{RELATIVE})Buffer.BlockCopy(BitConverter.GetBytes(unchecked(BitConverter.ToInt32(payload,offset)-delta)),0,payload,offset,4);
    result.Add(cave,payload);
+   result.Add(cave+0x8001c,BitConverter.GetBytes(NetworkGuard.TraceLogging?1:0));
    result.Add(cave+0x77000,Hotkeys.RuntimeTable());
    result.Add(cave+0x76d00,System.Text.Encoding.ASCII.GetBytes("BGM\\\\04-into the war.wav\\0"));
    result.Add(cave+0x76108,BitConverter.GetBytes(Math.Max(0,Math.Min(100,NetworkGuard.HarvestVolume))));
@@ -1391,6 +1396,6 @@ HOOKS
 hookcs=[]
 for h in meta['hooks']:
  hookcs.append('   {byte[] b=Enumerable.Repeat((byte)0x90,'+str(len(bytes.fromhex(h['before'])))+').ToArray();b[0]='+str(h['opcode'])+';Buffer.BlockCopy(BitConverter.GetBytes(unchecked(cave+'+str(h['target']-BASE)+'-'+str(h['site']+5)+')),0,b,1,4);result.Add('+hex(h['site'])+',b);}')
-cs=cs.replace('SIZEVALUE',str(SIZE)).replace('PAYLOAD',base64.b64encode(payload).decode()).replace('ABSOLUTE',','.join(map(str,sorted(set(absolute))))).replace('RELATIVE',','.join(map(str,sorted(set(relative))))).replace('HOOKS','\n'.join(hookcs)).replace('EXPECTED',','.join('{'+hex(s)+',"'+v.hex()+'"}' for s,t,v in hooks))
+cs=cs.replace('SIZEVALUE',str(SIZE)).replace('BEFOREVALUE',str(at('before')-BASE)).replace('PAYLOAD',base64.b64encode(payload).decode()).replace('ABSOLUTE',','.join(map(str,sorted(set(absolute))))).replace('RELATIVE',','.join(map(str,sorted(set(relative))))).replace('HOOKS','\n'.join(hookcs)).replace('EXPECTED',','.join('{'+hex(s)+',"'+v.hex()+'"}' for s,t,v in hooks))
 Path('src/SelectionRuntime.cs').write_text(cs,encoding='utf-8-sig')
 print('Generated installed selection runtime:',len(hooks),'hooks;',len(absolute),'absolute and',len(relative),'relative relocations')

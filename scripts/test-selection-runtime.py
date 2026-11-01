@@ -288,3 +288,34 @@ print('PASS start camera once-per-match/local ownership; common/race hotkeys/cha
 for empty in (False,True):
  u=fresh(1);u.mem_write(0x504b68,b'\0' if empty else b'BGM\\Menu.wav\0');w(u,STACK+4,0x504b68);run(u,M['blocks']['multiplayer_music'],0x4bc350);assert r(u,STACK+4)==(B+0x76d00 if empty else 0x504b68);assert u.reg_read(UC_X86_REG_ESP)==STACK
 print('PASS BGM fallback only for empty/null path; native cdecl frame retained')
+
+# Native command-boundary diagnostics: bounded ring, freeze, reset, and no writes
+# to authoritative unit/command/RNG state. Diagnostic memory is outside replay data.
+u=fresh(3);t=B+0x80000;ring=B+0x81000
+w(u,t+28,1);w(u,0x513ed4,1);w(u,0x4f8a10,0xffffffff);w(u,0x503c6c,100);u.mem_write(0x581158,b'\x17');u.mem_write(0x52f210,bytes(range(256))*5+bytes(range(128)))
+beforeUnits=bytes(u.mem_read(UNITS,3*0x1400));beforeCommands=bytes(u.mem_read(0x52f210,1408));beforeRng=bytes(u.mem_read(0x581158,4))
+regs=[UC_X86_REG_EAX,UC_X86_REG_EBX,UC_X86_REG_ECX,UC_X86_REG_EDX,UC_X86_REG_ESI,UC_X86_REG_EDI,UC_X86_REG_EBP]
+for i,reg in enumerate(regs):u.reg_write(reg,0x11110000+i)
+saved=[u.reg_read(reg) for reg in regs];u.reg_write(UC_X86_REG_EFLAGS,0x202)
+call(u,'sync_trace',[]);assert [u.reg_read(reg) for reg in regs]==saved and u.reg_read(UC_X86_REG_EFLAGS)==0x202
+assert r(u,t)==0x31525453 and r(u,t+4)==1 and r(u,t+20)==1
+slot=ring+2048;assert r(u,slot)==r(u,slot+76)==1 and r(u,slot+4)==100 and r(u,slot+8)==23 and r(u,slot+84)==0xffffffff
+assert bytes(u.mem_read(slot+128,1408))==beforeCommands
+assert bytes(u.mem_read(UNITS,3*0x1400))==beforeUnits and bytes(u.mem_read(0x581158,4))==beforeRng
+h=r(u,slot+24);call(u,'sync_trace',[]);assert r(u,t+4)==1
+w(u,0x503c6c,101);call(u,'sync_trace',[]);assert r(u,ring+4096+24)==h
+w(u,UNITS+20,999);w(u,0x503c6c,102);call(u,'sync_trace',[]);assert r(u,ring+6144+24)!=h
+u.mem_write(0x51a8e4,b'\1');w(u,0x503c6c,103);call(u,'sync_trace',[]);assert r(u,t+12)==1 and r(u,t+16)==103 and r(u,t+4)==3
+w(u,0x503c6c,200);call(u,'sync_trace',[]);assert r(u,t+4)==3
+u.mem_write(0x51a8e4,b'\0');w(u,0x503c6c,1);call(u,'sync_trace',[]);assert r(u,t+20)==2 and r(u,t+4)==1 and r(u,t+12)==0
+for tick in range(2,1030):w(u,0x503c6c,tick);call(u,'sync_trace',[])
+assert r(u,t+4)==1029 and r(u,ring+5*2048)==1029
+w(u,t+28,0);w(u,0x503c6c,2000);call(u,'sync_trace',[]);assert r(u,t+4)==1029
+print('PASS native sync trace: frame/command/RNG/hash capture, registers/flags, same-clock deduplication, first-error freeze, new-match reset, 1024-slot wrap and diagnostics-off')
+# The installed hook executes before native packet dispatch on every tick.
+u=fresh(1);w(u,B+0x80000+28,1);w(u,0x513ed4,1);w(u,0x4f8a10,0xffffffff);w(u,0x503c6c,7)
+run(u,0x454487,0x408300);assert r(u,B+0x80004)==1 and r(u,u.reg_read(UC_X86_REG_ESP))==0x45448c
+# Read CRT TLS state without invoking rand()/TLS APIs or changing the seed.
+u=fresh(1);u.mem_map(0,4096);w(u,0xe10+3*4,DEFS);w(u,DEFS+20,0x12345678);w(u,0x4f8a10,3);w(u,B+0x80000+28,1);w(u,0x513ed4,1);w(u,0x503c6c,7)
+call(u,'sync_trace',[]);assert r(u,B+0x81000+2048+84)==0x12345678 and r(u,DEFS+20)==0x12345678
+print('PASS installed per-tick command barrier and read-only CRT TLS seed')
