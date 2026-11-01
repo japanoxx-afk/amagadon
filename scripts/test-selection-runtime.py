@@ -471,3 +471,16 @@ asm(u,B+0xf000,'mov eax,0x22260; jmp 0x454491')
 asm(u,site,f'jmp {B+0xf000}')
 run(u,0x45448c,0x454491);assert u.reg_read(UC_X86_REG_EAX)==0x22260
 print('PASS fresh multiplayer music entry and chained diagnostic/replay barrier')
+
+# Execute the installed CALL site with the real caller stack, not just the helper.
+for multi in (0,1):
+ u=fresh(1);w(u,0x513ed4,multi);w(u,B+0x76d80,0);u.mem_write(0x504b68,b'\0')
+ asm(u,0x4bc350,f'inc dword ptr [{B+0x76d80}]; ret')
+ w(u,STACK,0x4d5054);w(u,STACK+4,RETURN)
+ assert bytes(u.mem_read(0x45348e,1))==b'\xe8'
+ run(u,0x45348e,0x453493)
+ assert u.reg_read(UC_X86_REG_ESP)==STACK and r(u,STACK)==0x4d5054 and r(u,B+0x76d80)==multi
+ # Reproduce the former JMP wiring: RET consumes the string argument as an address.
+ u=fresh(1);w(u,0x513ed4,0);w(u,STACK,0x4d5054);asm(u,0x45348e,f"jmp {M['blocks']['match_music']}")
+ run(u,0x45348e,0x4d5054);assert u.reg_read(UC_X86_REG_ESP)==STACK+4
+print('PASS installed new-match CALL preserves caller stack; former JMP-to-string fault reproduced')

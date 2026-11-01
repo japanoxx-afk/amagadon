@@ -1446,7 +1446,7 @@ for name,b in blocks.items():
     elif not branch and BASE<=op.imm<BASE+SIZE:
      assert ins.imm_size==4,(name,ins.mnemonic,ins.op_str,ins.imm_size);absolute.append(ins.address-BASE+ins.imm_offset)
 # Keep native CALL sites as calls, all other replacements as jumps.
-call_sites={0x48bd48,0x48bd41,0x4a690f,0x454e58}.union(terrain_sites).union(resource_sites).union(observer_sites).union(visibility_sites).union(voice_sites).union(world_resource_sites)
+call_sites={0x48bd48,0x48bd41,0x4a690f,0x454e58,0x45348e}.union(terrain_sites).union(resource_sites).union(observer_sites).union(visibility_sites).union(voice_sites).union(world_resource_sites)
 meta={'base':BASE,'size':SIZE,'data':DATA,'counts':COUNTS,'lists':LISTS,'group_counts':GROUP_COUNTS,'groups':GROUPS,'pending':PENDING,'stamp':STAMP,'blocks':{n:b['address'] for n,b in blocks.items()},'absolute':sorted(set(absolute)),'relative':sorted(set(relative)),'hooks':[{'site':s,'target':t,'before':v.hex(),'opcode':0xe8 if s in call_sites else 0xe9} for s,t,v in hooks]}
 Path('.tools/selection-runtime.bin').write_bytes(payload)
 Path('.tools/selection-runtime.json').write_text(json.dumps(meta,indent=2))
