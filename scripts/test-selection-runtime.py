@@ -312,9 +312,12 @@ for tick in range(2,1030):w(u,0x503c6c,tick);call(u,'sync_trace',[])
 assert r(u,t+4)==1029 and r(u,ring+5*2048)==1029
 w(u,t+28,0);w(u,0x503c6c,2000);call(u,'sync_trace',[]);assert r(u,t+4)==1029
 print('PASS native sync trace: frame/command/RNG/hash capture, registers/flags, same-clock deduplication, first-error freeze, new-match reset, 1024-slot wrap and diagnostics-off')
-# The installed hook executes before native packet dispatch on every tick.
-u=fresh(1);w(u,B+0x80000+28,1);w(u,0x513ed4,1);w(u,0x4f8a10,0xffffffff);w(u,0x503c6c,7)
-run(u,0x454487,0x408300);assert r(u,B+0x80004)==1 and r(u,u.reg_read(UC_X86_REG_ESP))==0x45448c
+# Execute both original control-flow branches: multiplayer jumps over 454487.
+# The shared barrier at 45448c must still commit multiplayer records.
+for multi in (0,1):
+ u=fresh(1);w(u,B+0x80000+28,1);w(u,0x513ed4,multi);w(u,0x4f8a10,0xffffffff);w(u,0x503c6c,7);u.reg_write(UC_X86_REG_EBP,1);u.reg_write(UC_X86_REG_EBX,0);u.reg_write(UC_X86_REG_EAX,1)
+ asm(u,0x482cf0,'ret');asm(u,0x408300,'ret');asm(u,0x429260,'ret')
+ run(u,0x45445e,0x454491);assert r(u,B+0x80004)==multi and r(u,B+0x80024)==1 and u.reg_read(UC_X86_REG_EAX)==0x22260 and u.reg_read(UC_X86_REG_ESP)==STACK
 # Read CRT TLS state without invoking rand()/TLS APIs or changing the seed.
 u=fresh(1);u.mem_map(0,4096);w(u,0xe10+3*4,DEFS);w(u,DEFS+20,0x12345678);w(u,0x4f8a10,3);w(u,B+0x80000+28,1);w(u,0x513ed4,1);w(u,0x503c6c,7)
 call(u,'sync_trace',[]);assert r(u,B+0x81000+2048+84)==0x12345678 and r(u,DEFS+20)==0x12345678
@@ -397,3 +400,48 @@ for scenario in ('empty','dead','enemy','chat','menu'):
  if scenario=='menu':u.mem_write(0x504f48,b'\2')
  u.reg_write(UC_X86_REG_ESI,46);call(u,'hotkey_map',[]);assert u.reg_read(UC_X86_REG_ESI)==46
 print('PASS skirmish trampoline caller preservation; build-key context/ownership/dead-selection guards')
+
+# Replay the actual construction crash path, with only surrounding world/own
+# footprint queries controlled. Both reports request missing Earth definition 56.
+def construction_machine(patched=True,target=0x38):
+ u=fresh(173,2);actor=UNITS+172*0x1400;cat=DEFS+0x8000
+ u.reg_write(UC_X86_REG_ESI,actor);u.reg_write(UC_X86_REG_EDI,0xffffffff);u.reg_write(UC_X86_REG_EBX,0)
+ u.mem_write(actor+12,struct.pack('<HH',0x12,172));w(u,actor+0x414,target);w(u,actor+0xa4,3251);w(u,actor+0xf4,2276);w(u,actor+0x2c,1);u.mem_write(actor+0x464,b'\7');w(u,0x5049fc,cat)
+ for i,v in enumerate((0xffffffff,0x11112222,0x33334444,0)):w(u,STACK+i*4,v)
+ w(u,STACK+0x84,RETURN);w(u,STACK+0x88,0)
+ if not patched:u.mem_write(0x438b51,bytes.fromhex(next(h['before'] for h in M['hooks'] if h['site']==0x438b51)))
+ def surroundings(uc,a,size,data):
+  sp=uc.reg_read(UC_X86_REG_ESP);pop=None
+  if a==0x41f590:pop=4
+  elif a==0x476ad0:pop=0
+  elif a==0x43b280:pop=8
+  elif a==0x43f5d0:
+   output=r(uc,sp+4);uc.mem_write(output,struct.pack('<4i',0,0,16,16));uc.reg_write(UC_X86_REG_EAX,output);pop=8
+  if pop is not None:uc.reg_write(UC_X86_REG_EIP,r(uc,sp));uc.reg_write(UC_X86_REG_ESP,sp+4+pop)
+ u.hook_add(UC_HOOK_CODE,surroundings)
+ return u,actor,cat
+u,actor,cat=construction_machine(False)
+try:run(u,0x438b51,RETURN)
+except UcError:assert u.reg_read(UC_X86_REG_EIP)==0x40d941
+else:raise AssertionError('Reported NULL footprint crash not reproduced')
+u,actor,cat=construction_machine(True);w(u,0x503c6c,11433);w(u,B+0x80004,10);w(u,B+0x80014,1);packet=bytes(range(64));u.mem_write(0x52f510+2*64,packet)
+run(u,0x438b51,RETURN);assert u.reg_read(UC_X86_REG_ESP)==STACK+0x8c
+assert r(u,actor+0x414)==0xffffffff and r(u,actor+0x460)==0xffffffff and u.mem_read(actor+0x464,1)==b'\0'
+e=B+0x78000;slot=e+256+128
+assert r(u,e)==0x31444c42 and r(u,e+4)==1 and r(u,slot)==r(u,slot+120)==1
+assert [r(u,slot+i) for i in (4,8,12,16,20,24,28,32,36)]==[11433,172,0x12,2,0x38,3251,2276,7,4]
+assert bytes(u.mem_read(slot+48,64))==packet and r(u,B+0x8000c)==2 and r(u,B+0x80010)==11433
+# Missing catalog/out-of-range definition/faction each follows native cancel.
+for target,reason,missing in ((0x38,4,False),(0x38,3,True),(0xff,2,False),(0x438,1,False)):
+ u,actor,cat=construction_machine(True,target)
+ if missing:w(u,0x5049fc,0)
+ run(u,0x438b51,RETURN);assert r(u,B+0x78000+256+128+36)==reason
+# Normal construction keeps the original register/flag/stack behavior at resume.
+for faction in range(4):
+ normal=[]
+ for patched in (False,True):
+  u,actor,cat=construction_machine(patched,(faction<<8)|4);w(u,0x5049fc+faction*4,cat);w(u,cat+4+4*4,DEFS);u.reg_write(UC_X86_REG_EAX,0x12345678);u.reg_write(UC_X86_REG_EFLAGS,0x246)
+  run(u,0x438b51,0x438b58);normal.append(([u.reg_read(reg) for reg in (UC_X86_REG_EAX,UC_X86_REG_EBX,UC_X86_REG_ECX,UC_X86_REG_EDX,UC_X86_REG_ESI,UC_X86_REG_EDI,UC_X86_REG_EBP,UC_X86_REG_ESP)],u.reg_read(UC_X86_REG_EFLAGS),bytes(u.mem_read(actor,0x1400))))
+  assert r(u,B+0x78004)==0
+ assert normal[0]==normal[1]
+print('PASS paired crash replay: original NULL fault at 40d941 reproduced; invalid construction cancelled with exact context/packet and trace freeze; valid construction unchanged')

@@ -6,6 +6,7 @@ pushfd
 pushad
 cmp dword ptr [{t}+28],1
 jne done
+inc dword ptr [{t}+36]
 cmp byte ptr [0x504f48],4
 jne done
 cmp dword ptr [0x513ed4],1

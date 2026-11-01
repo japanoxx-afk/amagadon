@@ -190,17 +190,41 @@ namespace Amagadon {
             for(int i=0;i<slots;i++){int o=header+i*stride;uint seq=BitConverter.ToUInt32(first,o);if(seq!=0&&seq<=head&&head-seq<slots&&(seq&1023)==i&&seq==BitConverter.ToUInt32(first,o+76)&&seq==BitConverter.ToUInt32(second,o)&&seq==BitConverter.ToUInt32(second,o+76)&&BitConverter.ToUInt32(first,o+88)==generation)valid.Add(o);}
             return valid.OrderBy(o=>BitConverter.ToUInt32(first,o)).ToArray();
         }
+        static void AtomicDiagnosticJson(string path,object value) {
+            string pending=path+".partial";File.WriteAllText(pending,Core.Json.Serialize(value));if(File.Exists(path))File.Replace(pending,path,null);else File.Move(pending,path);
+        }
+        static uint CaptureConstructionGuard(Process p,string folder,uint previous) {
+            Func<int,int,byte[]> read=(a,n)=>{var b=new byte[n];IntPtr got;if(!ReadProcessMemory(p.Handle,new IntPtr(a),b,n,out got)||got.ToInt32()!=n)throw new IOException("건설 보호 기록 읽기 실패");return b;};
+            byte[] hook=read(0x48bc82,5);if(hook[0]!=0xe9)return previous;
+            int runtime=unchecked(0x48bc87+BitConverter.ToInt32(hook,1)-SelectionRuntime.BeforeOffset),address=runtime+0x78000;
+            byte[] header=read(address,12);uint count=BitConverter.ToUInt32(header,4);if(BitConverter.ToUInt32(header,0)!=0x31444c42 || count==previous)return previous;
+            byte[] first=read(address,4352),second=read(address,4352);var rows=new List<object>();
+            for(int i=0;i<32;i++){int o=256+i*128;uint seq=BitConverter.ToUInt32(first,o);if(seq==0||seq>count||count-seq>=32||(seq&31)!=i||seq!=BitConverter.ToUInt32(first,o+120)||seq!=BitConverter.ToUInt32(second,o)||seq!=BitConverter.ToUInt32(second,o+120))continue;
+                rows.Add(new {sequence=seq,clock=BitConverter.ToUInt32(first,o+4),actorId=BitConverter.ToUInt32(first,o+8),actorType=BitConverter.ToUInt32(first,o+12),player=BitConverter.ToUInt32(first,o+16),targetType=BitConverter.ToUInt32(first,o+20),targetX=BitConverter.ToInt32(first,o+24),targetY=BitConverter.ToInt32(first,o+28),orderState=BitConverter.ToUInt32(first,o+32),reason=BitConverter.ToUInt32(first,o+36),generation=BitConverter.ToUInt32(first,o+40),finalPacket=Convert.ToBase64String(first.Skip(o+48).Take(64).ToArray())});
+            }
+            AtomicDiagnosticJson(Path.Combine(folder,"invalid-build-targets.json"),new {format=1,total=count,events=rows,notes="Rejected before footprint/cost access; native construction cancellation path used. reason 1=race range, 2=definition index range, 3=missing catalog, 4=missing definition."});
+            Write(folder,"invalid-build-targets",new {total=count,records=rows.Count});return count;
+        }
         static object CaptureSyncTrace(Process p,string folder,string reason) {
             Func<int,int,byte[]> read=(a,n)=>{var b=new byte[n];IntPtr got;if(!ReadProcessMemory(p.Handle,new IntPtr(a),b,n,out got)||got.ToInt32()!=n)throw new IOException("동기화 이력 읽기 실패");return b;};
             byte[] hook=read(0x48bc82,5);if(hook[0]!=0xe9)return new {available=false,reason="no-runtime-hook"};
             int runtime=unchecked(0x48bc87+BitConverter.ToInt32(hook,1)-SelectionRuntime.BeforeOffset),address=runtime+0x80000,size=4096+2048*1024;
+            byte[] header=read(address,64),barrier=read(0x45448c,5);uint committed=BitConverter.ToUInt32(header,4),calls=BitConverter.ToUInt32(header,36);bool enabled=BitConverter.ToUInt32(header,28)==1;
+            bool installed=barrier[0]==0xe9 && unchecked(0x454491+BitConverter.ToInt32(barrier,1))==runtime+SelectionRuntime.TraceBarrierOffset;
+            string state=!installed?"barrier-not-installed":!enabled?"disabled":calls==0?"no-barrier-calls":committed==0?"no-multiplayer-frames":"recording";
+            AtomicDiagnosticJson(Path.Combine(folder,"sync-trace-status.json"),new {savedUtc=DateTime.UtcNow,reason=reason,state=state,enabled=enabled,barrierInstalled=installed,barrierCalls=calls,committed=committed,mode=read(0x504f48,1)[0],multiplayer=BitConverter.ToUInt32(read(0x513ed4,4),0),simulationClock=BitConverter.ToUInt32(read(0x503c6c,4),0)});
+            if(committed==0)return new {available=false,reason=state};
             byte[] first=read(address,size),second=read(address,size);var offsets=StableTraceOffsets(first,second);
-            if(offsets.Length==0)return new {available=false,reason="no-committed-trace-slots"};
+            if(offsets.Length==0)return new {available=false,reason="no-stable-trace-slots"};
             // Keep the raw ring and a decoded index together; decoded fields omit heap pointers.
             string target=Path.Combine(folder,"sync-trace.dat"),pending=target+".partial";File.WriteAllBytes(pending,first);if(File.Exists(target))File.Replace(pending,target,null);else File.Move(pending,target);
             var frames=offsets.Select(o=>new {sequence=BitConverter.ToUInt32(first,o),clock=BitConverter.ToUInt32(first,o+4),engineRngIndex=BitConverter.ToUInt32(first,o+8),frameInterval=BitConverter.ToUInt32(first,o+12),localPlayer=BitConverter.ToUInt32(first,o+16),syncErrors=BitConverter.ToUInt32(first,o+20),unitHash=BitConverter.ToUInt32(first,o+24),unitCount=BitConverter.ToUInt32(first,o+28),playerHashes=Enumerable.Range(0,10).Select(i=>BitConverter.ToUInt32(first,o+32+i*4)).ToArray(),fpuControl=BitConverter.ToUInt16(first,o+80),crtRng=BitConverter.ToUInt32(first,o+84),offset=o}).ToArray();
-            var index=new {format=1,reason=reason,generation=BitConverter.ToUInt32(first,20),frozen=BitConverter.ToUInt32(first,12)!=0,freezeClock=BitConverter.ToUInt32(first,16),slots=1024,stride=2048,commandsOffset=128,commandsBytes=1408,stableFrames=frames,notes="Simulation command barrier samples. Compare peers by generation/clock, excluding localPlayer. CRT RNG 0xffffffff means TLS slot unavailable. Ring duration depends on simulation speed. Raw slots must pass sequence validation."};
+            var index=new {format=1,reason=reason,generation=BitConverter.ToUInt32(first,20),frozen=BitConverter.ToUInt32(first,12)!=0,freezeReason=BitConverter.ToUInt32(first,12),barrierCalls=BitConverter.ToUInt32(first,36),freezeClock=BitConverter.ToUInt32(first,16),slots=1024,stride=2048,commandsOffset=128,commandsBytes=1408,stableFrames=frames,notes="Simulation command barrier samples. Compare peers by generation/clock, excluding localPlayer. CRT RNG 0xffffffff means TLS slot unavailable. Ring duration depends on simulation speed. Raw slots must pass sequence validation."};
             string json=Path.Combine(folder,"sync-trace.json"),part=json+".partial";File.WriteAllText(part,Core.Json.Serialize(index));if(File.Exists(json))File.Replace(part,json,null);else File.Move(part,json);
+            if(BitConverter.ToUInt32(first,12)!=0) {
+                string archive=Path.Combine(folder,"SyncTrace","g"+BitConverter.ToUInt32(first,20).ToString("D8")+"-f"+BitConverter.ToUInt32(first,16).ToString("D10"));Directory.CreateDirectory(archive);
+                string raw=Path.Combine(archive,"sync-trace.dat"),metadata=Path.Combine(archive,"sync-trace.json");if(!File.Exists(raw))File.WriteAllBytes(raw,first);if(!File.Exists(metadata))AtomicDiagnosticJson(metadata,index);
+            }
             return new {available=true,reason=reason,frames=frames.Length,firstClock=frames[0].clock,lastClock=frames[frames.Length-1].clock,frozen=BitConverter.ToUInt32(first,12)!=0};
         }
         static object DivergenceState(Process p) {
@@ -226,7 +250,7 @@ namespace Amagadon {
                 if(attached && !DebugSetProcessKillOnExit(false)) {DebugActiveProcessStop((uint)pid);attached=false;}
                 Write(folder,"crash-monitor",new {attached=attached,error=attached?0:Marshal.GetLastWin32Error()});
                 File.WriteAllText(Path.Combine(folder,"ready.txt"),attached?"attached":"telemetry-only");
-                bool initialBreak=true,captured=false;var detector=new StallDetector();int exceptions=0;var sampleClock=Stopwatch.StartNew();long lastSample=-5000,lastMatch=-250,lastCapture=-30000;string previousMatch=null;bool divergenceCaptured=false;
+                bool initialBreak=true,captured=false;var detector=new StallDetector();int exceptions=0;var sampleClock=Stopwatch.StartNew();long lastSample=-5000,lastMatch=-250,lastCapture=-30000;string previousMatch=null;bool divergenceCaptured=false;uint lastConstructionGuard=0;
                 var recentMatch=new Queue<object>();object lastMatchState=null,lastNetworkState=null;DateTime? lastStateUtc=null;bool sawUnhandledException=false;int? debugExit=null;
                 while(true) {
                     if(sampleClock.ElapsedMilliseconds-lastCapture>=30000) {
@@ -236,6 +260,8 @@ namespace Amagadon {
                     if(engineMouse && sampleClock.ElapsedMilliseconds-lastMatch>=250) {
                         lastMatch=sampleClock.ElapsedMilliseconds;
                         try {
+                            uint rejected=CaptureConstructionGuard(p,folder,lastConstructionGuard);
+                            if(rejected!=lastConstructionGuard){lastConstructionGuard=rejected;try{Write(folder,"sync-trace-captured",CaptureSyncTrace(p,folder,"invalid-build-target"));}catch(Exception ex){Write(folder,"sync-trace-save-error",ex.Message);}}
                             var values=new List<int?>();
                             foreach(int address in new[]{0x504f48,0x507bf4,0x507bf8,0x51a668,0x51a8e4}) {
                                 int size=address==0x504f48||address==0x51a8e4?1:4;byte[] b=new byte[size];IntPtr n;
@@ -277,9 +303,9 @@ namespace Amagadon {
                             bool bootstrap=initialBreak && first && code==0x80000003;if(bootstrap)initialBreak=false;
                             status=bootstrap?0x10002U:0x80010001U;
                             if(!bootstrap && (exceptions++<100 || !first))Write(folder,"exception",new {code="0x"+code.ToString("X8"),address="0x"+unchecked((uint)Marshal.ReadInt32(buffer,24)).ToString("X8"),thread=tid,firstChance=first});
-                            if(!first) {sawUnhandledException=true;if(engineMouse) {try{Write(folder,"sync-trace-captured",CaptureSyncTrace(p,folder,"crash"));}catch(Exception ex){Write(folder,"sync-trace-save-error",ex.Message);}Write(folder,"network-at-crash",NetworkState(p));Write(folder,"match-at-crash",MatchState(p));Write(folder,"input-at-crash",InputState(p));}try {Dump(p,tid,buffer,folder);}catch(Exception ex) {Write(folder,"dump-error",ex.Message);}}
+                            if(!first) {sawUnhandledException=true;if(engineMouse) {try{lastConstructionGuard=CaptureConstructionGuard(p,folder,lastConstructionGuard);Write(folder,"sync-trace-captured",CaptureSyncTrace(p,folder,"crash"));}catch(Exception ex){Write(folder,"sync-trace-save-error",ex.Message);}Write(folder,"network-at-crash",NetworkState(p));Write(folder,"match-at-crash",MatchState(p));Write(folder,"input-at-crash",InputState(p));}try {Dump(p,tid,buffer,folder);}catch(Exception ex) {Write(folder,"dump-error",ex.Message);}}
                         } else if(kind==3 || kind==6) {IntPtr f=Marshal.ReadIntPtr(buffer,12);if(f!=IntPtr.Zero && f!=new IntPtr(-1))CloseHandle(f);}
-                        else if(kind==5) {if(engineMouse)try{Write(folder,"sync-trace-captured",CaptureSyncTrace(p,folder,"exit"));}catch(Exception ex){Write(folder,"sync-trace-save-error",ex.Message);}debugExit=Marshal.ReadInt32(buffer,12);Write(folder,"exit",new {code="0x"+unchecked((uint)debugExit.Value).ToString("X8")});exited=true;}
+                        else if(kind==5) {if(engineMouse)try{lastConstructionGuard=CaptureConstructionGuard(p,folder,lastConstructionGuard);Write(folder,"sync-trace-captured",CaptureSyncTrace(p,folder,"exit"));}catch(Exception ex){Write(folder,"sync-trace-save-error",ex.Message);}debugExit=Marshal.ReadInt32(buffer,12);Write(folder,"exit",new {code="0x"+unchecked((uint)debugExit.Value).ToString("X8")});exited=true;}
                     } finally {if(!ContinueDebugEvent((uint)pid,tid,status))Write(folder,"continue-error",Marshal.GetLastWin32Error());}
                     if(exited)break;
                 }
