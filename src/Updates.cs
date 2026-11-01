@@ -34,7 +34,7 @@ namespace Amagadon {
             return uri.AbsoluteUri;
         }
         // Both startup and button checks use this exact network/confirmation path.
-        public static async Task<string> Prepare(HttpClient client,string current,string directory,Func<LauncherRelease,bool> confirm,Action<string> progress,CancellationToken token) {
+        public static async Task<string> Prepare(HttpClient client,string current,string directory,Func<LauncherRelease,bool> confirm,Action<string> progress,CancellationToken token,Action<long,long?> downloadProgress=null) {
             LauncherRelease release;
             using(var timeout=CancellationTokenSource.CreateLinkedTokenSource(token)) {
                 timeout.CancelAfter(TimeSpan.FromSeconds(15));
@@ -51,7 +51,24 @@ namespace Amagadon {
             string package=Path.Combine(directory,"AmagadonLauncher.zip"),partial=package+".partial";
             try {
                 progress("업데이트 다운로드 중…");
-                using(var response=await client.GetAsync(zip,token)) {response.EnsureSuccessStatusCode();File.WriteAllBytes(partial,await response.Content.ReadAsByteArrayAsync());}
+                using(var downloadTimeout=CancellationTokenSource.CreateLinkedTokenSource(token)) {
+                    downloadTimeout.CancelAfter(TimeSpan.FromMinutes(5));
+                    using(var response=await client.GetAsync(zip,HttpCompletionOption.ResponseHeadersRead,downloadTimeout.Token)) {
+                        response.EnsureSuccessStatusCode();long? total=response.Content.Headers.ContentLength;long received=0;
+                        if(total>512L*1024*1024)throw new IOException("업데이트 파일이 허용 크기를 초과합니다.");
+                        if(downloadProgress!=null)downloadProgress(0,total);
+                        using(var input=await response.Content.ReadAsStreamAsync())using(var output=new FileStream(partial,FileMode.Create,FileAccess.Write,FileShare.None,65536,true)) {
+                            var bytes=new byte[65536];int count;
+                            while((count=await input.ReadAsync(bytes,0,bytes.Length,downloadTimeout.Token))>0) {
+                                received+=count;if(received>512L*1024*1024)throw new IOException("업데이트 파일이 허용 크기를 초과합니다.");
+                                await output.WriteAsync(bytes,0,count,downloadTimeout.Token);
+                                if(downloadProgress!=null)downloadProgress(received,total);
+                            }
+                        }
+                        if(total.HasValue && total.Value!=received)throw new IOException("업데이트 다운로드가 완료되지 않았습니다.");
+                    }
+                }
+                progress("다운로드 완료 · SHA-256 무결성 검증 중…");
                 string hash;
                 using(var response=await client.GetAsync(sha,token)) {response.EnsureSuccessStatusCode();hash=(await response.Content.ReadAsStringAsync()).Trim();}
                 token.ThrowIfCancellationRequested();

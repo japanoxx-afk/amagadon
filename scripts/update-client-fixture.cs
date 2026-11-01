@@ -13,7 +13,7 @@ class Fixture {
  static void Require(bool value,string message){if(!value)throw new Exception(message);}
  static string Metadata(string version){return "{\"tag_name\":\""+version+"\",\"draft\":false,\"prerelease\":false,\"assets\":[{\"name\":\"AmagadonLauncher.zip\",\"browser_download_url\":\"https://github.com/japanoxx-afk/amagadon/releases/download/"+version+"/AmagadonLauncher.zip\"},{\"name\":\"AmagadonLauncher.zip.sha256\",\"browser_download_url\":\"https://github.com/japanoxx-afk/amagadon/releases/download/"+version+"/AmagadonLauncher.zip.sha256\"}]}";}
  static async Task Run(string root) {
-  string seed=Path.Combine(root,"seed.zip");File.WriteAllBytes(seed,new byte[]{1,2,3,4});string digest=Core.Hash(seed);
+  string seed=Path.Combine(root,"seed.zip");File.WriteAllBytes(seed,new byte[200000]);string digest=Core.Hash(seed);
   // Reproduce the exact 0.3.9 cast before verifying the typed replacement.
   var raw=new JavaScriptSerializer().Deserialize<System.Collections.Generic.Dictionary<string,object>>(Metadata("v99.0.0"));
   bool reproduced=false;try{var broken=(object[])raw["assets"];}catch(InvalidCastException){reproduced=true;}Require(reproduced,"Old ArrayList regression not reproduced");
@@ -29,14 +29,15 @@ class Fixture {
    if(scenario=="http-error")handler.FailDownload=true;
    if(scenario=="draft")handler.Json=handler.Json.Replace("\"draft\":false","\"draft\":true");
    if(scenario=="bad-version")handler.Json=Metadata("v99.0.0-preview");
+   long lastBytes=-1;int progressCalls=0;
    using(var cts=new CancellationTokenSource())using(var client=new HttpClient(handler)) {
     if(scenario=="cancel-token")cts.Cancel();
     if(scenario=="cancel-download")handler.CancelDownload=cts;
-    try{result=await Updates.Prepare(client,"0.3.9",Path.Combine(root,scenario),r=>{confirmations++;return scenario!="cancel";},s=>{},cts.Token);}catch(Exception){rejected=true;}
+    try{result=await Updates.Prepare(client,"0.3.9",Path.Combine(root,scenario),r=>{confirmations++;return scenario!="cancel";},s=>{},cts.Token,(received,total)=>{Require(received>=lastBytes,"Progress regressed");Require(total==200000,"Download length missing");lastBytes=received;progressCalls++;});}catch(Exception){rejected=true;}
    }
    bool success=scenario.EndsWith("accept"),quiet=scenario=="cancel" || scenario=="latest" || scenario=="older" || scenario=="not-published";
    Require(rejected==(!success && !quiet),"Wrong outcome: "+scenario);
-   if(success)Require(result!=null && Core.Hash(result)==digest && confirmations==1 && handler.Requests==3,"Download failed: "+scenario);
+   if(success)Require(result!=null && Core.Hash(result)==digest && confirmations==1 && handler.Requests==3 && lastBytes==200000 && progressCalls>=4,"Download/progress failed: "+scenario);
    else Require(result==null && !Directory.GetFiles(root,"*.partial",SearchOption.AllDirectories).Any(),"Partial package left: "+scenario);
    if(quiet)Require(handler.Requests==1 && confirmations==(scenario=="cancel"?1:0),"Unexpected confirmation/download: "+scenario);
   }

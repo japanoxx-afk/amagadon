@@ -22,9 +22,9 @@ blocks={}; hooks=[]; cursor=0
 ks=Ks(KS_ARCH_X86,KS_MODE_32)
 def reserve(name):
  global cursor
- blocks[name]={'address':BASE+cursor};cursor+=0x800
+ blocks[name]={'address':BASE+cursor};cursor+=0x600
  return blocks[name]['address']
-for name in ('add','sync','select','rectangle','rect_native','first_accept','second_accept','rescan','wire','before','right','order','batch','group','group_native','key','hud','filter','reset','prune','terrain_visibility','resource_text','observer_view','replay_hud_gate','observer_visibility','replay_voice'):
+for name in ('add','sync','select','rectangle','rect_native','first_accept','second_accept','rescan','wire','before','right','order','batch','group','group_native','key','hud','filter','reset','prune','terrain_visibility','resource_text','observer_view','replay_hud_gate','observer_visibility','replay_voice','minimap_resources','harvest_volume','world_resources','minimap_resource_sight','minimap_resource_color','hotkey_map','multiplayer_music'):
  reserve(name)
 def at(name):return blocks[name]['address']
 def code(name,source):
@@ -594,6 +594,8 @@ hook(0x40c0e0,'group','83ec14538b5c241c')
 code('key',f'''
 pushfd
 pushad
+call {at('hotkey_map')}
+mov [esp+4],esi
 call {at('reset')}
 popad
 popfd
@@ -638,6 +640,7 @@ hook(0x453799,'key','772333d28a9644484500')
 code('hud',f'''
 pushfd
 pushad
+call {at('resource_text')}
 cmp dword ptr [0x4f75ec],1024
 jne replay_resources_done
 cmp dword ptr [0x233a000],2
@@ -881,7 +884,159 @@ ret 8
 terrain_sites=[4366496, 4366517, 4366550, 4366573, 4366589, 4366608, 4366624, 4366643, 4366659, 4366678, 4366705, 4366725, 4366741, 4366757, 4366773, 4366792, 4366812, 4366831, 4366862, 4366885, 4366901, 4366920, 4366936, 4366955, 4366971, 4366990, 4367017, 4367037, 4367053, 4367069, 4367085, 4367104, 4367124, 4367143, 4367174, 4367197, 4367213, 4367232, 4367248, 4367267, 4367283, 4367302, 4367329, 4367349, 4367365, 4367381, 4367397, 4367416, 4367436, 4367455, 4367486, 4367509, 4367525, 4367544, 4367560, 4367579, 4367595, 4367614, 4367641, 4367661, 4367677, 4367693, 4367709, 4367728, 4367748, 4367767, 4367798, 4367821, 4367837, 4367856, 4367872, 4367891, 4367907, 4367926, 4367953, 4367969, 4367985, 4368004, 4368020, 4368047, 4368063, 4368079, 4368095, 4368114, 4368141, 4368160, 4368176, 4368192, 4368208, 4368235, 4368251, 4368270, 4368286, 4368302, 4368329, 4368352, 4368368, 4368387, 4368403, 4368422, 4368438, 4368457, 4368484, 4368507, 4368527, 4368550, 4368570, 4368593, 4368613, 4368636, 4368674, 4368697, 4368713, 4368732, 4368748, 4368767, 4368783, 4368802, 4368829, 4368849, 4368865, 4368881, 4368897, 4368916, 4368936, 4368955, 4368986, 4369009, 4369025, 4369044, 4369060, 4369079, 4369095, 4369114, 4369141, 4369161, 4369177, 4369193, 4369209, 4369228, 4369248, 4369267, 4369298, 4369321, 4369337, 4369356, 4369372, 4369391, 4369407, 4369426, 4369453, 4369473, 4369489, 4369505, 4369521, 4369540, 4369560, 4369579, 4369610, 4369633, 4369649, 4369668, 4369684, 4369703, 4369719, 4369738, 4369765, 4369785, 4369801, 4369817, 4369833, 4369852, 4369872, 4369891, 4369922, 4369945, 4369961, 4369980, 4369996, 4370015, 4370031, 4370050, 4370077, 4370093, 4370109, 4370128, 4370144, 4370171, 4370187, 4370203, 4370219, 4370238, 4370265, 4370284, 4370300, 4370316, 4370332, 4370359, 4370375, 4370394, 4370410, 4370426, 4371728, 4371900, 4371924, 4371943, 4371959, 4371979, 4371998, 4372014, 4372030, 4372049, 4372065, 4372081, 4372100, 4372116]
 for site in terrain_sites:hooks.append((site,at('terrain_visibility'),b'\xe8'+struct.pack('<i',0x42b230-site-5)))
 
-code('resource_text',"jmp 0x428f70")
+# This is exclusively the minimap entity renderer. Resource IDs match the
+# native ore1/ore2 target family; do not modify authoritative sight buffers.
+code('minimap_resources',"""
+pushfd
+push eax
+movzx eax,word ptr [ebx+0xc]
+sub eax,0x300
+cmp eax,6
+ja normal
+cmp byte ptr [ebx+0x3c],9
+jne normal
+cmp byte ptr [ebx+0x13b8],0
+je normal
+pop eax
+popfd
+jmp 0x4a63ab
+normal:
+pop eax
+popfd
+mov eax,[ebx+0x14]
+mov ecx,[0x504878]
+jmp 0x4a6228
+""")
+hook(0x4a621f,'minimap_resources','8b43148b0d78485000')
+
+# A render-only resource marker must not inherit neutral-player black.
+code('hotkey_map',f"""
+cmp byte ptr [0x504f48],4
+jne done
+cmp byte ptr [0x513ec8],0
+jne done
+cmp byte ptr [0x5030c9],0
+jne done
+cmp esi,255
+ja done
+movzx edx,byte ptr [esi+{BASE+0x77000}]
+mov ebx,[0x504a10]
+test ebx,ebx
+jz mapped
+movzx ebp,byte ptr [0x4e7270]
+xor edi,edi
+scan:
+cmp edi,[ebx+4]
+jae mapped
+mov ecx,[ebx+edi*4+8]
+inc edi
+test ecx,ecx
+jz scan
+movzx eax,byte ptr [ecx+0x3c]
+cmp eax,ebp
+jne scan
+movzx eax,word ptr [ecx+12]
+shr eax,8
+cmp eax,2
+ja scan
+inc eax
+shl eax,8
+add eax,esi
+movzx eax,byte ptr [eax+{BASE+0x77000}]
+test eax,eax
+jz mapped
+mov edx,eax
+mapped:
+test edx,edx
+jz done
+lea esi,[edx-1]
+done:
+ret
+""")
+code('multiplayer_music',f"""
+mov eax,[esp+4]
+test eax,eax
+jz fallback
+cmp byte ptr [eax],0
+jne normal
+fallback:
+mov dword ptr [esp+4],{BASE+0x76d00}
+normal:
+jmp 0x4bc350
+""")
+hooks.append((0x454e58,at('multiplayer_music'),bytes.fromhex('e8f3740600')))
+code('minimap_resource_color',"""
+movzx eax,word ptr [edi+12]
+sub eax,0x300
+cmp eax,6
+ja normal
+cmp byte ptr [edi+0x3c],9
+jne normal
+mov dword ptr [esp+12],0xf0
+normal:
+jmp 0x48f230
+""")
+hooks.append((0x4a690f,at('minimap_resource_color'),bytes.fromhex('e81c89feff')))
+# Center once per match, after the player's initial units have been created.
+# Camera state only; never change authoritative unit, sight or RNG state.
+code('resource_text',f"""
+cmp byte ptr [0x504f48],4
+jne reset_camera
+cmp dword ptr [0x233a000],2
+je done
+mov ebx,[0x504a10]
+test ebx,ebx
+jz done
+cmp ebx,[{BASE+0x76c00}]
+jne search
+mov eax,[0x503c6c]
+cmp eax,[{BASE+0x76c04}]
+jae remember
+search:
+movzx ebp,byte ptr [0x4e7270]
+xor esi,esi
+scan:
+cmp esi,[ebx+4]
+jae done
+mov edi,[ebx+esi*4+8]
+inc esi
+test edi,edi
+jz scan
+cmp byte ptr [edi+0x13b8],0
+je scan
+movzx eax,byte ptr [edi+0x3c]
+cmp eax,ebp
+jne scan
+cmp dword ptr [edi+0x30],0
+je scan
+mov eax,[edi+0x14]
+sar eax,5
+sub eax,16
+jns x_ok
+xor eax,eax
+x_ok:
+mov [0x5812e8],eax
+mov [0x51bda0],eax
+mov [0x51bc20],eax
+mov eax,[edi+0x18]
+sar eax,5
+sub eax,9
+jns y_ok
+xor eax,eax
+y_ok:
+mov [0x5812ec],eax
+mov [0x51bda4],eax
+mov [0x51bc1c],eax
+mov [{BASE+0x76c00}],ebx
+remember:
+mov eax,[0x503c6c]
+mov [{BASE+0x76c04}],eax
+ret
+reset_camera:
+mov dword ptr [{BASE+0x76c00}],0
+done:
+ret
+""")
 resource_sites=[]
 for site in resource_sites:hooks.append((site,at('resource_text'),b'\xe8'+struct.pack('<i',0x428f70-site-5)))
 
@@ -913,8 +1068,78 @@ ret 8
 normal:
 jmp 0x42b230
 """)
+code('minimap_resource_sight',f"""
+movzx eax,word ptr [edi+0xc]
+sub eax,0x300
+cmp eax,6
+ja normal
+cmp byte ptr [edi+0x3c],9
+jne normal
+cmp byte ptr [edi+0x13b8],0
+je normal
+xor eax,eax
+ret 8
+normal:
+jmp {at('observer_visibility')}
+""")
+code('world_resources',"""
+push dword ptr [esp+8]
+push dword ptr [esp+8]
+call 0x42b230
+push edx
+cmp dword ptr [esp+4],0x449e3f
+je middle
+mov edx,[edi]
+jmp lookup
+middle:
+mov edx,[ebx]
+lookup:
+mov edx,[esi+edx*4+8]
+movzx ecx,word ptr [edx+0xc]
+sub ecx,0x300
+cmp ecx,6
+ja unit
+cmp byte ptr [edx+0x3c],9
+jne unit
+cmp byte ptr [edx+0x13b8],0
+je unit
+cmp dword ptr [esp+4],0x448e85
+je resource_first
+cmp dword ptr [esp+4],0x449e3f
+je resource_second
+mov dword ptr [esp+4],0x44a1a1
+jmp done
+resource_first:
+mov dword ptr [esp+4],0x448f3d
+jmp done
+resource_second:
+mov dword ptr [esp+4],0x449ed2
+jmp done
+unit:
+cmp al,2
+jne done
+mov cl,[0x4e7270]
+cmp [edx+0x3c],cl
+je done
+cmp dword ptr [esp+4],0x448e85
+je hide_first
+cmp dword ptr [esp+4],0x449e3f
+je hide_second
+mov dword ptr [esp+4],0x44a362
+jmp done
+hide_first:
+mov dword ptr [esp+4],0x449d5e
+jmp done
+hide_second:
+mov dword ptr [esp+4],0x44a027
+done:
+pop edx
+ret 8
+""")
+world_resource_sites=[0x448e80,0x449e3a,0x44a101]
+for site in world_resource_sites:hooks.append((site,at('world_resources'),b'\xe8'+struct.pack('<i',0x42b230-site-5)))
 visibility_sites=[4745594, 4745750, 4751616, 4751797, 4752145, 4752295, 4753114, 4753282, 4757631, 4758100, 4758611, 4759065, 4759409, 4760060, 4760777, 4874800, 4876100]
-for site in visibility_sites:hooks.append((site,at('observer_visibility'),b'\xe8'+struct.pack('<i',0x42b230-site-5)))
+for site in visibility_sites:hooks.append((site,at('minimap_resource_sight') if site==0x4a6744 else at('observer_visibility'),b'\xe8'+struct.pack('<i',0x42b230-site-5)))
 code('replay_voice',"""
 cmp dword ptr [0x4f75ec],1024
 jne normal
@@ -927,6 +1152,186 @@ jmp 0x4bbf80
 """)
 voice_sites=[0x493a3d,0x493b26,0x493c7f,0x493e0f]
 for site in voice_sites:hooks.append((site,at('replay_voice'),b'\xe8'+struct.pack('<i',0x4bbf80-site-5)))
+code('harvest_volume',f'''
+mov ecx,[esp+0x1c]
+pushfd
+push eax
+push edx
+push ebx
+mov eax,[esp+0x24]
+cmp eax,1000
+jae done
+imul eax,eax,20
+mov eax,[eax+0x2231f08]
+test eax,eax
+jz done
+mov ebx,eax
+mov edx,256
+scan:
+cmp byte ptr [eax],0
+je basename
+cmp byte ptr [eax],0x5c
+je slash
+cmp byte ptr [eax],0x2f
+jne advance
+slash:
+lea ebx,[eax+1]
+advance:
+inc eax
+dec edx
+jnz scan
+jmp done
+basename:
+sub eax,ebx
+cmp eax,10
+jne sound_next_0
+mov dl,[ebx+0]
+or dl,0x20
+cmp dl,100
+jne sound_next_0
+mov dl,[ebx+1]
+or dl,0x20
+cmp dl,105
+jne sound_next_0
+mov dl,[ebx+2]
+or dl,0x20
+cmp dl,103
+jne sound_next_0
+mov dl,[ebx+3]
+or dl,0x20
+cmp dl,103
+jne sound_next_0
+mov dl,[ebx+4]
+or dl,0x20
+cmp dl,101
+jne sound_next_0
+mov dl,[ebx+5]
+or dl,0x20
+cmp dl,114
+jne sound_next_0
+mov dl,[ebx+6]
+or dl,0x20
+cmp dl,46
+jne sound_next_0
+mov dl,[ebx+7]
+or dl,0x20
+cmp dl,119
+jne sound_next_0
+mov dl,[ebx+8]
+or dl,0x20
+cmp dl,97
+jne sound_next_0
+mov dl,[ebx+9]
+or dl,0x20
+cmp dl,118
+jne sound_next_0
+jmp scale
+sound_next_0:
+cmp eax,12
+jne sound_next_1
+mov dl,[ebx+0]
+or dl,0x20
+cmp dl,118
+jne sound_next_1
+mov dl,[ebx+1]
+or dl,0x20
+cmp dl,105
+jne sound_next_1
+mov dl,[ebx+2]
+or dl,0x20
+cmp dl,98
+jne sound_next_1
+mov dl,[ebx+3]
+or dl,0x20
+cmp dl,101
+jne sound_next_1
+mov dl,[ebx+4]
+or dl,0x20
+cmp dl,119
+jne sound_next_1
+mov dl,[ebx+5]
+or dl,0x20
+cmp dl,97
+jne sound_next_1
+mov dl,[ebx+6]
+or dl,0x20
+cmp dl,118
+jne sound_next_1
+mov dl,[ebx+7]
+or dl,0x20
+cmp dl,101
+jne sound_next_1
+mov dl,[ebx+8]
+or dl,0x20
+cmp dl,46
+jne sound_next_1
+mov dl,[ebx+9]
+or dl,0x20
+cmp dl,119
+jne sound_next_1
+mov dl,[ebx+10]
+or dl,0x20
+cmp dl,97
+jne sound_next_1
+mov dl,[ebx+11]
+or dl,0x20
+cmp dl,118
+jne sound_next_1
+jmp scale
+sound_next_1:
+cmp eax,8
+jne sound_next_2
+mov dl,[ebx+0]
+or dl,0x20
+cmp dl,101
+jne sound_next_2
+mov dl,[ebx+1]
+or dl,0x20
+cmp dl,99
+jne sound_next_2
+mov dl,[ebx+2]
+or dl,0x20
+cmp dl,48
+jne sound_next_2
+mov dl,[ebx+3]
+or dl,0x20
+cmp dl,48
+jne sound_next_2
+mov dl,[ebx+4]
+or dl,0x20
+cmp dl,46
+jne sound_next_2
+mov dl,[ebx+5]
+or dl,0x20
+cmp dl,119
+jne sound_next_2
+mov dl,[ebx+6]
+or dl,0x20
+cmp dl,97
+jne sound_next_2
+mov dl,[ebx+7]
+or dl,0x20
+cmp dl,118
+jne sound_next_2
+jmp scale
+sound_next_2:
+jmp done
+scale:
+mov eax,ecx
+imul eax,dword ptr [{PENDING+0x108}]
+xor edx,edx
+mov ebx,100
+div ebx
+mov ecx,eax
+done:
+pop ebx
+pop edx
+pop eax
+popfd
+push ecx
+jmp 0x4bc14c
+''')
+hook(0x4bc147,'harvest_volume','8b4c241c51')
 payload=bytearray(0x10000);absolute=[];relative=[]
 md=Cs(CS_ARCH_X86,CS_MODE_32);md.detail=True
 for name,b in blocks.items():
@@ -942,7 +1347,7 @@ for name,b in blocks.items():
     elif not branch and BASE<=op.imm<BASE+SIZE:
      assert ins.imm_size==4,(name,ins.mnemonic,ins.op_str,ins.imm_size);absolute.append(ins.address-BASE+ins.imm_offset)
 # Keep native CALL sites as calls, all other replacements as jumps.
-call_sites={0x48bd48,0x48bd41}.union(terrain_sites).union(resource_sites).union(observer_sites).union(visibility_sites).union(voice_sites)
+call_sites={0x48bd48,0x48bd41,0x4a690f,0x454e58}.union(terrain_sites).union(resource_sites).union(observer_sites).union(visibility_sites).union(voice_sites).union(world_resource_sites)
 meta={'base':BASE,'size':SIZE,'data':DATA,'counts':COUNTS,'lists':LISTS,'group_counts':GROUP_COUNTS,'groups':GROUPS,'pending':PENDING,'stamp':STAMP,'blocks':{n:b['address'] for n,b in blocks.items()},'absolute':sorted(set(absolute)),'relative':sorted(set(relative)),'hooks':[{'site':s,'target':t,'before':v.hex(),'opcode':0xe8 if s in call_sites else 0xe9} for s,t,v in hooks]}
 Path('.tools/selection-runtime.bin').write_bytes(payload)
 Path('.tools/selection-runtime.json').write_text(json.dumps(meta,indent=2))
@@ -959,6 +1364,9 @@ namespace Amagadon {
    foreach(int offset in new int[]{ABSOLUTE})Buffer.BlockCopy(BitConverter.GetBytes(unchecked(BitConverter.ToInt32(payload,offset)+delta)),0,payload,offset,4);
    foreach(int offset in new int[]{RELATIVE})Buffer.BlockCopy(BitConverter.GetBytes(unchecked(BitConverter.ToInt32(payload,offset)-delta)),0,payload,offset,4);
    result.Add(cave,payload);
+   result.Add(cave+0x77000,Hotkeys.RuntimeTable());
+   result.Add(cave+0x76d00,System.Text.Encoding.ASCII.GetBytes("BGM\\\\04-into the war.wav\\0"));
+   result.Add(cave+0x76108,BitConverter.GetBytes(Math.Max(0,Math.Min(100,NetworkGuard.HarvestVolume))));
 HOOKS
    result.Add(0x4d96e0,NetworkGuard.Hex("d65f12bfb6aa8347b154d17783ab6831"));
    result.Add(0x4a5274,NetworkGuard.Hex("eb1f"));

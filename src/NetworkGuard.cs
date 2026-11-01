@@ -2,6 +2,7 @@
 namespace Amagadon {
  public static class NetworkGuard {
   public const int Counter=0x475ba8;
+  public static int HarvestVolume=100;
   [StructLayout(LayoutKind.Sequential,CharSet=CharSet.Unicode)] struct Startup {public int cb;public string reserved,desktop,title;public int x,y,cx,cy,xchars,ychars,fill,flags;public short show,reserved2;public IntPtr bytes,input,output,error;}
   [StructLayout(LayoutKind.Sequential)] struct Info {public IntPtr process,thread;public uint pid,tid;}
   [DllImport("kernel32.dll",CharSet=CharSet.Unicode,SetLastError=true)] static extern bool CreateProcess(string app,StringBuilder cmd,IntPtr pa,IntPtr ta,bool inherit,uint flags,IntPtr env,string cwd,ref Startup startup,out Info info);
@@ -29,10 +30,33 @@ namespace Amagadon {
     }
     edits[sites[i]]=Branch(0xe9,sites[i],cave+start,7);
    }
+   // Observe both native lockstep failure paths without changing their decision.
+   // Missing history and unequal fingerprints share one lifetime error counter.
+   // Keep registers/flags intact; never hide a genuine simulation desync.
+   int[] syncSites={0x483b4a,0x483baa};
+   for(int i=0;i<syncSites.Length;i++) {
+    int start=512+i*192, data=cave+4096;
+    using(var m=new MemoryStream())using(var w=new BinaryWriter(m)) {
+     w.Write(Hex("9c60ff05"));w.Write(data+8+i*4);
+     w.Write(Hex("c705"));w.Write(data+16);w.Write(i+1);
+     w.Write(Hex("891d"));w.Write(data+20); // peer slot
+     w.Write(Hex("8935"));w.Write(data+24); // history index (50 means absent)
+     w.Write(Hex("a3"));w.Write(data+28); // AL: local fingerprint on mismatch path
+     w.Write(Hex("890d"));w.Write(data+32); // CL: remote fingerprint on mismatch path
+     w.Write(Hex("a16c3c5000a3"));w.Write(data+36); // simulation clock
+     w.Write(Hex("0fb605e4a85100a3"));w.Write(data+40);
+     w.Write(Hex("0fb60570724e00a3"));w.Write(data+44);
+     w.Write(Hex("c1e0060fb7804ef55200a3"));w.Write(data+48);
+     w.Write(Hex("619d803de4a851003c")); // displaced native comparison
+     w.Write(Branch(0xe9,cave+start+(int)m.Length,syncSites[i]+7,5));
+     byte[] code=m.ToArray();Buffer.BlockCopy(code,0,payload,start,code.Length);
+    }
+    edits[syncSites[i]]=Branch(0xe9,syncSites[i],cave+start,7);
+   }
    edits[cave]=payload;
    foreach(int site in new[]{0x475b31,0x475bc1})edits[site]=Hex("85ff7406803f00909090");
    foreach(int site in new[]{0x475b3e,0x475bce})edits[site]=Branch(0xe8,site,cave,6);
-   edits[Counter]=BitConverter.GetBytes(cave+4096);edits[cave+4096]=new byte[4];return edits;
+   edits[Counter]=BitConverter.GetBytes(cave+4096);var state=new byte[52];Buffer.BlockCopy(BitConverter.GetBytes(0x53594e31),0,state,4,4);edits[cave+4096]=state;return edits;
   }
   internal static void Write(IntPtr process,int address,byte[] bytes) {
    uint old;IntPtr count;var size=new UIntPtr((uint)bytes.Length);
@@ -44,6 +68,7 @@ namespace Amagadon {
    string hash=Core.Hash(executable);
    if(hash!=NativePatch.InputHash && !NativePatch.IsPrevious(hash) && hash!="1a3051c992ea27f3b10545f6623642c2071d31070ae54d5e98129f99c9cb6c22")throw new IOException("네트워크 보호 패치가 지원하지 않는 실행 파일입니다.");
    var expected=new Dictionary<int,string>{{0x475b31,"83c9ff33c0f2aef7d149"},{0x475bc1,"83c9ff33c0f2aef7d149"},{0x475b3e,"8b0252ff5008"},{0x475bce,"8b0252ff5008"},{0x45c092,"50ff1564b24c00"},{0x45c104,"50ff1564b24c00"},{Counter,"90909090"}};
+   expected[0x483b4a]="803de4a851003c";expected[0x483baa]="803de4a851003c";
    foreach(var item in expected) {byte[] before=Hex(item.Value),actual=new byte[before.Length];IntPtr count;if(!ReadProcessMemory(process,new IntPtr(item.Key),actual,actual.Length,out count) || count.ToInt64()!=actual.Length || !before.SequenceEqual(actual))throw new IOException("네트워크 보호 패치 대상 코드가 다릅니다.");}
    IntPtr memory=VirtualAllocEx(process,IntPtr.Zero,new UIntPtr(8192),0x3000,0x04);if(memory==IntPtr.Zero)throw new IOException("Network guard allocation failed");
    var edits=Build(memory.ToInt32());Write(process,memory.ToInt32(),edits[memory.ToInt32()]);uint previous;if(!VirtualProtectEx(process,memory,new UIntPtr(4096),0x20,out previous))throw new IOException("Network guard executable protection failed");

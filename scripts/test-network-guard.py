@@ -16,6 +16,30 @@ def put(u,a,v):u.mem_write(a,struct.pack('<I',v&0xffffffff))
 def get(u,a):return struct.unpack('<I',u.mem_read(a,4))[0]
 def ret(u,n,value):
  sp=u.reg_read(UC_X86_REG_ESP);u.reg_write(UC_X86_REG_EAX,value&0xffffffff);u.reg_write(UC_X86_REG_EIP,get(u,sp));u.reg_write(UC_X86_REG_ESP,sp+4+n)
+
+# Both lockstep diagnostics must preserve the original comparison, every register,
+# and the stack. In particular, error 60 must still trigger the native disconnect.
+for site,reason in [(0x483b4a,1),(0x483baa,2)]:
+ for errors in (0,59,60,61,70):
+  snapshots=[]
+  for patched in (False,True):
+   u=machine(patched)
+   registers=[UC_X86_REG_EAX,UC_X86_REG_EBX,UC_X86_REG_ECX,UC_X86_REG_EDX,UC_X86_REG_ESI,UC_X86_REG_EDI,UC_X86_REG_EBP,UC_X86_REG_ESP]
+   values=[0x123456ab,3,0x765432cd,0x99,50 if reason==2 else 7,0x8811,0x9922,0x2008000]
+   for r,v in zip(registers,values):u.reg_write(r,v)
+   u.reg_write(UC_X86_REG_EFLAGS,0x202)
+   u.mem_write(0x51a8e4,bytes([errors]));u.mem_write(0x4e7270,b'\x02')
+   put(u,0x503c6c,54321);u.mem_write(0x52f54e+2*64,struct.pack('<H',4321))
+   u.emu_start(site,site+7,count=200)
+   snapshots.append(([u.reg_read(r) for r in registers],u.reg_read(UC_X86_REG_EFLAGS)))
+   if patched:
+    b=get(u,0x475ba8)
+    assert get(u,b+8+(reason-1)*4)==1 and get(u,b+16)==reason
+    assert get(u,b+20)==3 and get(u,b+24)==values[4]
+    assert get(u,b+28)&255==0xab and get(u,b+32)&255==0xcd
+    assert [get(u,b+x) for x in (36,40,44,48)]==[54321,errors,2,4321]
+  assert snapshots[0]==snapshots[1],(site,errors,snapshots)
+print('Lockstep diagnostics: register/flag preservation and native disconnect threshold passed')
 def run(provider,stage='ok',patched=True,tcp=False):
  u=machine(patched);put(u,0x5140d0,0x580000);put(u,0x580000,0x580100);put(u,0x580108,0x590000);put(u,0x580198,0x590200);put(u,0x4cb3d8,0x590100)
  put(u,0x5140f8 if tcp else 0x5140f4,0x581000 if provider else 0);u.mem_write(0x581000,b'provider\0')

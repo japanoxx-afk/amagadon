@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
@@ -63,7 +63,13 @@ namespace Amagadon {
         static object NetworkState(Process p) {
             Func<int,int?> read=address=>{var b=new byte[4];IntPtr count;return ReadProcessMemory(p.Handle,new IntPtr(address),b,4,out count)&&count.ToInt64()==4?(int?)BitConverter.ToInt32(b,0):null;};
             int? counter=read(NetworkGuard.Counter);
+            object sync=null;
+            if(counter.HasValue && read(counter.Value+4)==0x53594e31) {
+                int b=counter.Value;
+                sync=new {fingerprintMismatches=read(b+8),missingHistory=read(b+12),lastReason=read(b+16),peerSlot=read(b+20),historyIndex=read(b+24),localFingerprint=read(b+28)&255,remoteFingerprint=read(b+32)&255,clock=read(b+36),nativeErrorCount=read(b+40),localPlayer=read(b+44),sequence=read(b+48)};
+            }
             return new {directPlayObject=read(0x5140d0),ipxProvider=read(0x5140f4),tcpProvider=read(0x5140f8),initializationFailure=read(0x4d96f0),guardFailureCount=counter.HasValue?read(counter.Value):null,
+                lockstep=sync,
                 crazyZone=new {connected=read(0x57ca38),connectionEnded=read(0x57ca3c),welcome=read(0x57ca30),loginResult=read(0x4eaaac),channelResult=read(0x4eaaa8),roomCreateResult=read(0x57ca28),roomJoinResult=read(0x57ca6c),roomId=read(0x57b93c)}};
         }
         static object InputState(Process p) {
@@ -80,7 +86,7 @@ namespace Amagadon {
             return new {mode=read(0x504f48,1),multiplayer=read(0x513ed4,4),crazyZone=read(0x513ed0,4),
                 endFlag=read(0x507bf4,4),terminationWait=read(0x51a660,4),dialog=read(0x507bf8,4),result=read(0x51a668,4),lobbyCountdown=read(0x50e753,1),startPending=read(0x507b20,4),
                 startedAt=read(0x51a690,4),minimumDuration=read(0x51a68c,4),
-                localPlayer=read(0x513e88,4),nativeMouseX=read(0x4e89d8,4),nativeMouseY=read(0x4e89dc,4),
+                localPlayer=read(0x4e7270,1),nativeSyncErrors=read(0x51a8e4,1),simulationClock=read(0x503c6c,4),nativeMouseX=read(0x4e89d8,4),nativeMouseY=read(0x4e89dc,4),
                 displayWidth=read(0x4f75ec,4),displayHeight=read(0x4f75f0,4),frameInterval=read(0x50bc64,4)};
         }
         static object MenuState(Process p) {
@@ -170,6 +176,13 @@ namespace Amagadon {
                 Write(folder,"crash-dump",Path.GetFileName(dest));
             } finally {if(thread!=IntPtr.Zero)CloseHandle(thread);Marshal.FreeHGlobal(info);Marshal.FreeHGlobal(pointers);Marshal.FreeHGlobal(record);Marshal.FreeHGlobal(context);}
         }
+        static object DivergenceState(Process p) {
+            Func<int,int,byte[]> read=(a,n)=>{var b=new byte[n];IntPtr got;if(!ReadProcessMemory(p.Handle,new IntPtr(a),b,n,out got)||got.ToInt32()!=n)throw new IOException("동기화 상태 읽기 실패");return b;};
+            int clock=BitConverter.ToInt32(read(0x503c6c,4),0),manager=BitConverter.ToInt32(read(0x504a10,4),0);
+            int count=manager==0?0:Math.Max(0,Math.Min(1700,BitConverter.ToInt32(read(manager+4,4),0)));var units=new List<object>();
+            for(int i=0;i<count;i++){int ptr=BitConverter.ToInt32(read(manager+8+i*4,4),0);if(ptr==0)continue;var b=read(ptr,0x13bc);units.Add(new {id=i,type=BitConverter.ToUInt16(b,12),owner=b[60],alive=b[0x13b8],x=BitConverter.ToInt32(b,20),y=BitConverter.ToInt32(b,24),health=BitConverter.ToInt32(b,0x9c4)});}
+            return new {clockBefore=clock,clockAfter=BitConverter.ToInt32(read(0x503c6c,4),0),network=NetworkState(p),units=units,commands=Convert.ToBase64String(read(0x52f510,640)),note="Read-only asynchronous sample; clockBefore/After identify concurrent simulation advancement."};
+        }
         public static int Watch(int pid,long ticks,string folder) {
             string root=Path.GetFullPath(Home)+Path.DirectorySeparatorChar;
             if(!Path.GetFullPath(folder).StartsWith(root,StringComparison.OrdinalIgnoreCase))return 2;
@@ -186,7 +199,8 @@ namespace Amagadon {
                 if(attached && !DebugSetProcessKillOnExit(false)) {DebugActiveProcessStop((uint)pid);attached=false;}
                 Write(folder,"crash-monitor",new {attached=attached,error=attached?0:Marshal.GetLastWin32Error()});
                 File.WriteAllText(Path.Combine(folder,"ready.txt"),attached?"attached":"telemetry-only");
-                bool initialBreak=true,captured=false;var detector=new StallDetector();int exceptions=0;var sampleClock=Stopwatch.StartNew();long lastSample=-5000,lastMatch=-250,lastCapture=-30000;string previousMatch=null;
+                bool initialBreak=true,captured=false;var detector=new StallDetector();int exceptions=0;var sampleClock=Stopwatch.StartNew();long lastSample=-5000,lastMatch=-250,lastCapture=-30000;string previousMatch=null;bool divergenceCaptured=false;
+                var recentMatch=new Queue<object>();object lastMatchState=null,lastNetworkState=null;DateTime? lastStateUtc=null;bool sawUnhandledException=false;int? debugExit=null;
                 while(true) {
                     if(sampleClock.ElapsedMilliseconds-lastCapture>=30000) {
                         lastCapture=sampleClock.ElapsedMilliseconds;
@@ -196,15 +210,36 @@ namespace Amagadon {
                         lastMatch=sampleClock.ElapsedMilliseconds;
                         try {
                             var values=new List<int?>();
-                            foreach(int address in new[]{0x504f48,0x507bf4,0x507bf8,0x51a668}) {
-                                int size=address==0x504f48?1:4;byte[] b=new byte[size];IntPtr n;
+                            foreach(int address in new[]{0x504f48,0x507bf4,0x507bf8,0x51a668,0x51a8e4}) {
+                                int size=address==0x504f48||address==0x51a8e4?1:4;byte[] b=new byte[size];IntPtr n;
                                 values.Add(ReadProcessMemory(p.Handle,new IntPtr(address),b,size,out n)&&n.ToInt64()==size?(int?)(size==1?b[0]:BitConverter.ToInt32(b,0)):null);
                             }
+                            if(values[4].GetValueOrDefault()>0 && !divergenceCaptured){divergenceCaptured=true;try{Write(folder,"first-sync-divergence",DivergenceState(p));}catch(Exception ex){Write(folder,"sync-divergence-error",ex.Message);}}
+                            if(values[0].GetValueOrDefault()!=4)divergenceCaptured=false;
                             string current=Core.Json.Serialize(values);
-                            if(current!=previousMatch) {previousMatch=current;Write(folder,"match-transition",MatchState(p));Write(folder,"network-at-transition",NetworkState(p));}
+                            if(values[0].HasValue) {
+                            lastMatchState=MatchState(p);lastStateUtc=DateTime.UtcNow;
+                            recentMatch.Enqueue(new {utc=lastStateUtc,state=lastMatchState});while(recentMatch.Count>120)recentMatch.Dequeue();
+                            if(current!=previousMatch) {
+                                previousMatch=current;lastNetworkState=NetworkState(p);Write(folder,"match-transition",lastMatchState);Write(folder,"network-at-transition",lastNetworkState);
+                                // Dialog 14 is shared by several outcomes; retain raw values,
+                                // not a guessed DRAW/disconnect label.
+                                if(values[2]==14 || values[1]==1)Write(folder,"match-result-context",new {match=lastMatchState,network=lastNetworkState,players=MenuState(p),input=InputState(p),history=recentMatch.ToArray()});
+                            }
+                            }
                         }catch(Exception ex) {Write(folder,"match-sample-error",ex.Message);}
                     }
-                    if(sampleClock.ElapsedMilliseconds-lastSample>=5000) {lastSample=sampleClock.ElapsedMilliseconds;Snapshot(p,folder,!EditorPatch.IsEditor(name),engineMouse,detector,ref captured);}
+                    if(sampleClock.ElapsedMilliseconds-lastSample>=5000) {
+                        lastSample=sampleClock.ElapsedMilliseconds;Snapshot(p,folder,!EditorPatch.IsEditor(name),engineMouse,detector,ref captured);
+                        // Persist a bounded rolling copy before a crash/forced monitor exit.
+                        // Atomic replacement leaves the previous valid copy on write failure.
+                        try {
+                            string target=Path.Combine(folder,"recent-state.json"),pending=target+".partial";
+                            if(engineMouse)lastNetworkState=NetworkState(p);
+                            File.WriteAllText(pending,Core.Json.Serialize(new {savedUtc=DateTime.UtcNow,lastStateUtc=lastStateUtc,match=lastMatchState,network=lastNetworkState,history=recentMatch.ToArray()}));
+                            if(File.Exists(target))File.Replace(pending,target,null);else File.Move(pending,target);
+                        }catch(Exception ex){Write(folder,"recent-state-save-error",ex.Message);}
+                    }
                     if(!attached) {if(p.HasExited)break;Thread.Sleep(engineMouse?250:1000);continue;}
                     if(!WaitForDebugEvent(buffer,engineMouse?250U:1000U)) {if(p.HasExited)break;continue;}
                     uint kind=unchecked((uint)Marshal.ReadInt32(buffer)),tid=unchecked((uint)Marshal.ReadInt32(buffer,8)),status=0x10002;
@@ -215,12 +250,13 @@ namespace Amagadon {
                             bool bootstrap=initialBreak && first && code==0x80000003;if(bootstrap)initialBreak=false;
                             status=bootstrap?0x10002U:0x80010001U;
                             if(!bootstrap && (exceptions++<100 || !first))Write(folder,"exception",new {code="0x"+code.ToString("X8"),address="0x"+unchecked((uint)Marshal.ReadInt32(buffer,24)).ToString("X8"),thread=tid,firstChance=first});
-                            if(!first) {if(engineMouse) {Write(folder,"network-at-crash",NetworkState(p));Write(folder,"match-at-crash",MatchState(p));Write(folder,"input-at-crash",InputState(p));}try {Dump(p,tid,buffer,folder);}catch(Exception ex) {Write(folder,"dump-error",ex.Message);}}
+                            if(!first) {sawUnhandledException=true;if(engineMouse) {Write(folder,"network-at-crash",NetworkState(p));Write(folder,"match-at-crash",MatchState(p));Write(folder,"input-at-crash",InputState(p));}try {Dump(p,tid,buffer,folder);}catch(Exception ex) {Write(folder,"dump-error",ex.Message);}}
                         } else if(kind==3 || kind==6) {IntPtr f=Marshal.ReadIntPtr(buffer,12);if(f!=IntPtr.Zero && f!=new IntPtr(-1))CloseHandle(f);}
-                        else if(kind==5) {Write(folder,"exit",new {code="0x"+unchecked((uint)Marshal.ReadInt32(buffer,12)).ToString("X8")});exited=true;}
+                        else if(kind==5) {debugExit=Marshal.ReadInt32(buffer,12);Write(folder,"exit",new {code="0x"+unchecked((uint)debugExit.Value).ToString("X8")});exited=true;}
                     } finally {if(!ContinueDebugEvent((uint)pid,tid,status))Write(folder,"continue-error",Marshal.GetLastWin32Error());}
                     if(exited)break;
                 }
+                Write(folder,"process-end-context",new {lastStateUtc=lastStateUtc,debugExit=debugExit,unhandledException=sawUnhandledException,match=lastMatchState,network=lastNetworkState,history=recentMatch.ToArray(),note="Cached state before exit; exit code zero does not prove a normal match completion."});
                 p.WaitForExit();
                 try {string logName="DDrawCompat-"+Path.GetFileNameWithoutExtension(name)+".log";string log=Path.Combine(binaryFolder,logName);if(EditorPatch.IsEditor(name) && File.Exists(log) && new FileInfo(log).Length<=8*1024*1024)File.Copy(log,Path.Combine(folder,logName),true);}catch(Exception ex) {Write(folder,"editor-log-copy-error",ex.Message);}
                 foreach(string logName in new[]{"ipxwrapper.log","dplayx.log","directplay.log"})try {string file=Path.Combine(binaryFolder,logName);if(File.Exists(file)&&new FileInfo(file).Length<=8*1024*1024)File.Copy(file,Path.Combine(folder,logName),true);}catch(Exception ex){Write(folder,"network-log-error",ex.Message);}

@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Drawing;
@@ -12,8 +12,8 @@ using System.Threading.Tasks;
 using System.Web.Script.Serialization;
 using System.Windows.Forms;
 
-[assembly: System.Reflection.AssemblyVersion("0.3.47.0")]
-[assembly: System.Reflection.AssemblyInformationalVersion("0.3.47")]
+[assembly: System.Reflection.AssemblyVersion("0.3.50.0")]
+[assembly: System.Reflection.AssemblyInformationalVersion("0.3.50")]
 namespace Amagadon {
     public class Settings {
         public string GamePath="";
@@ -22,14 +22,16 @@ namespace Amagadon {
         public bool AutoReplay=true;
         public bool DiagnosticLogging=true, MouseCompatibility=true;
         public int InputProfile=0;
+        public int HarvestVolume=100;
+        public int[][] HotkeyProfiles;
         public int ScreenProfile=0;
         public string ZoneAddress="127.0.0.1";
         public int ZonePort=9000;
     }
     public class Backup { public string Directory; public string[] Existing; }
     public static class Core {
-        public const string Version = "0.3.47";
-        public const string DisplayVersion = "0.3.47";
+        public const string Version = "0.3.50";
+        public const string DisplayVersion = "0.3.50";
         public static readonly string Home = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "AmagadonLauncher");
         public static readonly JavaScriptSerializer Json = new JavaScriptSerializer();
         public static string Hash(string path) { using(var h=SHA256.Create()) using(var f=File.OpenRead(path)) return BitConverter.ToString(h.ComputeHash(f)).Replace("-", "").ToLowerInvariant(); }
@@ -93,6 +95,7 @@ namespace Amagadon {
         TextBox path=new TextBox(); ComboBox resolution=new ComboBox(),output=new ComboBox(),aspect=new ComboBox(),renderer=new ComboBox();
         CheckBox diagnostic=new CheckBox(),mouseCompatibility=new CheckBox(),autoReplay=new CheckBox(),compat=new CheckBox(),fullscreen=new CheckBox(),confine=new CheckBox();
         bool gameRunning; Button replay; ReplaySession activeReplay; Label status=new Label(); Button game,editor,update; Settings settings;
+        TrackBar harvestVolume=new TrackBar();Label harvestValue=new Label();
         readonly CrazyZoneHost zoneHost=new CrazyZoneHost();
         string Base { get { return AppDomain.CurrentDomain.BaseDirectory; } }
         public Launcher() {
@@ -124,10 +127,17 @@ namespace Amagadon {
             zone.Click+=async delegate {if(gameRunning || checkingUpdate)return;using(var dialog=new CrazyZoneWindow(zoneHost,settings)) {if(dialog.ShowDialog(this)==DialogResult.OK) {settings.ZoneAddress=dialog.Address;settings.ZonePort=dialog.Port;Save();await Launch("Armageddon.exe",null,true);}}};
             FormClosed+=delegate {zoneHost.Dispose();};
             ipxRepair.Click+=async delegate {if(gameRunning || checkingUpdate)return;gameRunning=true;ipxRepair.Enabled=game.Enabled=editor.Enabled=update.Enabled=replay.Enabled=false;try {Save();await IpxSetup.RunElevated(path.Text);status.Text="IPX 공급자 등록을 복구했습니다. 게임을 다시 실행해 IPX를 선택해주세요.";}catch(System.ComponentModel.Win32Exception ex){if(ex.NativeErrorCode==1223)status.Text="IPX 복구 권한 요청을 취소했습니다.";else Error(ex);}catch(Exception ex){Error(ex);}finally{gameRunning=false;ipxRepair.Enabled=game.Enabled=editor.Enabled=update.Enabled=replay.Enabled=true;}};
-            status.SetBounds(32,870,694,55); status.ForeColor=Color.FromArgb(158,174,194); Controls.Add(status);
+            AddLabel("자원 채취 소리 · 다음 게임 실행 시 적용",32,870);
+            harvestVolume.SetBounds(32,901,560,40);harvestVolume.Minimum=0;harvestVolume.Maximum=100;harvestVolume.TickFrequency=10;harvestVolume.SmallChange=5;harvestVolume.LargeChange=10;Controls.Add(harvestVolume);
+            harvestValue.SetBounds(610,907,110,30);Controls.Add(harvestValue);harvestVolume.ValueChanged+=delegate {harvestValue.Text=harvestVolume.Value==0?"음소거":"볼륨 "+harvestVolume.Value+"%";};
+            var hotkeys=Button("핫키 설정 · 공통 / 진영별",32,953,338,40);hotkeys.Click+=delegate {if(gameRunning || checkingUpdate)return;Hotkeys.Edit(this,settings);Save();};
+            AutoScrollMinSize=new Size(740,1070);
+            status.SetBounds(32,1003,694,55); status.ForeColor=Color.FromArgb(158,174,194); Controls.Add(status);
             settings=new Settings(); try { string f=Path.Combine(Core.Home,"settings.json"); if(File.Exists(f)) settings=Core.Json.Deserialize<Settings>(File.ReadAllText(f)); } catch(Exception ex) { Core.Log(ex.Message); }
+            Hotkeys.Profiles=settings.HotkeyProfiles;
             Core.MigrateScreen(settings);
             Core.MigrateInput(settings);
+            harvestVolume.Value=Math.Max(0,Math.Min(100,settings.HarvestVolume));harvestValue.Text="볼륨 "+harvestVolume.Value+"%";
             if(String.IsNullOrWhiteSpace(settings.GamePath))settings.GamePath=Core.FindGame();
             autoReplay.Checked=settings.AutoReplay;diagnostic.Checked=settings.DiagnosticLogging;mouseCompatibility.Checked=settings.MouseCompatibility;
             path.Text=settings.GamePath; resolution.SelectedIndex=settings.NativeHD?1:0; output.SelectedIndex=settings.OutputHD?1:0; compat.Checked=settings.Compatibility;
@@ -149,6 +159,7 @@ namespace Amagadon {
         void AddLabel(string text,int x,int y) { Controls.Add(new Label{Text=text,AutoSize=true,Location=new Point(x,y)}); }
         Button Button(string text,int x,int y,int w,int h) { var b=new Button{Text=text,BackColor=Color.FromArgb(33,43,57),ForeColor=ForeColor,FlatStyle=FlatStyle.Flat,Cursor=Cursors.Hand}; b.FlatAppearance.BorderSize=0; b.SetBounds(x,y,w,h); Controls.Add(b); return b; }
         void Save() {
+            settings.HarvestVolume=harvestVolume.Value;NetworkGuard.HarvestVolume=settings.HarvestVolume;
             settings.GamePath=String.IsNullOrWhiteSpace(path.Text)?"":Path.GetFullPath(path.Text.Trim()); settings.NativeHD=resolution.SelectedIndex==1;settings.OutputHD=output.SelectedIndex==1; settings.Compatibility=compat.Checked;
             settings.DiagnosticLogging=diagnostic.Checked;settings.MouseCompatibility=mouseCompatibility.Checked;settings.AutoReplay=autoReplay.Checked;settings.Fullscreen=fullscreen.Checked;settings.MaintainAspect=aspect.SelectedIndex==0;settings.ConfineMouse=confine.Checked;settings.Renderer=new[]{"auto","gdi","direct3d9","opengl"}[renderer.SelectedIndex];
             Directory.CreateDirectory(Core.Home); File.WriteAllText(Path.Combine(Core.Home,"settings.json"),Core.Json.Serialize(settings));
@@ -198,16 +209,27 @@ namespace Amagadon {
             if(checkingUpdate || gameRunning || IsDisposed)return;
             checkingUpdate=true;
             update.Enabled=game.Enabled=editor.Enabled=replay.Enabled=false;
+            Form progressWindow=null;Label progressLabel=null;ProgressBar progressBar=null;
+            Action<string> showStage=message=>{if(IsDisposed)return;status.Text=message;if(progressLabel!=null&&!progressLabel.IsDisposed){progressLabel.Text=message;progressBar.Style=ProgressBarStyle.Marquee;}};
             try {
                 status.Text="GitHub에서 최신 버전을 확인하는 중…"; ServicePointManager.SecurityProtocol=SecurityProtocolType.Tls12;
                 using(var client=new HttpClient()) {
                     client.DefaultRequestHeaders.UserAgent.ParseAdd("AmagadonLauncher/"+Core.Version); client.Timeout=TimeSpan.FromSeconds(90);
                     string directory=Path.Combine(Core.Home,"updates",Guid.NewGuid().ToString("N"));
                     string package=await Updates.Prepare(client,Core.Version,directory,
-                        release=>MessageBox.Show(this,"새 버전 "+release.tag_name+"이 있습니다. (현재 "+Core.DisplayVersion+")\r\n\r\n확인을 누르면 업데이트를 설치한 뒤 런처를 다시 실행합니다.","런처 업데이트",MessageBoxButtons.OKCancel,MessageBoxIcon.Information)==DialogResult.OK,
-                        message=>{if(!IsDisposed)status.Text=message;},updateCancellation.Token);
+                        release=>{
+                            if(MessageBox.Show(this,"새 버전 "+release.tag_name+"이 있습니다. (현재 "+Core.DisplayVersion+")\r\n\r\n확인을 누르면 업데이트를 설치한 뒤 런처를 다시 실행합니다.","런처 업데이트",MessageBoxButtons.OKCancel,MessageBoxIcon.Information)!=DialogResult.OK)return false;
+                            progressWindow=new Form {Text="런처 업데이트",ClientSize=new Size(460,115),StartPosition=FormStartPosition.CenterParent,FormBorderStyle=FormBorderStyle.FixedDialog,ControlBox=false,ShowInTaskbar=false};
+                            progressLabel=new Label {Left=20,Top=18,Width=420,Height=36,Text="업데이트 다운로드 준비 중…"};
+                            progressBar=new ProgressBar {Left=20,Top=65,Width=420,Height=24,Style=ProgressBarStyle.Marquee};
+                            progressWindow.Controls.Add(progressLabel);progressWindow.Controls.Add(progressBar);progressWindow.Show(this);return true;
+                        },showStage,updateCancellation.Token,(received,total)=>{
+                            if(progressWindow==null||progressWindow.IsDisposed)return;
+                            if(total.HasValue&&total.Value>0){progressBar.Style=ProgressBarStyle.Continuous;progressBar.Value=(int)Math.Min(100,received*100/total.Value);progressLabel.Text=String.Format("다운로드 {0}% · {1:F1} / {2:F1} MB",progressBar.Value,received/1048576.0,total.Value/1048576.0);}
+                            else {progressBar.Style=ProgressBarStyle.Marquee;progressLabel.Text=String.Format("다운로드 중 · {0:F1} MB",received/1048576.0);}
+                        });
                     if(package==null)return;
-                    Core.EnsureIdle(settings.GamePath);Save();status.Text="업데이트 파일 검증 및 설치 준비 중…";
+                    Core.EnsureIdle(settings.GamePath);Save();showStage("업데이트 파일 검증 및 설치 준비 중…");
                     await Updates.StartInstaller(package,Base,Path.GetFileName(Application.ExecutablePath),Process.GetCurrentProcess().Id,updateCancellation.Token);
                     Close();
                 }
@@ -217,7 +239,7 @@ namespace Amagadon {
                     if(automatic)status.Text="업데이트를 완료하지 못했습니다. 업데이트 버튼으로 다시 시도해주세요.";
                     else Error(ex);
                 }
-            } finally {checkingUpdate=false;if(!IsDisposed)update.Enabled=game.Enabled=editor.Enabled=replay.Enabled=!gameRunning;}
+            } finally {if(progressWindow!=null)progressWindow.Dispose();checkingUpdate=false;if(!IsDisposed)update.Enabled=game.Enabled=editor.Enabled=replay.Enabled=!gameRunning;}
         }
         [STAThread] public static int Main(string[] args) {
             Diagnostics.SetProcessDPIAware();

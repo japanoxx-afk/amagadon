@@ -60,6 +60,50 @@ def selection(u,p):
  c=r(u,M['counts']+p*4)
  return list(struct.unpack('<'+'H'*c,u.mem_read(M['lists']+p*4096,c*2)))
 
+# Resource-only minimap bypass, independent of owner and visibility. Ordinary
+# entities still reach the original fog query; no entity state is mutated.
+for kind in (0,1,0x100,0x200,0x2ff,0x300,0x301,0x302,0x303,0x304,0x305,0x306):
+ for alive in (0,1):
+  u=fresh(1);u.mem_write(UNITS+12,struct.pack('<H',kind));u.mem_write(UNITS+0x13b8,bytes([alive]));u.mem_write(UNITS+0x3c,b'\x09')
+  u.reg_write(UC_X86_REG_EBX,UNITS);u.reg_write(UC_X86_REG_EAX,0x12345678);u.reg_write(UC_X86_REG_ECX,0x87654321)
+  u.reg_write(UC_X86_REG_EFLAGS,0x202);before=bytes(u.mem_read(UNITS,0x1400))
+  reveal=alive and 0x300<=kind<=0x306
+  run(u,0x4a621f,0x4a63ab if reveal else 0x4a6228)
+  assert u.reg_read(UC_X86_REG_ESP)==STACK and u.reg_read(UC_X86_REG_EFLAGS)==0x202
+  assert bytes(u.mem_read(UNITS,0x1400))==before
+  if reveal:assert u.reg_read(UC_X86_REG_EAX)==0x12345678 and u.reg_read(UC_X86_REG_ECX)==0x87654321
+  else:assert u.reg_read(UC_X86_REG_EAX)==100
+print('PASS minimap resource-only visibility: all six ore types; ordinary entities unchanged; no simulation writes')
+
+for filename in (b'wav/weapon/earth/digger.wav',b'wav\\weapon\\earth\\DIGGER.WAV',b'wav/weapon/elca/vibewave.wav',b'wav/weapon/ead/ec00.wav',b'other.wav',b'digger.wav.backup',b'SAndC/UWSelect118_0.wav'):
+ for percent in (0,25,50,100):
+  u=fresh(1);w(u,B+0x76108,percent);w(u,STACK+0x14,7);w(u,STACK+0x1c,127)
+  w(u,0x2231f08+7*20,DEFS);u.mem_write(DEFS,filename+b'\0')
+  u.reg_write(UC_X86_REG_EAX,12);u.reg_write(UC_X86_REG_EDX,34);u.reg_write(UC_X86_REG_EBX,56);u.reg_write(UC_X86_REG_EFLAGS,0x202)
+  run(u,0x4bc147,0x4bc14c)
+  expected=127*percent//100 if filename.replace(b'\\',b'/').lower().split(b'/')[-1] in (b'digger.wav',b'vibewave.wav',b'ec00.wav') else 127
+  assert r(u,STACK-4)==expected and u.reg_read(UC_X86_REG_ESP)==STACK-4
+  assert [u.reg_read(rg) for rg in (UC_X86_REG_EAX,UC_X86_REG_EDX,UC_X86_REG_EBX,UC_X86_REG_EFLAGS)]==[12,34,56,0x202]
+print('PASS harvesting volume: mute/25/50/100 percent; path case/separators; unrelated sounds untouched')
+
+# World display routing must not reveal unknown enemies. Resource-only bypass
+# covers all three native draw passes and both minimap checks.
+for site,visible,hidden in [(0x448e80,0x448f3d,0x449d5e),(0x449e3a,0x449ed2,0x44a027),(0x44a101,0x44a1a1,0x44a362)]:
+ for kind,owner in [(0x300,9),(0x303,9),(0x306,9),(0x22a,2),(0x20f,2),(0x22a,1),(0x300,2)]:
+  for sight in (0,1,2):
+   u=fresh(1);u.mem_write(UNITS+12,struct.pack('<H',kind));u.mem_write(UNITS+0x3c,bytes([owner]))
+   u.reg_write(UC_X86_REG_ESI,MANAGER);u.reg_write(UC_X86_REG_EBX,DEFS);u.reg_write(UC_X86_REG_EDI,DEFS);w(u,DEFS,0)
+   asm(u,0x42b230,f'mov eax,{sight}; ret 8')
+   resource=0x300<=kind<=0x306 and owner==9
+   target=visible if resource else hidden if sight==2 and owner!=1 else site+5
+   before=bytes(u.mem_read(UNITS,0x1400));run(u,site,target)
+   assert u.reg_read(UC_X86_REG_ESP)==STACK+8 and bytes(u.mem_read(UNITS,0x1400))==before
+for kind in (0x300,0x306,0x22a):
+ u=fresh(1);u.mem_write(UNITS+12,struct.pack('<H',kind));u.mem_write(UNITS+0x3c,b'\x09');u.reg_write(UC_X86_REG_EDI,UNITS)
+ asm(u,0x42b230,'mov eax,2; ret 8');run(u,0x4a6744,0x4a6749)
+ assert u.reg_read(UC_X86_REG_EAX)==(0 if 0x300<=kind<=0x306 else 2)
+print('PASS resource visibility: ore/hydrogen in three world passes and late minimap gate; unknown enemies hidden, own units preserved')
+
 for player in (1,4,8):
  for n in (0,1,16,17,65,1700):
   u=fresh(n,player);call(u,'select',(player,13));assert selection(u,player)==list(range(n))
@@ -227,3 +271,20 @@ print('PASS observer regression: all five render phases preserved; display visib
 resource_sites=(0x4a58f1,0x4a5929,0x4a5989,0x4a59c1,0x4a5a5c,0x4a5a94,0x4a5bb7,0x4a5bf1)
 assert not any(h['site'] in resource_sites for h in M['hooks'])
 print('PASS resource rollback: original HD resource text call sites retained')
+
+# First rendered frame centers once on a living local building; never on enemy.
+u=fresh(3);w(u,UNITS+0x30,1);u.mem_write(UNITS+60,b'\x02');w(u,UNITS+0x1400+0x30,1);w(u,UNITS+0x1400+20,3200);w(u,UNITS+0x1400+24,1600);w(u,0x503c6c,5)
+call(u,'resource_text',[]);assert (r(u,0x5812e8),r(u,0x5812ec))==(84,41)
+w(u,0x5812e8,50);w(u,0x503c6c,10);call(u,'resource_text',[]);assert r(u,0x5812e8)==50
+u.mem_write(0x504f48,b'\x02');call(u,'resource_text',[]);u.mem_write(0x504f48,b'\x04');call(u,'resource_text',[]);assert r(u,0x5812e8)==84
+# Common mapping, race override, chat guard, identity fallback.
+for kind,common,race,chat,expected in [(1,31,0,0,30),(0x101,31,32,0,31),(0x201,0,0,0,15),(1,31,0,1,15)]:
+ u=fresh(1);u.mem_write(UNITS+12,struct.pack('<H',kind));u.mem_write(B+0x77000+15,bytes([common]));u.mem_write(B+0x77000+((kind>>8)+1)*256+15,bytes([race]));u.mem_write(0x513ec8,bytes([chat]));u.reg_write(UC_X86_REG_ESI,15);call(u,'hotkey_map',[]);assert u.reg_read(UC_X86_REG_ESI)==expected
+# Resource markers override black neutral owner colour only.
+for kind,owner,expected in [(0x300,9,0xf0),(0x306,9,0xf0),(0x22a,2,7),(0x300,2,7)]:
+ u=fresh(1);u.mem_write(UNITS+12,struct.pack('<H',kind));u.mem_write(UNITS+60,bytes([owner]));u.reg_write(UC_X86_REG_EDI,UNITS);w(u,STACK+12,7);run(u,M['blocks']['minimap_resource_color'],0x48f230);assert r(u,STACK+12)==expected
+print('PASS start camera once-per-match/local ownership; common/race hotkeys/chat guard; resource marker colours')
+# BGM fallback preserves authored paths and the original cdecl argument layout.
+for empty in (False,True):
+ u=fresh(1);u.mem_write(0x504b68,b'\0' if empty else b'BGM\\Menu.wav\0');w(u,STACK+4,0x504b68);run(u,M['blocks']['multiplayer_music'],0x4bc350);assert r(u,STACK+4)==(B+0x76d00 if empty else 0x504b68);assert u.reg_read(UC_X86_REG_ESP)==STACK
+print('PASS BGM fallback only for empty/null path; native cdecl frame retained')
