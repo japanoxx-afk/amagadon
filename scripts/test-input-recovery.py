@@ -196,7 +196,9 @@ def message_api(u,a,size,_):
   assert u.reg_read(UC_X86_REG_ECX)==0x507cd8
   sp=u.reg_read(UC_X86_REG_ESP);seen.append([get(u,sp+4+i*4) for i in range(4)]);ret(u,16)
 u.hook_add(UC_HOOK_CODE,message_api);u.emu_start(0x1008100,STOP,count=100);preserved(u,16)
-assert seen==[[308,517,25,0xffffff]]
+# 0.3.45 (ab956be) moved the message list by +84, separate from
+# the production banner (+168). Keep the original argument/stack checks.
+assert seen==[[308,433,25,0xffffff]],seen
 print('PASS: F10/confirmation draw-hit rectangles, save/load exclusion, repeat initialization, HUD notification arguments and stack')
 
 # Status text is NOT the chat/message list: execute its own original draw call.
