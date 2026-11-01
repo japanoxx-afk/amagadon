@@ -38,7 +38,7 @@ cmp byte ptr [0x51a8e4],0
 je capture
 mov dword ptr [{t}+12],1
 mov [{t}+16],eax
-jmp done
+jmp capture
 capture:
 mov [{t}+8],eax
 mov ebx,[{t}+4]
@@ -58,6 +58,7 @@ mov [edi+16],ecx
 movzx ecx,byte ptr [0x51a8e4]
 mov [edi+20],ecx
 mov dword ptr [edi+24],0x811c9dc5
+mov dword ptr [edi+92],0x811c9dc5
 mov ecx,[ebp+4]
 cmp ecx,1700
 jbe count_ok
@@ -81,6 +82,12 @@ jz tls_done
 mov edx,[edx+20]
 mov [edi+84],edx
 tls_done:
+push edi
+add edi,96
+xor eax,eax
+mov ecx,8
+rep stosd
+pop edi
 xor esi,esi
 unit_loop:
 cmp esi,[edi+28]
@@ -88,6 +95,29 @@ jae unit_done
 mov edx,[ebp+esi*4+8]
 test edx,edx
 jz unit_next
+push edx
+mov eax,[edx+0x414]
+xor eax,[edx+0x478]
+imul eax,eax,0x1000193
+movzx ecx,byte ptr [edx+0x464]
+xor eax,ecx
+imul eax,eax,0x1000193
+xor eax,[edx+0x1398]
+imul eax,eax,0x1000193
+xor eax,[edx+0x139c]
+xor eax,esi
+xor [edi+92],eax
+imul ecx,[edi+92],0x1000193
+mov [edi+92],ecx
+movzx ecx,byte ptr [edx+60]
+dec ecx
+cmp ecx,7
+ja order_hash_done
+xor [edi+ecx*4+96],eax
+imul edx,[edi+ecx*4+96],0x1000193
+mov [edi+ecx*4+96],edx
+order_hash_done:
+pop edx
 movzx eax,word ptr [edx+12]
 xor eax,esi
 imul eax,eax,0x1000193

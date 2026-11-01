@@ -23,10 +23,11 @@ def load(path):
   return name,index,frames
 
 def compare(a,b):
- an,ai,af=load(a);bn,bi,bf=load(b);common=sorted(af.keys()&bf.keys());result={'left':an,'right':bn,'commonFrames':len(common),'range':[common[0],common[-1]] if common else [],'firstStateDifference':None,'firstRandomDifference':None,'firstPacketDifference':None,'note':'Matches simulation clocks from selected sessions; verify both reports describe the same match. Differences are indicators, not proof of cause. Local input staging is deliberately excluded from packet comparison.'}
+ an,ai,af=load(a);bn,bi,bf=load(b);common=sorted(af.keys()&bf.keys());result={'left':an,'right':bn,'commonFrames':len(common),'range':[common[0],common[-1]] if common else [],'firstStateDifference':None,'firstOrderDifference':None,'firstRandomDifference':None,'firstPacketDifference':None,'note':'Matches simulation clocks from selected sessions; verify both reports describe the same match. Differences are indicators, not proof of cause. Local input staging is deliberately excluded from packet comparison.'}
  for clock in common:
   x,xp=af[clock];y,yp=bf[clock]
   if result['firstStateDifference'] is None and (x['unitHash']!=y['unitHash'] or x['unitCount']!=y['unitCount']):result['firstStateDifference']={'clock':clock,'leftHash':x['unitHash'],'rightHash':y['unitHash'],'players':[p for p in range(10) if x['playerHashes'][p]!=y['playerHashes'][p]]}
+  if result['firstOrderDifference'] is None and 'orderHash' in x and 'orderHash' in y and x['orderHash']!=y['orderHash']:result['firstOrderDifference']={'clock':clock,'leftHash':x['orderHash'],'rightHash':y['orderHash'],'players':[p+1 for p in range(8) if x['playerOrderHashes'][p]!=y['playerOrderHashes'][p]]}
   if result['firstRandomDifference'] is None and any(x[k]!=y[k] for k in ('engineRngIndex','crtRng','fpuControl')):result['firstRandomDifference']={'clock':clock,'left':{k:x[k] for k in ('engineRngIndex','crtRng','fpuControl')},'right':{k:y[k] for k in ('engineRngIndex','crtRng','fpuControl')}}
   if result['firstPacketDifference'] is None:
    players=[]

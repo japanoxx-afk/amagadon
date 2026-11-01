@@ -73,10 +73,16 @@ namespace Amagadon {
                 int? displacement=read(0x47538b);
                 if(displacement.HasValue) {int data=unchecked(0x47538f+displacement.Value-1024+4096);lobbyRefresh=new {sent=read(data),received=read(data+4)};}
             }
+            object firstComparison=null;
+            if(counter.HasValue && read(counter.Value+64)==0x31435953) {
+                var bytes=new byte[256];IntPtr got;
+                if(ReadProcessMemory(p.Handle,new IntPtr(counter.Value+64),bytes,bytes.Length,out got)&&got.ToInt32()==bytes.Length && BitConverter.ToInt32(bytes,0)==0x31435953)
+                    firstComparison=new {clock=BitConverter.ToInt32(bytes,4),reason=BitConverter.ToInt32(bytes,8),peerSlot=BitConverter.ToInt32(bytes,12),historyIndex=BitConverter.ToInt32(bytes,16),sequence=BitConverter.ToInt32(bytes,20),localFingerprint=bytes[24],remoteFingerprint=bytes[28],localPacket=Convert.ToBase64String(bytes.Skip(64).Take(64).ToArray()),peerHistoryPacket=Convert.ToBase64String(bytes.Skip(128).Take(64).ToArray())};
+            }
             var lobbySlots=new List<object>();
             for(int i=0;i<8;i++)lobbySlots.Add(new {slot=i,kind=read(0x513c64+i)&255,active=read(0x513c80+i)&255,playerId=read(0x513c9c+i*60),hasName=read(0x513ca0+i*60)!=0,race=read(0x513cd3+i*60)&255});
             return new {directPlayObject=read(0x5140d0),ipxProvider=read(0x5140f4),tcpProvider=read(0x5140f8),initializationFailure=read(0x4d96f0),guardFailureCount=counter.HasValue?read(counter.Value):null,
-                lockstep=sync,lobby=new {session=read(0x51429c),phase=read(0x513ed8),inGame=read(0x513ed4),localId=read(0x513e88),hostId=read(0x513e7c),countdown=read(0x50e753)&255,refresh=lobbyRefresh,slots=lobbySlots},
+                lockstep=sync,firstNativeComparison=firstComparison,lobby=new {session=read(0x51429c),phase=read(0x513ed8),inGame=read(0x513ed4),localId=read(0x513e88),hostId=read(0x513e7c),countdown=read(0x50e753)&255,refresh=lobbyRefresh,slots=lobbySlots},
                 crazyZone=new {connected=read(0x57ca38),connectionEnded=read(0x57ca3c),welcome=read(0x57ca30),loginResult=read(0x4eaaac),channelResult=read(0x4eaaa8),roomCreateResult=read(0x57ca28),roomJoinResult=read(0x57ca6c),roomId=read(0x57b93c)}};
         }
         static object InputState(Process p) {
@@ -225,7 +231,7 @@ namespace Amagadon {
             if(offsets.Length==0)return new {available=false,reason="no-stable-trace-slots"};
             // Keep the raw ring and a decoded index together; decoded fields omit heap pointers.
             string target=Path.Combine(folder,"sync-trace.dat"),pending=target+".partial";File.WriteAllBytes(pending,first);if(File.Exists(target))File.Replace(pending,target,null);else File.Move(pending,target);
-            var frames=offsets.Select(o=>new {sequence=BitConverter.ToUInt32(first,o),clock=BitConverter.ToUInt32(first,o+4),engineRngIndex=BitConverter.ToUInt32(first,o+8),frameInterval=BitConverter.ToUInt32(first,o+12),localPlayer=BitConverter.ToUInt32(first,o+16),syncErrors=BitConverter.ToUInt32(first,o+20),unitHash=BitConverter.ToUInt32(first,o+24),unitCount=BitConverter.ToUInt32(first,o+28),playerHashes=Enumerable.Range(0,10).Select(i=>BitConverter.ToUInt32(first,o+32+i*4)).ToArray(),fpuControl=BitConverter.ToUInt16(first,o+80),crtRng=BitConverter.ToUInt32(first,o+84),offset=o}).ToArray();
+            var frames=offsets.Select(o=>new {sequence=BitConverter.ToUInt32(first,o),clock=BitConverter.ToUInt32(first,o+4),engineRngIndex=BitConverter.ToUInt32(first,o+8),frameInterval=BitConverter.ToUInt32(first,o+12),localPlayer=BitConverter.ToUInt32(first,o+16),syncErrors=BitConverter.ToUInt32(first,o+20),unitHash=BitConverter.ToUInt32(first,o+24),unitCount=BitConverter.ToUInt32(first,o+28),playerHashes=Enumerable.Range(0,10).Select(i=>BitConverter.ToUInt32(first,o+32+i*4)).ToArray(),fpuControl=BitConverter.ToUInt16(first,o+80),crtRng=BitConverter.ToUInt32(first,o+84),orderHash=BitConverter.ToUInt32(first,o+92),playerOrderHashes=Enumerable.Range(0,8).Select(i=>BitConverter.ToUInt32(first,o+96+i*4)).ToArray(),offset=o}).ToArray();
             var index=new {format=1,reason=reason,generation=BitConverter.ToUInt32(first,20),frozen=BitConverter.ToUInt32(first,12)!=0,freezeReason=BitConverter.ToUInt32(first,12),barrierCalls=BitConverter.ToUInt32(first,36),freezeClock=BitConverter.ToUInt32(first,16),slots=1024,stride=2048,commandsOffset=128,commandsBytes=1408,stableFrames=frames,notes="Simulation command barrier samples. Compare peers by generation/clock, excluding localPlayer. CRT RNG 0xffffffff means TLS slot unavailable. Ring duration depends on simulation speed. Raw slots must pass sequence validation."};
             string json=Path.Combine(folder,"sync-trace.json"),part=json+".partial";File.WriteAllText(part,Core.Json.Serialize(index));if(File.Exists(json))File.Replace(part,json,null);else File.Move(part,json);
             if(BitConverter.ToUInt32(first,12)!=0) {

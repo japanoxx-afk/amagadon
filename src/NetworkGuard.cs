@@ -19,7 +19,7 @@ namespace Amagadon {
   static byte[] Branch(byte opcode,int source,int target,int size){var b=Enumerable.Repeat((byte)0x90,size).ToArray();b[0]=opcode;Buffer.BlockCopy(BitConverter.GetBytes(target-source-5),0,b,1,4);return b;}
   // Public pure builder also feeds the machine-code regression fixture.
   public static Dictionary<int,byte[]> Build(int cave) {
-   var edits=new Dictionary<int,byte[]>();var payload=new byte[1024];
+   var edits=new Dictionary<int,byte[]>();var payload=new byte[2048];
    byte[] release=Hex("8b0252ff5008c705d040510000000000c3");Buffer.BlockCopy(release,0,payload,0,release.Length);
    byte[] title=Encoding.ASCII.GetBytes("Armageddon IPX\0"),message=Encoding.ASCII.GetBytes("IPX connection could not be initialized.\r\nDirectPlay or the IPX provider may be unavailable.\r\nThe game will stay in the menu.\r\nRun IPX registration repair in the launcher, then retry.\0");
    Buffer.BlockCopy(title,0,payload,256,title.Length);Buffer.BlockCopy(message,0,payload,320,message.Length);
@@ -48,12 +48,34 @@ namespace Amagadon {
      w.Write(Hex("0fb605e4a85100a3"));w.Write(data+40);
      w.Write(Hex("0fb60570724e00a3"));w.Write(data+44);
      w.Write(Hex("c1e0060fb7804ef55200a3"));w.Write(data+48);
+     w.Write(Branch(0xe8,cave+start+(int)m.Length,cave+1024,5));
      w.Write(Hex("619d803de4a851003c")); // displaced native comparison
      w.Write(Branch(0xe9,cave+start+(int)m.Length,syncSites[i]+7,5));
      byte[] code=m.ToArray();Buffer.BlockCopy(code,0,payload,start,code.Length);
     }
     edits[syncSites[i]]=Branch(0xe9,syncSites[i],cave+start,7);
    }
+   // Keep the exact first native comparison operands before later frames overwrite them.
+   int snapshot=cave+4096+64;
+   var first=new InputRecovery.Code(cave+1024);
+   first.Hex("803de4a8510000");first.Branch("0f85","done");
+   first.Hex("c705");first.Int(snapshot);first.Int(0);
+   first.Hex("a16c3c5000a3");first.Int(snapshot+4);
+   first.Hex("a1");first.Int(cave+4096+16);first.Hex("a3");first.Int(snapshot+8);
+   first.Hex("891d");first.Int(snapshot+12);first.Hex("8935");first.Int(snapshot+16);
+   first.Hex("a1");first.Int(cave+4096+28);first.Hex("a3");first.Int(snapshot+24);
+   first.Hex("a1");first.Int(cave+4096+32);first.Hex("a3");first.Int(snapshot+28);
+   first.Hex("a1104a5000a3");first.Int(snapshot+32);
+   first.Hex("a1");first.Int(cave+4096+48);first.Hex("a3");first.Int(snapshot+20);
+   first.Hex("89f5"); // history slot must survive rep movsd
+   first.Hex("bf");first.Int(snapshot+64);first.Hex("31c0b930000000fcf3ab");
+   first.Hex("0fb60570724e00c1e0060510f552008bf0bf");first.Int(snapshot+64);first.Hex("b910000000f3a5");
+   first.Hex("83fd32");first.Branch("0f83","commit");
+   first.Hex("833d");first.Int(cave+4096+16);first.Hex("01");first.Branch("0f85","commit");
+   first.Hex("6bfb3d03fdc1e70681c7905952008bf7bf");first.Int(snapshot+128);first.Hex("b910000000f3a5");
+   first.Label("commit");first.Hex("c705");first.Int(snapshot);first.Int(0x31435953);
+   first.Label("done");first.Hex("c3");
+   byte[] firstCode=first.Finish();Buffer.BlockCopy(firstCode,0,payload,1024,firstCode.Length);
    edits[cave]=payload;
    foreach(int site in new[]{0x475b31,0x475bc1})edits[site]=Hex("85ff7406803f00909090");
    foreach(int site in new[]{0x475b3e,0x475bce})edits[site]=Branch(0xe8,site,cave,6);

@@ -305,8 +305,9 @@ assert bytes(u.mem_read(UNITS,3*0x1400))==beforeUnits and bytes(u.mem_read(0x581
 h=r(u,slot+24);call(u,'sync_trace',[]);assert r(u,t+4)==1
 w(u,0x503c6c,101);call(u,'sync_trace',[]);assert r(u,ring+4096+24)==h
 w(u,UNITS+20,999);w(u,0x503c6c,102);call(u,'sync_trace',[]);assert r(u,ring+6144+24)!=h
-u.mem_write(0x51a8e4,b'\1');w(u,0x503c6c,103);call(u,'sync_trace',[]);assert r(u,t+12)==1 and r(u,t+16)==103 and r(u,t+4)==3
-w(u,0x503c6c,200);call(u,'sync_trace',[]);assert r(u,t+4)==3
+oldOrder=r(u,ring+6144+92);w(u,UNITS+0x414,88);u.mem_write(0x51a8e4,b'\1');w(u,0x503c6c,103);call(u,'sync_trace',[]);assert r(u,t+12)==1 and r(u,t+16)==103 and r(u,t+4)==4 and r(u,ring+8192+4)==103 and r(u,ring+8192+20)==1
+assert r(u,ring+8192+92)!=oldOrder
+w(u,0x503c6c,200);call(u,'sync_trace',[]);assert r(u,t+4)==4
 u.mem_write(0x51a8e4,b'\0');w(u,0x503c6c,1);call(u,'sync_trace',[]);assert r(u,t+20)==2 and r(u,t+4)==1 and r(u,t+12)==0
 for tick in range(2,1030):w(u,0x503c6c,tick);call(u,'sync_trace',[])
 assert r(u,t+4)==1029 and r(u,ring+5*2048)==1029

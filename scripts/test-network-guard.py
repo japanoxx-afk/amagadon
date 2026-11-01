@@ -29,8 +29,10 @@ for site,reason in [(0x483b4a,1),(0x483baa,2)]:
    for r,v in zip(registers,values):u.reg_write(r,v)
    u.reg_write(UC_X86_REG_EFLAGS,0x202)
    u.mem_write(0x51a8e4,bytes([errors]));u.mem_write(0x4e7270,b'\x02')
+   u.mem_write(0x52f510+2*64,bytes(range(64)))
+   u.mem_write(0x525990+(3*61+7)*64,bytes(range(64,128)))
    put(u,0x503c6c,54321);u.mem_write(0x52f54e+2*64,struct.pack('<H',4321))
-   u.emu_start(site,site+7,count=200)
+   u.emu_start(site,site+7,count=1000)
    snapshots.append(([u.reg_read(r) for r in registers],u.reg_read(UC_X86_REG_EFLAGS)))
    if patched:
     b=get(u,0x475ba8)
@@ -38,6 +40,11 @@ for site,reason in [(0x483b4a,1),(0x483baa,2)]:
     assert get(u,b+20)==3 and get(u,b+24)==values[4]
     assert get(u,b+28)&255==0xab and get(u,b+32)&255==0xcd
     assert [get(u,b+x) for x in (36,40,44,48)]==[54321,errors,2,4321]
+    assert (get(u,b+64)==0x31435953)==(errors==0)
+    if errors==0:
+     assert get(u,b+68)==54321 and get(u,b+72)==reason and get(u,b+76)==3 and get(u,b+80)==values[4]
+     assert bytes(u.mem_read(b+128,64))==bytes(u.mem_read(0x52f510+2*64,64))
+     assert bytes(u.mem_read(b+192,64))==(bytes(range(64,128)) if reason==1 else bytes(64))
   assert snapshots[0]==snapshots[1],(site,errors,snapshots)
 print('Lockstep diagnostics: register/flag preservation and native disconnect threshold passed')
 def run(provider,stage='ok',patched=True,tcp=False):
