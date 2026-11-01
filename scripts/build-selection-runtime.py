@@ -24,7 +24,7 @@ def reserve(name):
  global cursor
  blocks[name]={'address':BASE+cursor};cursor+=0x600
  return blocks[name]['address']
-for name in ('add','sync','select','rectangle','rect_native','first_accept','second_accept','rescan','wire','before','right','order','batch','group','group_native','key','hud','filter','reset','prune','terrain_visibility','resource_text','observer_view','replay_hud_gate','observer_visibility','replay_voice','minimap_resources','harvest_volume','world_resources','minimap_resource_sight','minimap_resource_color','hotkey_map','multiplayer_music','sync_trace','trace_barrier','skirmish_init','construction_guard','trace_units'):
+for name in ('add','sync','select','rectangle','rect_native','first_accept','second_accept','rescan','wire','before','right','order','batch','group','group_native','key','hud','filter','reset','prune','terrain_visibility','resource_text','observer_view','replay_hud_gate','observer_visibility','replay_voice','minimap_resources','harvest_volume','world_resources','minimap_resource_sight','minimap_resource_color','hotkey_map','multiplayer_music','sync_trace','trace_barrier','skirmish_init','construction_guard','trace_units','match_music'):
  reserve(name)
 def at(name):return blocks[name]['address']
 def code(name,source):
@@ -1039,6 +1039,22 @@ normal:
 jmp 0x4bc350
 """)
 hooks.append((0x454e58,at('multiplayer_music'),bytes.fromhex('e8f3740600')))
+code('match_music',f"""
+call 0x492280
+pushfd
+pushad
+cmp dword ptr [0x513ed4],1
+jne done
+push 0x504b68
+call {at('multiplayer_music')}
+add esp,4
+done:
+popad
+popfd
+ret
+""")
+hooks.append((0x45348e,at('match_music'),bytes.fromhex('e8eded0300')))
+
 code('minimap_resource_color',"""
 movzx eax,word ptr [edi+12]
 sub eax,0x300

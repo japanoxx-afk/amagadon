@@ -456,3 +456,18 @@ for faction in range(4):
   assert r(u,B+0x78004)==0
  assert normal[0]==normal[1]
 print('PASS paired crash replay: original NULL fault at 40d941 reproduced; invalid construction cancelled with exact context/packet and trace freeze; valid construction unchanged')
+
+# Fresh-match entry invokes music only in multiplayer and retains native call results.
+for multi in (0,1):
+ u=fresh(1);w(u,0x513ed4,multi);w(u,B+0x76d80,0);u.mem_write(0x504b68,b'\0')
+ asm(u,0x492280,'mov eax,123; ret')
+ asm(u,0x4bc350,f'inc dword ptr [{B+0x76d80}]; mov eax,456; ret')
+ call(u,'match_music',[])
+ assert r(u,B+0x76d80)==multi and u.reg_read(UC_X86_REG_EAX)==123
+# Replay chains after the diagnostic call instead of replacing/rejecting its hook.
+u=fresh(1);site=M['blocks']['trace_barrier']+5
+assert bytes(u.mem_read(site,5))==bytes.fromhex('b860220200')
+asm(u,B+0xf000,'mov eax,0x22260; jmp 0x454491')
+asm(u,site,f'jmp {B+0xf000}')
+run(u,0x45448c,0x454491);assert u.reg_read(UC_X86_REG_EAX)==0x22260
+print('PASS fresh multiplayer music entry and chained diagnostic/replay barrier')

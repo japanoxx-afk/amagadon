@@ -234,12 +234,16 @@ namespace Amagadon {
                     if(!fixture)selectionAddress=NetworkGuard.Apply(handle,executable,!playback || info.ControlsVersion==SelectionRuntime.Protocol);
                     if(eventsEnabled && Core.Hash(executable)!=NativePatch.LegacyOutputHash)SetupEvents();
                     if(!fixture && (!playback || info.Format==3 || CaptureDiagnostic!=null)) {
-                        if(BitConverter.ToString(Read(0x45448c,5))!="B8-60-22-02-00")throw new IOException("리플레이 최종 명령 위치가 다릅니다.");
+                        int replayBarrier=0x45448c;
+                        byte[] existingBarrier=Read(replayBarrier,5);
+                        if(selectionAddress!=0 && existingBarrier[0]==0xe9 && unchecked(replayBarrier+5+BitConverter.ToInt32(existingBarrier,1))==selectionAddress+SelectionRuntime.TraceBarrierOffset)
+                            replayBarrier=selectionAddress+SelectionRuntime.TraceBarrierOffset+5;
+                        if(BitConverter.ToString(Read(replayBarrier,5))!="B8-60-22-02-00")throw new IOException("리플레이 최종 명령 위치가 다릅니다.");
                         byte[] barrier=Convert.FromBase64String("nGCDPQCgMwIAdByDPRSgMwIAdBODPdQ+UQABdAq4AwAAAOjZwP//YZ24YCICAOletRH+");
                         if(Read(0x2338f00,barrier.Length).Any(value=>value!=0))throw new IOException("리플레이 명령 코드 공간이 사용 중입니다.");
                         if(CaptureDiagnostic!=null) {int immediate=Array.IndexOf(barrier,(byte)0xb8);barrier[immediate+1]=5;}
                         Write(0x2338f00,barrier);if(CaptureDiagnostic==null || info.Format==3)Write(0x454429,NetworkGuard.Hex("381dc83e5100"));
-                        byte[] branch=new byte[5];branch[0]=0xe9;Buffer.BlockCopy(BitConverter.GetBytes(0x2338f00-0x454491),0,branch,1,4);Write(0x45448c,branch);
+                        byte[] branch=new byte[5];branch[0]=0xe9;Buffer.BlockCopy(BitConverter.GetBytes(unchecked(0x2338f00-replayBarrier-5)),0,branch,1,4);Write(replayBarrier,branch);
                         Core.Log("Replay format 3: capture final native packets and decoded command flags after input processing");
                     }
                     if(playback && !fixture) {
