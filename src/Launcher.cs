@@ -12,8 +12,8 @@ using System.Threading.Tasks;
 using System.Web.Script.Serialization;
 using System.Windows.Forms;
 
-[assembly: System.Reflection.AssemblyVersion("0.3.69.0")]
-[assembly: System.Reflection.AssemblyInformationalVersion("0.3.69")]
+[assembly: System.Reflection.AssemblyVersion("0.3.70.0")]
+[assembly: System.Reflection.AssemblyInformationalVersion("0.3.70")]
 namespace Amagadon {
     public class Settings {
         public string GamePath="";
@@ -56,8 +56,8 @@ namespace Amagadon {
         }
     }
     public static class Core {
-        public const string Version = "0.3.69";
-        public const string DisplayVersion = "0.3.69";
+        public const string Version = "0.3.70";
+        public const string DisplayVersion = "0.3.70";
         public static readonly string Home = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "AmagadonLauncher");
         public static readonly JavaScriptSerializer Json = new JavaScriptSerializer();
         public static string Hash(string path) { using(var h=SHA256.Create()) using(var f=File.OpenRead(path)) return BitConverter.ToString(h.ComputeHash(f)).Replace("-", "").ToLowerInvariant(); }
@@ -223,7 +223,7 @@ namespace Amagadon {
                 Core.Log("Start version="+Core.DisplayVersion+" "+file+" SHA256="+Core.Hash(file)+" settings="+Core.Json.Serialize(settings));
                 if(!privateZone && exe=="Armageddon.exe" && settings.NativeHD && (settings.AutoReplay || replaySource!=null)) {
                     status.Text=replaySource!=null?"리플레이 시작 상태를 불러오는 중…":"게임 실행 중 · 싱글플레이 자동 기록 준비";
-                    using(var session=new ReplaySession(settings.GamePath,file,replaySource)) {session.DiagnosticSettings=settings;activeReplay=session;session.Progress=delegate(string text) {if(!IsDisposed && IsHandleCreated)BeginInvoke((Action)delegate {status.Text=text;});};if(session.IsPlayback) {replay.Text="재생 중단";replay.Enabled=true;}await Task.Run(()=>session.Run());status.Text=session.Result;if(session.IsPlayback && session.Result!="리플레이 재생을 완료했습니다." && session.Result!="리플레이 재생을 중단했습니다.")MessageBox.Show(this,Path.GetFileName(replaySource)+"\r\n"+session.Result,"리플레이 재생 결과",MessageBoxButtons.OK,MessageBoxIcon.Warning);}
+                    using(var session=new ReplaySession(settings.GamePath,file,replaySource)) {session.DiagnosticSettings=settings;activeReplay=session;session.Progress=delegate(string text) {if(!IsDisposed && IsHandleCreated)BeginInvoke((Action)delegate {status.Text=text;});};if(session.IsPlayback) {replay.Text="재생 중단";replay.Enabled=true;}await Task.Run(()=>session.Run());status.Text=session.Result;if(session.IsPlayback) {if(session.Result=="리플레이 재생을 완료했습니다."){Activate();MessageBox.Show(this,"리플레이 재생이 끝났습니다.\r\n"+Path.GetFileName(replaySource),"리플레이 종료",MessageBoxButtons.OK,MessageBoxIcon.Information);} else if(session.Result!="리플레이 재생을 중단했습니다.")MessageBox.Show(this,Path.GetFileName(replaySource)+"\r\n"+session.Result,"리플레이 재생 결과",MessageBoxButtons.OK,MessageBoxIcon.Warning);}}
                 } else using(var p=exe=="Armageddon.exe"?NetworkGuard.Start(file,settings.GamePath):Process.Start(Diagnostics.StartInfo(file,settings.GamePath))) {
                     Diagnostics.Begin(p.Id,file,settings.GamePath,settings);status.Text=exe+" 실행 중"; await Task.Run(()=>p.WaitForExit());
                     int exitCode=p.ExitCode;Core.Log(exe+" exit=0x"+exitCode.ToString("X8")); status.Text=exitCode==0?"정상 종료했습니다.":"비정상 종료: 0x"+exitCode.ToString("X8")+" · 실행 로그를 확인해주세요.";
