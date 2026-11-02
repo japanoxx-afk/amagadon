@@ -1,0 +1,20 @@
+{
+  "scope": "Native fixture record/playback and launcher regression; NOT a full multiplayer match",
+  "repeat": 3,
+  "builds": {
+    "baseline": "dist/0.3.69-final/AmagadonLauncher-0.3.69.exe",
+    "candidate": "dist/0.3.69-final/AmagadonLauncher-0.3.70.exe"
+  },
+  "cases": [
+    {
+      "name": "launcher-self-test",
+      "argv": ["{build}", "--self-test"],
+      "timeout": 120
+    },
+    {
+      "name": "native-replay-transport",
+      "argv": ["{build}", "--test-replay-process", "{root}/.tools/ReplayTransportFixture.exe"],
+      "timeout": 120
+    }
+  ]
+}
