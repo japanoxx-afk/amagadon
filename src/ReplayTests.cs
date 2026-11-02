@@ -14,7 +14,26 @@ namespace Amagadon {
                 Core.Log("REPLAY ARCHIVE VERIFY PASS frames="+info.Frames+" version="+info.Version+"; file structure and game hashes checked; no gameplay launched");
             } finally {if(Directory.Exists(root))Directory.Delete(root,true);}
         }
+        // Pure observer-control math: client->game mapping, original minimap tile
+        // conversion (0x4080A0 scale rule), camera clamp and wheel accumulation.
+        public static void ObserverControls() {
+            int gx,gy;
+            Check(ReplaySession.ToGame(3839,2159,3840,2160,false,out gx,out gy) && gx==1023 && gy==767,"stretch corner");
+            Check(ReplaySession.ToGame(1920,1080,3840,2160,false,out gx,out gy) && gx==512 && gy==384,"stretch centre");
+            Check(!ReplaySession.ToGame(100,1080,3840,2160,true,out gx,out gy),"letterbox bar is outside the game");
+            Check(ReplaySession.ToGame(1920,1080,3840,2160,true,out gx,out gy) && gx==512 && gy==384,"letterbox centre");
+            int tx,ty;int[] rect={16,600,144,728};
+            Check(ReplaySession.MinimapTile(80,664,rect,1,out tx,out ty) && tx==64 && ty==64,"minimap x1");
+            Check(ReplaySession.MinimapTile(80,664,rect,0,out tx,out ty) && tx==32 && ty==32,"minimap half scale");
+            Check(ReplaySession.MinimapTile(80,664,rect,3,out tx,out ty) && tx==128 && ty==128,"minimap double scale");
+            Check(!ReplaySession.MinimapTile(144,664,rect,1,out tx,out ty) && !ReplaySession.MinimapTile(15,664,rect,1,out tx,out ty),"minimap edges exclusive/inclusive");
+            Check(ReplaySession.Clamp(-5,128,32)==0 && ReplaySession.Clamp(200,128,32)==96 && ReplaySession.Clamp(40,128,32)==40 && ReplaySession.Clamp(3,20,32)==0,"camera clamp");
+            var wheel=ObserverWheelProbe.Create();wheel.Add(0x20a,120);wheel.Add(0x20a,-240);wheel.Add(0x20e,120);wheel.Add(0x200,999);
+            int v,h;wheel.Take(out v,out h);Check(v==-120 && h==120,"wheel accumulation");wheel.Take(out v,out h);Check(v==0 && h==0,"wheel drained");
+            Core.Log("REPLAY OBSERVER CONTROLS PASS: mapping, minimap tile, clamp, wheel");
+        }
         public static void ProcessRoundTrip(string fixture) {
+            ObserverControls();
             string root=Path.Combine(Path.GetTempPath(),"AmagadonReplayProcess-"+Guid.NewGuid().ToString("N"));Directory.CreateDirectory(root);
             try {
                 File.WriteAllText(Path.Combine(root,"Armageddon.MFP"),"fixture-data");File.WriteAllText(Path.Combine(root,"Armageddon.HED"),"fixture-index");

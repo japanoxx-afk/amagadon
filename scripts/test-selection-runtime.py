@@ -103,6 +103,17 @@ for kind in (0x300,0x306,0x22a):
  asm(u,0x42b230,'mov eax,2; ret 8');run(u,0x4a6744,0x4a6749)
  assert u.reg_read(UC_X86_REG_EAX)==(0 if 0x300<=kind<=0x306 else 2)
 print('PASS resource visibility: ore/hydrogen in three world passes and late minimap gate; unknown enemies hidden, own units preserved')
+# Replay observer: every unit is drawn regardless of the recorded player's fog;
+# a live game (mailbox state != 2) keeps hiding unseen enemies.
+for site,visible,hidden in [(0x448e80,0x448f3d,0x449d5e),(0x449e3a,0x449ed2,0x44a027),(0x44a101,0x44a1a1,0x44a362)]:
+ for mode in (0,2):
+  for owner in (1,2):
+   u=fresh(1);w(u,0x4f75ec,1024);w(u,0x233a000,mode);u.mem_write(UNITS+12,struct.pack('<H',0x22a));u.mem_write(UNITS+0x3c,bytes([owner]))
+   u.reg_write(UC_X86_REG_ESI,MANAGER);u.reg_write(UC_X86_REG_EBX,DEFS);u.reg_write(UC_X86_REG_EDI,DEFS);w(u,DEFS,0)
+   asm(u,0x42b230,'mov eax,2; ret 8')
+   target=hidden if (mode!=2 and owner!=1) else site+5
+   run(u,site,target);assert u.reg_read(UC_X86_REG_ESP)==STACK+8,(site,mode,owner)
+print('PASS replay observer fog: unseen enemy units drawn during playback, still hidden in live games')
 
 for player in (1,4,8):
  for n in (0,1,16,17,65,1700):

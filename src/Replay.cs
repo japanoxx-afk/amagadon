@@ -149,7 +149,7 @@ namespace Amagadon {
         string work,relative,recordDirectory,recordDestination;
         ReplayInfo info; ReplayReader reader; BinaryWriter writer;
         IntPtr handle,requestEvent,ackEvent; bool preciseTimer; uint request; int frames;
-        bool playback,finished,disposed;int selectionAddress;uint processId;int replaySpeed=1,baseReplayInterval=-1;bool replayHudHidden,replayIToggled;byte[] observerCamera;
+        bool playback,finished,disposed;int selectionAddress;uint processId;int replaySpeed=1,baseReplayInterval=-1;bool replayHudHidden,replayIToggled;byte[] observerCamera;bool closeKeySeen;uint lastClock;bool replayMenu,escapeHeld,enterHeld,leftHeld,overlayDirty=true;ObserverWheel wheel;
         volatile bool stopRequested;
         public bool IsPlayback {get {return playback;}}
         public void RequestStop() {if(playback)stopRequested=true;}
@@ -258,6 +258,7 @@ namespace Amagadon {
                         if(!FlushInstructionCache(handle,IntPtr.Zero,UIntPtr.Zero))throw new IOException("리플레이 호환 코드 반영 실패");
                     }
                     SetSavePath(relative+"\\start.sav");Number(Box,playback?2U:1U);
+                    if(playback && !fixture)wheel=ObserverWheel.Start(processId);
                     if(ResumeThread(pi.thread)==UInt32.MaxValue)throw new IOException("게임 실행을 재개할 수 없습니다.");
                 } catch {TerminateProcess(handle,0xe002);throw;} finally {CloseHandle(pi.thread);}
                 while(!Exited) {
@@ -285,10 +286,15 @@ namespace Amagadon {
                     else Result="게임 비정상 종료로 기록이 중단되었습니다. 임시 기록은 LauncherReplayWork 폴더에 보존했습니다.";
                 }
                 if(playback && !finished && ChildExitCode!=0 && String.IsNullOrEmpty(Result))Result="리플레이 게임이 비정상 종료했습니다: 0x"+ChildExitCode.ToString("X8")+" · 재생 "+frames+"프레임. 진단 로그를 확인해주세요.";
+                if(playback && !finished && ChildExitCode==0 && String.IsNullOrEmpty(Result) && info!=null && frames<info.Frames) {
+                    Result="게임 창이 닫혀 리플레이 재생이 중간에 끝났습니다: "+frames+" / "+info.Frames+" 프레임"+(closeKeySeen?" (Alt+F4 입력 감지)":"")+". 중간에 나가려면 ESC → Enter를 사용해주세요.";
+                    Core.Log("Replay ended early frames="+frames+"/"+info.Frames+" closeKey="+closeKeySeen+" lastClock="+lastClock);
+                }
                 if(String.IsNullOrEmpty(Result))Result=playback?"게임이 종료되어 리플레이 재생을 마쳤습니다.":"게임을 종료했습니다. 기록한 리플레이가 없으면 싱글플레이와 1024×768 모드를 확인해주세요.";
                 if(playback && source!=null)Core.Log("Replay result source="+Path.GetFileName(source)+" frames="+frames+" result="+Result);
                 Core.Log("Replay child exit=0x"+ExitCode.ToString("X8")+" "+Result);
             } finally {
+                if(wheel!=null) {wheel.Dispose();wheel=null;}
                 if(requestEvent!=IntPtr.Zero) {CloseHandle(requestEvent);requestEvent=IntPtr.Zero;}
                 if(ackEvent!=IntPtr.Zero) {CloseHandle(ackEvent);ackEvent=IntPtr.Zero;}
                 if(preciseTimer) {timeEndPeriod(1);preciseTimer=false;}
@@ -351,12 +357,12 @@ namespace Amagadon {
                 if(kind==1) {
                     if(e.Clock!=U32(0x503c6c))throw new IOException("게임 진행 시간이 기록과 다릅니다.");
                     if(CaptureDiagnostic==null && e.Digest!=0 && e.Digest!=Digest()) {if(!fixture) {try {DumpReplayState();}catch(Exception diagnostic) {Core.Log("Replay diagnostics unavailable: "+diagnostic.Message);}}throw new IOException((info.Format==1?"이전 형식 리플레이의 AI 상태가 기록과 달라 재생을 중단했습니다. 프레임=":"유닛 위치·체력 상태가 기록과 다릅니다. 프레임=")+(frames+1)+", clock="+e.Clock+", expected="+e.Digest.ToString("X8")+", actual="+Digest().ToString("X8"));}
-                    frames++;
+                    frames++;lastClock=e.Clock;
                     if(frames%600==0) {string progress="리플레이 재생 · "+frames+" / "+info.Frames+" 프레임";Core.Log(progress);if(Progress!=null)Progress(progress);}
                 }
                 if(kind==1 && !fixture)PollReplayControls();
                 Apply(kind,e.Data);
-                if(kind==1 && !fixture && selectionAddress!=0 && frames%15==1)UpdateResourceOverlay();
+                if(kind==1 && !fixture && selectionAddress!=0 && (frames%15==1 || overlayDirty))UpdateResourceOverlay();
                 if(scenarioWriter!=null) {
                     if(kind!=3) {byte[] captured=Capture(kind);scenarioWriter.Write(kind);scenarioWriter.Write(U32(0x503c6c));scenarioWriter.Write(kind==1 && (frames==1 || frames%60==0)?Digest():0);scenarioWriter.Write(captured.Length);scenarioWriter.Write(captured);scenarioWriter.Flush();}
                 }
@@ -382,7 +388,12 @@ namespace Amagadon {
             if(GetAsyncKeyState(0x34)<0 || GetAsyncKeyState(0x64)<0)speed=4;
             if(baseReplayInterval<0)baseReplayInterval=Math.Max(1,(int)Read(0x4d4c65,1)[0]);
             Write(0x4d4c65,new[]{(byte)Math.Max(1,baseReplayInterval/speed)});
-            if(speed!=replaySpeed) {replaySpeed=speed;Core.Log("Replay speed "+speed+"x");if(Progress!=null)Progress("리플레이 · "+speed+"배속 · I: HUD 표시 전환");}
+            if(speed!=replaySpeed) {replaySpeed=speed;overlayDirty=true;Core.Log("Replay speed "+speed+"x");if(Progress!=null)Progress("리플레이 · "+speed+"배속 · I: HUD 표시 전환");}
+            if(!closeKeySeen && GetAsyncKeyState(0x12)<0 && GetAsyncKeyState(0x73)<0) {closeKeySeen=true;Core.Log("Replay Alt+F4 pressed at frame "+frames);}
+            bool escape=GetAsyncKeyState(0x1b)<0,enter=GetAsyncKeyState(0x0d)<0;
+            if(escape && !escapeHeld) {replayMenu=!replayMenu;overlayDirty=true;Core.Log("Replay menu open="+replayMenu);if(Progress!=null)Progress(replayMenu?"리플레이 메뉴 · Enter: 나가기 · ESC: 계속":"리플레이 재생 중 · ESC: 메뉴");}
+            if(replayMenu && enter && !enterHeld) {Core.Log("Replay exit requested from in-game menu");stopRequested=true;}
+            escapeHeld=escape;enterHeld=enter;
             bool pressed=GetAsyncKeyState(0x49)<0;
             if(pressed && !replayIToggled && selectionAddress!=0) {replayHudHidden=!replayHudHidden;Number(selectionAddress+0x76704,replayHudHidden?1U:0U);Core.Log("Replay HUD hidden="+replayHudHidden);}
             replayIToggled=pressed;
@@ -392,33 +403,80 @@ namespace Amagadon {
         [DllImport("user32.dll")] static extern bool GetCursorPos(out ObserverPoint point);
         [DllImport("user32.dll")] static extern bool ScreenToClient(IntPtr window,ref ObserverPoint point);
         [DllImport("user32.dll")] static extern bool GetClientRect(IntPtr window,out ObserverRect rect);
+        // Observer camera for Format 3 playback. Recorded inputs drive the game, so the
+        // game's own minimap/scroll handling never sees the viewer's mouse; the launcher
+        // reads it here and moves only the display camera (0x5812E8/EC, tiles), which is
+        // restored after input interpretation each tick (see Apply).
+        const int ViewTilesX=32,ViewTilesY=18;
+        internal static bool ToGame(int clientX,int clientY,int clientW,int clientH,bool maintainAspect,out int gx,out int gy) {
+            gx=gy=0;if(clientW<=0 || clientH<=0)return false;
+            double sx=clientW/1024.0,sy=clientH/768.0,ox=0,oy=0;
+            if(maintainAspect) {double k=Math.Min(sx,sy);ox=(clientW-1024*k)/2;oy=(clientH-768*k)/2;sx=sy=k;}
+            gx=(int)Math.Floor((clientX-ox)/sx);gy=(int)Math.Floor((clientY-oy)/sy);
+            return gx>=0 && gy>=0 && gx<1024 && gy<768;
+        }
+        // Same conversion as the original minimap click (0x4080A0): relative pixel
+        // scaled by 0x4F9DB8 (0: /2, 1-2: x1, >=3: x2) is the world tile.
+        internal static bool MinimapTile(int gx,int gy,int[] rect,int scale,out int tx,out int ty) {
+            tx=ty=0;if(gx<rect[0] || gy<rect[1] || gx>=rect[2] || gy>=rect[3])return false;
+            int rx=gx-rect[0],ry=gy-rect[1];
+            if(scale==0){rx/=2;ry/=2;} else if(scale>=3){rx*=2;ry*=2;}
+            tx=rx;ty=ry;return true;
+        }
+        internal static int Clamp(int value,int size,int view) {return Math.Max(0,Math.Min(Math.Max(0,size-view),value));}
         void MoveObserverCamera() {
-            if(frames%3!=0)return;
             uint active;GetWindowThreadProcessId(GetForegroundWindow(),out active);
+            int wheelY=0,wheelX=0;if(wheel!=null)wheel.Take(out wheelY,out wheelX);
             if(active!=processId)return;
             int map=(int)U32(0x4f9de4);if(map==0)return;
             int width=BitConverter.ToUInt16(Read(map+230,2),0),height=BitConverter.ToUInt16(Read(map+232,2),0);
             int x=(int)U32(0x5812e8),y=(int)U32(0x5812ec);
-            ObserverPoint cursor;ObserverRect bounds;IntPtr window=GetForegroundWindow();
-            if(GetCursorPos(out cursor) && ScreenToClient(window,ref cursor) && GetClientRect(window,out bounds) && cursor.X>=0 && cursor.Y>=0 && cursor.X<bounds.Right && cursor.Y<bounds.Bottom) {
-                if(cursor.X<12)x--;else if(cursor.X>=bounds.Right-12)x++;
-                if(cursor.Y<12)y--;else if(cursor.Y>=bounds.Bottom-12)y++;
+            ObserverPoint cursor=new ObserverPoint();ObserverRect bounds=new ObserverRect();IntPtr window=GetForegroundWindow();
+            bool haveCursor=GetCursorPos(out cursor) && ScreenToClient(window,ref cursor) && GetClientRect(window,out bounds);
+            bool left=GetAsyncKeyState(0x01)<0;
+            if(haveCursor) {
+                int gx,gy;bool inside=ToGame(cursor.X,cursor.Y,bounds.Right,bounds.Bottom,DiagnosticSettings!=null && DiagnosticSettings.MaintainAspect,out gx,out gy);
+                byte[] r=Read(0x4f9dd0,16);int[] rect={BitConverter.ToInt32(r,0),BitConverter.ToInt32(r,4),BitConverter.ToInt32(r,8),BitConverter.ToInt32(r,12)};
+                int tx,ty;
+                // Click or drag on the minimap centres the view there.
+                if(left && inside && MinimapTile(gx,gy,rect,(int)U32(0x4f9db8),out tx,out ty)) {x=tx-ViewTilesX/2;y=ty-ViewTilesY/2;}
+                else if(frames%3==0) {
+                    // Edge scroll; a cursor that left the window across a monitor edge still counts.
+                    bool rows=cursor.Y>=0 && cursor.Y<bounds.Bottom,cols=cursor.X>=0 && cursor.X<bounds.Right;
+                    if(rows && cursor.X<12)x--;else if(rows && cursor.X>=bounds.Right-12)x++;
+                    if(cols && cursor.Y<12)y--;else if(cols && cursor.Y>=bounds.Bottom-12)y++;
+                }
             }
-            if(GetAsyncKeyState(0x25)<0)x--;if(GetAsyncKeyState(0x27)<0)x++;
-            if(GetAsyncKeyState(0x26)<0)y--;if(GetAsyncKeyState(0x28)<0)y++;
-            Number(0x5812e8,(uint)Math.Max(0,Math.Min(Math.Max(0,width-32),x)));
-            Number(0x5812ec,(uint)Math.Max(0,Math.Min(Math.Max(0,height-18),y)));
+            leftHeld=left;
+            bool shift=GetAsyncKeyState(0x10)<0;
+            // Wheel: 3 tiles per notch vertically; Shift+wheel or tilt scrolls horizontally.
+            if(shift){x-=wheelY*3/120;} else y-=wheelY*3/120;
+            x+=wheelX*3/120;
+            if(frames%3==0) {
+                if(GetAsyncKeyState(0x25)<0)x--;if(GetAsyncKeyState(0x27)<0)x++;
+                if(GetAsyncKeyState(0x26)<0)y--;if(GetAsyncKeyState(0x28)<0)y++;
+            }
+            Number(0x5812e8,(uint)Clamp(x,width,ViewTilesX));
+            Number(0x5812ec,(uint)Clamp(y,height,ViewTilesY));
         }
+        static Encoding overlayText;
+        static Encoding OverlayText {get {if(overlayText==null)overlayText=Encoding.GetEncoding(949);return overlayText;}}
+        static void PutRow(byte[] rows,int row,string text) {byte[] b=OverlayText.GetBytes(text);Array.Clear(rows,row*128,128);Buffer.BlockCopy(b,0,rows,row*128,Math.Min(b.Length,127));}
         void UpdateResourceOverlay() {
             int manager=(int)U32(0x504a10);if(manager==0)return;
             byte[] rows=new byte[1024];
-            for(int player=1;player<=8;player++) {
-                if(Read(manager+0x7126+player,1)[0]==0)continue;
-                uint ore=U32(manager+0xa8c0+player*4),second=U32(manager+0xa8e8+player*4);
-                byte[] text=Encoding.ASCII.GetBytes("P"+player+"  O:"+ore+"  R:"+second);
-                Buffer.BlockCopy(text,0,rows,(player-1)*128,Math.Min(text.Length,127));
+            if(replayMenu) {
+                PutRow(rows,0,"[리플레이 메뉴]");PutRow(rows,1,"Enter: 리플레이 나가기");PutRow(rows,2,"ESC: 계속 보기");PutRow(rows,3,"1/2/4: 배속 (현재 x"+replaySpeed+")");
+            } else {
+                int last=-1;
+                for(int player=1;player<=8;player++) {
+                    if(Read(manager+0x7126+player,1)[0]==0)continue;
+                    uint ore=U32(manager+0xa8c0+player*4),second=U32(manager+0xa8e8+player*4);
+                    PutRow(rows,player-1,"P"+player+"  O:"+ore+"  R:"+second);last=player-1;
+                }
+                int status=Math.Min(7,last+1);PutRow(rows,status,"x"+replaySpeed+" 배속 · ESC: 메뉴");
             }
-            Write(selectionAddress+0x76800,rows);
+            Write(selectionAddress+0x76800,rows);overlayDirty=false;
         }
         void LogMatchState(string phase) {
             if(fixture || DiagnosticSettings==null || !DiagnosticSettings.DiagnosticLogging)return;
@@ -522,5 +580,50 @@ namespace Amagadon {
             if(disposed)return;disposed=true;
             if(handle!=IntPtr.Zero)CloseHandle(handle);
         }
+    }
+
+    // Low-level mouse hook in the launcher (never injected into the game) that
+    // accumulates wheel/tilt deltas while the replay window is in the foreground.
+    // The event is passed on unchanged.
+    static class ObserverWheelProbe {public static ObserverWheel Create(){return new ObserverWheel(0);}}
+    public sealed class ObserverWheel : IDisposable {
+        delegate IntPtr HookProc(int code,IntPtr wParam,IntPtr lParam);
+        [DllImport("user32.dll",SetLastError=true)] static extern IntPtr SetWindowsHookEx(int id,HookProc proc,IntPtr module,uint thread);
+        [DllImport("user32.dll")] static extern bool UnhookWindowsHookEx(IntPtr hook);
+        [DllImport("user32.dll")] static extern IntPtr CallNextHookEx(IntPtr hook,int code,IntPtr wParam,IntPtr lParam);
+        [DllImport("user32.dll")] static extern int GetMessage(out Msg msg,IntPtr window,uint min,uint max);
+        [DllImport("user32.dll")] static extern bool PostThreadMessage(uint thread,uint msg,IntPtr wParam,IntPtr lParam);
+        [DllImport("user32.dll")] static extern IntPtr GetForegroundWindow();
+        [DllImport("user32.dll")] static extern uint GetWindowThreadProcessId(IntPtr window,out uint pid);
+        [DllImport("kernel32.dll")] static extern IntPtr GetModuleHandle(string name);
+        [DllImport("kernel32.dll")] static extern uint GetCurrentThreadId();
+        [StructLayout(LayoutKind.Sequential)] struct Msg {public IntPtr hwnd;public uint message;public IntPtr wParam,lParam;public uint time;public int x,y;}
+        readonly uint target;HookProc proc;IntPtr hook;uint thread;int vertical,horizontal;readonly ManualResetEvent ready=new ManualResetEvent(false);
+        internal ObserverWheel(uint pid){target=pid;}
+        public static ObserverWheel Start(uint pid) {
+            var w=new ObserverWheel(pid);w.proc=w.Callback;
+            var t=new Thread(w.Loop){IsBackground=true,Name="Replay observer wheel"};t.Start();w.ready.WaitOne(2000);return w;
+        }
+        void Loop() {
+            thread=GetCurrentThreadId();hook=SetWindowsHookEx(14,proc,GetModuleHandle(null),0);ready.Set();
+            if(hook==IntPtr.Zero){Core.Log("Replay wheel hook unavailable: "+Marshal.GetLastWin32Error());return;}
+            Msg m;while(GetMessage(out m,IntPtr.Zero,0,0)>0){}
+            UnhookWindowsHookEx(hook);hook=IntPtr.Zero;
+        }
+        internal void Add(int message,int delta) {
+            if(message==0x20a)Interlocked.Add(ref vertical,delta);else if(message==0x20e)Interlocked.Add(ref horizontal,delta);
+        }
+        IntPtr Callback(int code,IntPtr wParam,IntPtr lParam) {
+            if(code>=0) {
+                int message=wParam.ToInt32();
+                if(message==0x20a || message==0x20e) {
+                    uint active;GetWindowThreadProcessId(GetForegroundWindow(),out active);
+                    if(active==target)Add(message,(short)(Marshal.ReadInt32(lParam,8)>>16));
+                }
+            }
+            return CallNextHookEx(hook,code,wParam,lParam);
+        }
+        public void Take(out int wheelVertical,out int wheelHorizontal) {wheelVertical=Interlocked.Exchange(ref vertical,0);wheelHorizontal=Interlocked.Exchange(ref horizontal,0);}
+        public void Dispose() {if(thread!=0)PostThreadMessage(thread,0x12,IntPtr.Zero,IntPtr.Zero);}
     }
 }

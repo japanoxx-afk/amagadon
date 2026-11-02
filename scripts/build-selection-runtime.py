@@ -1176,6 +1176,12 @@ code('world_resources',"""
 push dword ptr [esp+8]
 push dword ptr [esp+8]
 call 0x42b230
+cmp dword ptr [0x4f75ec],1024
+jne world_sight_done
+cmp dword ptr [0x233a000],2
+jne world_sight_done
+xor eax,eax
+world_sight_done:
 push edx
 cmp dword ptr [esp+4],0x449e3f
 je middle
