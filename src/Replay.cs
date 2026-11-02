@@ -149,7 +149,7 @@ namespace Amagadon {
         string work,relative,recordDirectory,recordDestination;
         ReplayInfo info; ReplayReader reader; BinaryWriter writer;
         IntPtr handle,requestEvent,ackEvent; bool preciseTimer; uint request; int frames;
-        bool playback,finished,disposed;int selectionAddress;uint processId;int replaySpeed=1,baseReplayInterval=-1;bool replayHudHidden,replayIToggled;byte[] observerCamera;bool replayMenu,escapeHeld,enterHeld,leftHeld,overlayDirty=true;ObserverWheel wheel;
+        bool playback,finished,disposed;int selectionAddress;uint processId;int replaySpeed=1,baseReplayInterval=-1;bool replayHudHidden,replayIToggled;byte[] observerCamera;bool closeKeySeen;uint lastClock;bool replayMenu,escapeHeld,enterHeld,leftHeld,overlayDirty=true;ObserverWheel wheel;
         volatile bool stopRequested;
         public bool IsPlayback {get {return playback;}}
         public void RequestStop() {if(playback)stopRequested=true;}
@@ -286,6 +286,10 @@ namespace Amagadon {
                     else Result="게임 비정상 종료로 기록이 중단되었습니다. 임시 기록은 LauncherReplayWork 폴더에 보존했습니다.";
                 }
                 if(playback && !finished && ChildExitCode!=0 && String.IsNullOrEmpty(Result))Result="리플레이 게임이 비정상 종료했습니다: 0x"+ChildExitCode.ToString("X8")+" · 재생 "+frames+"프레임. 진단 로그를 확인해주세요.";
+                if(playback && !finished && ChildExitCode==0 && String.IsNullOrEmpty(Result) && info!=null && frames<info.Frames) {
+                    Result="게임 창이 닫혀 리플레이 재생이 중간에 끝났습니다: "+frames+" / "+info.Frames+" 프레임"+(closeKeySeen?" (Alt+F4 입력 감지)":"")+". 중간에 나가려면 ESC → Enter를 사용해주세요.";
+                    Core.Log("Replay ended early frames="+frames+"/"+info.Frames+" closeKey="+closeKeySeen+" lastClock="+lastClock);
+                }
                 if(String.IsNullOrEmpty(Result))Result=playback?"게임이 종료되어 리플레이 재생을 마쳤습니다.":"게임을 종료했습니다. 기록한 리플레이가 없으면 싱글플레이와 1024×768 모드를 확인해주세요.";
                 if(playback && source!=null)Core.Log("Replay result source="+Path.GetFileName(source)+" frames="+frames+" result="+Result);
                 Core.Log("Replay child exit=0x"+ExitCode.ToString("X8")+" "+Result);
@@ -353,7 +357,7 @@ namespace Amagadon {
                 if(kind==1) {
                     if(e.Clock!=U32(0x503c6c))throw new IOException("게임 진행 시간이 기록과 다릅니다.");
                     if(CaptureDiagnostic==null && e.Digest!=0 && e.Digest!=Digest()) {if(!fixture) {try {DumpReplayState();}catch(Exception diagnostic) {Core.Log("Replay diagnostics unavailable: "+diagnostic.Message);}}throw new IOException((info.Format==1?"이전 형식 리플레이의 AI 상태가 기록과 달라 재생을 중단했습니다. 프레임=":"유닛 위치·체력 상태가 기록과 다릅니다. 프레임=")+(frames+1)+", clock="+e.Clock+", expected="+e.Digest.ToString("X8")+", actual="+Digest().ToString("X8"));}
-                    frames++;
+                    frames++;lastClock=e.Clock;
                     if(frames%600==0) {string progress="리플레이 재생 · "+frames+" / "+info.Frames+" 프레임";Core.Log(progress);if(Progress!=null)Progress(progress);}
                 }
                 if(kind==1 && !fixture)PollReplayControls();
@@ -385,6 +389,7 @@ namespace Amagadon {
             if(baseReplayInterval<0)baseReplayInterval=Math.Max(1,(int)Read(0x4d4c65,1)[0]);
             Write(0x4d4c65,new[]{(byte)Math.Max(1,baseReplayInterval/speed)});
             if(speed!=replaySpeed) {replaySpeed=speed;overlayDirty=true;Core.Log("Replay speed "+speed+"x");if(Progress!=null)Progress("리플레이 · "+speed+"배속 · I: HUD 표시 전환");}
+            if(!closeKeySeen && GetAsyncKeyState(0x12)<0 && GetAsyncKeyState(0x73)<0) {closeKeySeen=true;Core.Log("Replay Alt+F4 pressed at frame "+frames);}
             bool escape=GetAsyncKeyState(0x1b)<0,enter=GetAsyncKeyState(0x0d)<0;
             if(escape && !escapeHeld) {replayMenu=!replayMenu;overlayDirty=true;Core.Log("Replay menu open="+replayMenu);if(Progress!=null)Progress(replayMenu?"리플레이 메뉴 · Enter: 나가기 · ESC: 계속":"리플레이 재생 중 · ESC: 메뉴");}
             if(replayMenu && enter && !enterHeld) {Core.Log("Replay exit requested from in-game menu");stopRequested=true;}
