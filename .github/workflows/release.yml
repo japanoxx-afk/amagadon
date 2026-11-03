@@ -34,4 +34,7 @@ jobs:
         shell: powershell
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "$env:GITHUB_REF_NAME" ./dist/AmagadonLauncher.zip ./dist/AmagadonLauncher.zip.sha256 --notes-file PATCHNOTES.md
+        run: |
+          $title = (Get-Content PATCHNOTES.md -Encoding UTF8 -TotalCount 1) -replace '^#\s*', ''
+          gh release create "$env:GITHUB_REF_NAME" ./dist/AmagadonLauncher.zip ./dist/AmagadonLauncher.zip.sha256 --title "$title" --notes-file PATCHNOTES.md
+          if ($LASTEXITCODE -ne 0) { throw 'Release publication failed' }
