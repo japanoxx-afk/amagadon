@@ -21,7 +21,7 @@ if len(sys.argv)>1:
  M['blocks']={k:v+delta for k,v in M['blocks'].items()}
  for h in M['hooks']:h['target']+=delta
  B=M['base'];D=M['data']
-P=pefile.PE(r'C:\Users\seo\Downloads\armaggeddon\armaggeddon\Armageddon.exe')
+P=pefile.PE(os.environ.get('AMAGADON_GAME_EXE',r'C:\Users\seo\Downloads\armaggeddon\armaggeddon\Armageddon.exe'))
 K=Ks(KS_ARCH_X86,KS_MODE_32)
 STACK,RETURN,MANAGER,UNITS,DEFS=0x400f000,0x4001000,0x3000000,0x3100000,0x3e00000
 checks=0
@@ -434,7 +434,7 @@ print('PASS skirmish Closed spawn exclusion, native AI scheduler activation, cam
 
 # Execute the original AI planner and its original order writer with controlled
 # world queries. Covers production -> construction -> attack for all race plans.
-archive=Path(r'C:\Users\seo\Downloads\armaggeddon\armaggeddon');hed=(archive/'Armageddon.HED').read_bytes()
+archive=Path(os.environ.get('AMAGADON_GAME_DIR',r'C:\Users\seo\Downloads\armaggeddon\armaggeddon'));hed=(archive/'Armageddon.HED').read_bytes()
 with (archive/'Armageddon.MFP').open('rb') as archive_file:
  for entry in range(9):
   offset=struct.unpack_from('<I',hed,8+entry*72)[0];size=struct.unpack_from('<I',hed,8+entry*72+68)[0];archive_file.seek(offset);lines=archive_file.read(size).splitlines()
