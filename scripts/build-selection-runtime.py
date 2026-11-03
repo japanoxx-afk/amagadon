@@ -263,6 +263,11 @@ mov esi,16
 jmp 0x44de09
 ''')
 hook(0x44de00,'rescan','8b542438be10000000')
+# Multiplayer local input (0x407010 -> 0x40b010 -> 0x40bb22) selects at UI time,
+# before the command executes on any PC; the original isolates that by swapping
+# mgr+0x7218[local] around the call (0x407b13 / 0x407c41). The extended sidecar
+# (COUNTS/LISTS/STAMP) is read at execution barriers, so it must not change here:
+# only the native 16-slot result, local UI mirrors and the transmitted rectangle.
 code('rect_native','sub esp,0x20\npush ebx\npush ebp\njmp 0x44dbd5')
 code('rectangle',f'''
 push ebp
@@ -274,10 +279,19 @@ sub esp,8
 mov [ebp-16],ecx
 mov ebx,[ebp+12]
 and ebx,255
+xor esi,esi
+cmp dword ptr [{SUPPRESS}],0
+jne execution
+cmp dword ptr [0x513ed4],1
+jne execution
+inc esi
+execution:
 cmp ebx,1
 jb original
 cmp ebx,8
 ja original
+test esi,esi
+jnz original
 mov [{TRACK}],ebx
 mov dword ptr [ebx*4+{COUNTS}],0
 original:
@@ -293,6 +307,8 @@ cmp ebx,1
 jb done
 cmp ebx,8
 ja done
+test esi,esi
+jnz transmit
 push ebx
 call {at('filter')}
 add esp,4
@@ -305,6 +321,7 @@ cmp dword ptr [{SUPPRESS}],0
 jne done
 cmp dword ptr [0x513ed4],1
 jne done
+transmit:
 movzx eax,byte ptr [0x4e7270]
 cmp eax,ebx
 jne done
