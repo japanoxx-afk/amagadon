@@ -12,8 +12,8 @@ using System.Threading.Tasks;
 using System.Web.Script.Serialization;
 using System.Windows.Forms;
 
-[assembly: System.Reflection.AssemblyVersion("0.3.71.0")]
-[assembly: System.Reflection.AssemblyInformationalVersion("0.3.71")]
+[assembly: System.Reflection.AssemblyVersion("0.3.72.0")]
+[assembly: System.Reflection.AssemblyInformationalVersion("0.3.72")]
 namespace Amagadon {
     public class Settings {
         public string GamePath="";
@@ -56,8 +56,8 @@ namespace Amagadon {
         }
     }
     public static class Core {
-        public const string Version = "0.3.71";
-        public const string DisplayVersion = "0.3.71";
+        public const string Version = "0.3.72";
+        public const string DisplayVersion = "0.3.72";
         public static readonly string Home = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "AmagadonLauncher");
         public static readonly JavaScriptSerializer Json = new JavaScriptSerializer();
         public static string Hash(string path) { using(var h=SHA256.Create()) using(var f=File.OpenRead(path)) return BitConverter.ToString(h.ComputeHash(f)).Replace("-", "").ToLowerInvariant(); }
