@@ -60,6 +60,41 @@ def selection(u,p):
  c=r(u,M['counts']+p*4)
  return list(struct.unpack('<'+'H'*c,u.mem_read(M['lists']+p*4096,c*2)))
 
+# Exercise actual installed JMP -> CALL -> normalizer -> native continuation.
+# Deliberately perturb all valid precision/rounding combinations, with logging OFF.
+for mode in (0,4):
+ for precision in (0,0x200,0x300):
+  for rounding in (0,0x400,0x800,0xc00):
+   u=fresh(1);u.mem_write(0x504f48,bytes([mode]));w(u,B+0x8001c,0)
+   cw=0x7f|precision|rounding
+   u.reg_write(UC_X86_REG_FPCW,cw)
+   regs=(UC_X86_REG_EBX,UC_X86_REG_ECX,UC_X86_REG_EDX,UC_X86_REG_ESI,UC_X86_REG_EDI,UC_X86_REG_EBP,UC_X86_REG_ESP,UC_X86_REG_EFLAGS)
+   u.reg_write(UC_X86_REG_EFLAGS,0x602)
+   before=[u.reg_read(reg) for reg in regs]
+   run(u,0x45448c,0x454491)
+   assert before==[u.reg_read(reg) for reg in regs]
+   assert u.reg_read(UC_X86_REG_EAX)==0x22260
+   assert u.reg_read(UC_X86_REG_FPCW)==(0x27f if mode==4 else cw)
+   # Actual x87 conversion demonstrates the divergent rounding this prevents.
+   u.mem_write(RETURN+256,struct.pack('<d',1.75))
+   asm(u,RETURN,f'fld qword ptr [{RETURN+256}]; fistp dword ptr [{RETURN+264}]')
+   end=RETURN+len(bytes(K.asm(f'fld qword ptr [{RETURN+256}]; fistp dword ptr [{RETURN+264}]',RETURN)[0]))
+   run(u,RETURN,end)
+   assert r(u,RETURN+264)==(2 if mode==4 or rounding in (0,0x800) else 1)
+# A pre-existing live FPU value and status survive; precision affects real math.
+for precision in (0,0x200,0x300):
+ u=fresh(1);w(u,B+0x8001c,0);u.reg_write(UC_X86_REG_FPCW,0x7f|precision)
+ asm(u,RETURN,'fld1')
+ run(u,RETURN,RETURN+2)
+ status=u.reg_read(UC_X86_REG_FPSW)
+ run(u,0x45448c,0x454491)
+ assert u.reg_read(UC_X86_REG_FPSW)==status
+ u.mem_write(RETURN+256,struct.pack('<d',16777216.0))
+ program=f'fld qword ptr [{RETURN+256}]; fadd st(0),st(1); fsub qword ptr [{RETURN+256}]; fistp dword ptr [{RETURN+264}]; fistp dword ptr [{RETURN+268}]'
+ asm(u,RETURN,program);run(u,RETURN,RETURN+len(bytes(K.asm(program,RETURN)[0])))
+ assert r(u,RETURN+264)==1 and r(u,RETURN+268)==1
+print('PASS deterministic FPU installed boundary: 24 precision/rounding cases; flags/registers/stack preserved; logging OFF; native conversion converges; menus untouched')
+
 # Coordinate setter entry diagnostics must reproduce the original prologue exactly.
 for site in (0x43f550,0x43f590):
  for enabled,frozen,multi in ((1,0,1),(0,0,1),(1,1,1),(1,0,0)):

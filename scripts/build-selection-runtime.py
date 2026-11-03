@@ -377,7 +377,30 @@ mov eax,[0x504a10]
 jmp 0x4079bc
 ''')
 hook(0x4079b7,'wire','a1104a5000')
-code('before',f'''
+# Restore only x87 precision/rounding at deterministic execution boundaries.
+# Native CRT arithmetic expects 0x027f; retain exception masks and status.
+# Independent of trace logging. No RNG/state/checksum modification.
+def deterministic_fpu():
+ return '''
+pushfd
+push eax
+sub esp,4
+cmp byte ptr [0x504f48],4
+jne fpu_done
+fnstcw word ptr [esp]
+movzx eax,word ptr [esp]
+and ax,0xf0ff
+or ax,0x0200
+cmp ax,word ptr [esp]
+je fpu_done
+mov word ptr [esp],ax
+fldcw word ptr [esp]
+fpu_done:
+add esp,4
+pop eax
+popfd
+'''
+code('before',deterministic_fpu()+f'''
 pushfd
 pushad
 mov eax,ebx
@@ -1437,7 +1460,7 @@ unit_spec=importlib.util.spec_from_file_location('unit_trace',Path(__file__).wit
 code('trace_units',unit_trace.assembly(BASE))
 state_spec=importlib.util.spec_from_file_location('state_trace',Path(__file__).with_name('build-state-trace.py'));state_trace=importlib.util.module_from_spec(state_spec);state_spec.loader.exec_module(state_trace)
 code('state_trace',state_trace.assembly())
-code('sync_trace',trace.assembly(BASE,at('trace_units'),at('state_trace')))
+code('sync_trace',deterministic_fpu()+trace.assembly(BASE,at('trace_units'),at('state_trace')))
 code('trace_barrier',f"call {at('sync_trace')}\nmov eax,0x22260\njmp 0x454491")
 hook(0x45448c,'trace_barrier','b860220200')
 guard_spec=importlib.util.spec_from_file_location('construction_guard',Path(__file__).with_name('build-construction-guard.py'));guard=importlib.util.module_from_spec(guard_spec);guard_spec.loader.exec_module(guard)
