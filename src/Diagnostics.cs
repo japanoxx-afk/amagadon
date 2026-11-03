@@ -205,7 +205,8 @@ namespace Amagadon {
             return valid.OrderBy(o=>BitConverter.ToUInt32(first,o)).ToArray();
         }
         static void AtomicDiagnosticJson(string path,object value) {
-            string pending=path+".partial";File.WriteAllText(pending,Core.Json.Serialize(value));if(File.Exists(path))File.Replace(pending,path,null);else File.Move(pending,path);
+            var serializer=new System.Web.Script.Serialization.JavaScriptSerializer {MaxJsonLength=16*1024*1024};
+            string pending=path+".partial";File.WriteAllText(pending,serializer.Serialize(value));if(File.Exists(path))File.Replace(pending,path,null);else File.Move(pending,path);
         }
         static uint CaptureConstructionGuard(Process p,string folder,uint previous) {
             Func<int,int,byte[]> read=(a,n)=>{var b=new byte[n];IntPtr got;if(!ReadProcessMemory(p.Handle,new IntPtr(a),b,n,out got)||got.ToInt32()!=n)throw new IOException("건설 보호 기록 읽기 실패");return b;};
@@ -218,6 +219,21 @@ namespace Amagadon {
             }
             AtomicDiagnosticJson(Path.Combine(folder,"invalid-build-targets.json"),new {format=1,total=count,events=rows,notes="Rejected before footprint/cost access; native construction cancellation path used. reason 1=race range, 2=definition index range, 3=missing catalog, 4=missing definition."});
             Write(folder,"invalid-build-targets",new {total=count,records=rows.Count});return count;
+        }
+        static void CapturePositionTrace(Process p,string folder,int runtime,uint generation) {
+            const int size=0x101000;int address=runtime+0x5d5000;IntPtr got;
+            var magic=new byte[12];
+            if(!ReadProcessMemory(p.Handle,new IntPtr(address),magic,12,out got)||got.ToInt32()!=12||BitConverter.ToUInt32(magic,0)!=0x31534f50)return;
+            var raw=new byte[size];var again=new byte[size];
+            if(!ReadProcessMemory(p.Handle,new IntPtr(address),raw,size,out got)||got.ToInt32()!=size)return;
+            if(!ReadProcessMemory(p.Handle,new IntPtr(address),again,size,out got)||got.ToInt32()!=size)return;
+            uint total=BitConverter.ToUInt32(raw,4);var records=new List<object>();
+            for(int slot=0;slot<8192;slot++) {
+                int o=4096+slot*128;uint seq=BitConverter.ToUInt32(raw,o);
+                if(seq==0 || seq>total || total-seq>=8192 || (seq&8191)!=slot || BitConverter.ToUInt32(raw,o+8)!=generation || BitConverter.ToUInt32(raw,o+124)!=seq || BitConverter.ToUInt32(again,o)!=seq || BitConverter.ToUInt32(again,o+124)!=seq)continue;
+                records.Add(new {sequence=seq,clock=BitConverter.ToUInt32(raw,o+4),generation=generation,unit=BitConverter.ToUInt32(raw,o+12),setter=BitConverter.ToUInt32(raw,o+16),requested=BitConverter.ToInt32(raw,o+20),beforeX=BitConverter.ToInt32(raw,o+24),beforeY=BitConverter.ToInt32(raw,o+28),caller=BitConverter.ToUInt32(raw,o+96),owner=BitConverter.ToUInt32(raw,o+100),type=BitConverter.ToUInt32(raw,o+104),rawUnit400=Convert.ToBase64String(raw.Skip(o+32).Take(64).ToArray())});
+            }
+            AtomicDiagnosticJson(Path.Combine(folder,"position-trace.json"),new {format=1,generation=generation,total=total,capacity=8192,records=records,notes="Coordinate setter ENTRY only; requested is a setter argument, not final raw X/Y. rawUnit400 is uninterpreted bytes at unit+0x400..0x43f and may include PC-specific values. Not full gameplay replay."});
         }
         static void CaptureUnitTrace(Process p,string folder,int runtime,uint generation,bool frozen,uint clock) {
             const int size=0x354000,stride=54464;int address=runtime+0x281000;
@@ -255,6 +271,7 @@ namespace Amagadon {
                 string raw=Path.Combine(archive,"sync-trace.dat"),metadata=Path.Combine(archive,"sync-trace.json");if(!File.Exists(raw))File.WriteAllBytes(raw,first);if(!File.Exists(metadata))AtomicDiagnosticJson(metadata,index);
             }
             CaptureUnitTrace(p,folder,runtime,BitConverter.ToUInt32(first,20),BitConverter.ToUInt32(first,12)!=0,BitConverter.ToUInt32(first,16));
+            CapturePositionTrace(p,folder,runtime,BitConverter.ToUInt32(first,20));
             return new {available=true,reason=reason,frames=frames.Length,firstClock=frames[0].clock,lastClock=frames[frames.Length-1].clock,frozen=BitConverter.ToUInt32(first,12)!=0};
         }
         static object DivergenceState(Process p) {

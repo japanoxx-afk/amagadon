@@ -57,7 +57,7 @@ namespace Amagadon {
     }
     public static class Core {
         public const string Version = "0.3.70";
-        public const string DisplayVersion = "0.3.70";
+        public const string DisplayVersion = "0.3.70-preview";
         public static readonly string Home = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "AmagadonLauncher");
         public static readonly JavaScriptSerializer Json = new JavaScriptSerializer();
         public static string Hash(string path) { using(var h=SHA256.Create()) using(var f=File.OpenRead(path)) return BitConverter.ToString(h.ComputeHash(f)).Replace("-", "").ToLowerInvariant(); }

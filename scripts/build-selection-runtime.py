@@ -17,14 +17,14 @@ TRACK=DATA+0x66020
 SUPPRESS=DATA+0x66024
 STAMP=DATA+0x66040
 TEXT=DATA+0x66080
-SIZE=0x5d5000
+SIZE=0x6d6000
 blocks={}; hooks=[]; cursor=0
 ks=Ks(KS_ARCH_X86,KS_MODE_32)
 def reserve(name):
  global cursor
  blocks[name]={'address':BASE+cursor};cursor+=0x600
  return blocks[name]['address']
-for name in ('add','sync','select','rectangle','rect_native','first_accept','second_accept','rescan','wire','before','right','order','batch','group','group_native','key','hud','filter','reset','prune','terrain_visibility','resource_text','observer_view','replay_hud_gate','observer_visibility','replay_voice','minimap_resources','harvest_volume','world_resources','minimap_resource_sight','minimap_resource_color','hotkey_map','multiplayer_music','sync_trace','trace_barrier','skirmish_init','construction_guard','trace_units','match_music','state_trace'):
+for name in ('add','sync','select','rectangle','rect_native','first_accept','second_accept','rescan','wire','before','right','order','batch','group','group_native','key','hud','filter','reset','prune','terrain_visibility','resource_text','observer_view','replay_hud_gate','observer_visibility','replay_voice','minimap_resources','harvest_volume','world_resources','minimap_resource_sight','minimap_resource_color','hotkey_map','multiplayer_music','sync_trace','trace_barrier','skirmish_init','construction_guard','trace_units','match_music','state_trace','position_x','position_y'):
  reserve(name)
 def at(name):return blocks[name]['address']
 def code(name,source):
@@ -48,6 +48,10 @@ shl eax,12
 mov word ptr [eax+ecx*2+{LISTS}],dx
 done: ret
 ''')
+spec=importlib.util.spec_from_file_location('position_trace',Path(__file__).with_name('build-position-trace.py'));position_trace=importlib.util.module_from_spec(spec);spec.loader.exec_module(position_trace)
+for name,site in [('position_x',0x43f550),('position_y',0x43f590)]:
+ code(name,position_trace.assembly(BASE,site))
+ hooks.append((site,at(name),bytes.fromhex('83ec10568bf1')))
 code('sync',f'''
 push ebp
 mov ebp,esp

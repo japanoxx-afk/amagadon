@@ -89,6 +89,18 @@ def load_units(path,sync_name):
    frames[row['clock']]=units
   return frames
 
+def position_history(path,record,unit,clock):
+ # Position events live at the session root, including when sync records are frozen copies.
+ parts=record.split('/');i=parts.index('Diagnostics') if 'Diagnostics' in parts else -1
+ if i<0:return []
+ name='/'.join(parts[:i+2])+'/position-trace.json'
+ with zipfile.ZipFile(path) as z:
+  if name not in z.namelist():return []
+  if z.getinfo(name).file_size>16*1024*1024:raise ValueError('Oversize position trace')
+  d=json.loads(z.read(name).decode('utf-8-sig'))
+  if d.get('format')!=1:return []
+  return sorted((r for r in d.get('records',[]) if r.get('unit')==unit and r.get('generation')==d.get('generation') and clock-2<=r.get('clock',-1)<=clock+2),key=lambda r:r['sequence'])
+
 def compare(a,b):
  an,ai,af=load(a);bn,bi,bf=load(b);common=sorted(af.keys()&bf.keys());result={'left':an,'right':bn,'commonFrames':len(common),'range':[common[0],common[-1]] if common else [],'firstStateDifference':None,'firstOrderDifference':None,'firstRandomDifference':None,'firstPacketDifference':None,'note':'Matches simulation clocks from selected sessions; verify both reports describe the same match. Differences are indicators, not proof of cause. Local input staging is deliberately excluded from packet comparison. Idle cursor differences are expected; hidden-state differences are candidates, not automatically causal.'}
  result['hiddenStateCommonFrames']=0;result['firstHiddenStateDifferences']={};result['firstIdleCursorDifferences']={};result['idleCursorDifferenceFrames']=0;result['localUiSample']=None
@@ -131,6 +143,10 @@ def compare(a,b):
   for clock in sorted(au.keys()&bu.keys()):
    if first['clock']-2<=clock<=first['clock']+2:
     result['unitTransitionHistory'].append({'clock':clock,'units':[{'id':i,'left':au[clock].get(i),'right':bu[clock].get(i)} for i in ids]})
+ result['positionHistory']=[]
+ if result['firstUnitDifference']:
+  for unit in result['firstUnitDifference']['units']:
+   result['positionHistory'].append({'unit':unit['id'],'left':position_history(a,an,unit['id'],result['firstUnitDifference']['clock']),'right':position_history(b,bn,unit['id'],result['firstUnitDifference']['clock'])})
  return result
 if __name__=='__main__':
  parser=argparse.ArgumentParser(description=__doc__);parser.add_argument('left',type=Path);parser.add_argument('right',type=Path);args=parser.parse_args()

@@ -60,6 +60,27 @@ def selection(u,p):
  c=r(u,M['counts']+p*4)
  return list(struct.unpack('<'+'H'*c,u.mem_read(M['lists']+p*4096,c*2)))
 
+# Coordinate setter entry diagnostics must reproduce the original prologue exactly.
+for site in (0x43f550,0x43f590):
+ for enabled,frozen,multi in ((1,0,1),(0,0,1),(1,1,1),(1,0,0)):
+  outcomes=[]
+  for patched in (False,True):
+   u=fresh(1);w(u,B+0x80000+28,enabled);w(u,B+0x80000+12,frozen);w(u,B+0x80000+20,3);w(u,0x513ed4,multi);w(u,0x503c6c,21803)
+   if not patched:u.mem_write(site,bytes.fromhex('83ec10568bf1'))
+   w(u,STACK,0x4423d6);w(u,STACK+4,1931);u.reg_write(UC_X86_REG_ECX,UNITS);u.reg_write(UC_X86_REG_ESI,0x12345678);u.reg_write(UC_X86_REG_EFLAGS,0x602)
+   original=bytes(u.mem_read(UNITS,0x1400));run(u,site,site+6)
+   outcomes.append(([u.reg_read(reg) for reg in (UC_X86_REG_EAX,UC_X86_REG_EBX,UC_X86_REG_ECX,UC_X86_REG_EDX,UC_X86_REG_ESI,UC_X86_REG_EDI,UC_X86_REG_EBP,UC_X86_REG_ESP,UC_X86_REG_EFLAGS)],bytes(u.mem_read(STACK-20,28))))
+   assert bytes(u.mem_read(UNITS,0x1400))==original
+   if patched:
+    t=B+0x5d5000;expected=enabled and not frozen and multi
+    assert r(u,t+4)==(1 if expected else 0)
+    if expected:
+     o=t+4096+128
+     assert r(u,o)==r(u,o+124)==1 and r(u,o+4)==21803 and r(u,o+8)==3
+     assert r(u,o+12)==0 and r(u,o+16)==site and r(u,o+20)==1931 and r(u,o+96)==0x4423d6
+  assert outcomes[0]==outcomes[1],(site,enabled,frozen,multi)
+print('PASS position setter installed JMP: original stack/registers/flags, readonly unit state, disabled/frozen/single-player guards')
+
 # Resource-only minimap bypass, independent of owner and visibility. Ordinary
 # entities still reach the original fog query; no entity state is mutated.
 for kind in (0,1,0x100,0x200,0x2ff,0x300,0x301,0x302,0x303,0x304,0x305,0x306):
