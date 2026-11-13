@@ -2,7 +2,9 @@
 
 Set AMAGADON_LAB_REAL_SPRITES=1, AMAGADON_LAB_AI_PLAYERS=1/2/3 and
 AMAGADON_LAB_TICKS to reproduce a faction run. No plan index or completion
-flag is forced. Exit 2 explicitly means the plan list remains incomplete.
+flag is forced. AMAGADON_LAB_SUPPLEMENT_EAD_PARENT=1 adds one explicitly
+reported native build request at the stalled EAD plan. Exit 2 explicitly
+means the plan list remains incomplete.
 """
 import importlib.util,struct,json,collections,os,pathlib
 s=importlib.util.spec_from_file_location('b',pathlib.Path(__file__).with_name('test-battle-flow.py'));b=importlib.util.module_from_spec(s);s.loader.exec_module(b)
@@ -10,8 +12,9 @@ REAL_SPRITES=os.environ.get('AMAGADON_LAB_REAL_SPRITES')=='1'
 ACTIVE_PLAYERS=[int(x) for x in os.environ.get('AMAGADON_LAB_AI_PLAYERS','1,2,3,4,5,6,7,8').split(',')]
 assert ACTIVE_PLAYERS and all(1<=p<=8 for p in ACTIVE_PLAYERS)
 TICKS=int(os.environ.get('AMAGADON_LAB_TICKS','6000'))
+SUPPLEMENT_EAD_PARENT=os.environ.get("AMAGADON_LAB_SUPPLEMENT_EAD_PARENT")=="1"
 PROGRESS={}
-RUN_NAME=('natural-ai-real' if REAL_SPRITES else 'natural-ai')+'-'+'-'.join(map(str,ACTIVE_PLAYERS))
+RUN_NAME=('natural-ai-real' if REAL_SPRITES else 'natural-ai')+'-'+'-'.join(map(str,ACTIVE_PLAYERS))+('-supplement' if SUPPLEMENT_EAD_PARENT else '')
 from unicorn import UC_HOOK_MEM_INVALID,UC_HOOK_BLOCK
 from unicorn.x86_const import UC_X86_REG_EIP,UC_X86_REG_ESP
 
@@ -70,9 +73,21 @@ def fixture(local,width):
  p.u.hook_add(UC_HOOK_MEM_INVALID,fault)
  return p
 
+def supplemental_parent_order(p):
+ # Controlled extra input, not a forced plan index or completed building.
+ assert p.call(0x452d30,(3,0x204),b.n.m.MANAGER,8)==0xffffffff
+ p.u.mem_write(0x504dd8,bytes(160))
+ p.u.mem_write(0x504dd8+3*16,struct.pack("<4I",1,0x204,0,0))
+ p.u.mem_write(b.n.m.STACK,struct.pack("<I",b.n.m.RETURN))
+ p.u.reg_write(UC_X86_REG_ESP,b.n.m.STACK)
+ saved=[p.u.reg_read(reg) for reg in b.n.m.REGS]
+ b.n.m.run(p.u,0x406160,b.n.m.RETURN,50000000)
+ assert [p.u.reg_read(reg) for reg in b.n.m.REGS]==saved
+ assert p.u.reg_read(UC_X86_REG_ESP)==b.n.m.STACK+4
+
 def main():
  local_players=[ACTIVE_PLAYERS[0],1 if ACTIVE_PLAYERS[0]!=1 else 2]
- peers=[fixture(local_players[0],800),fixture(local_players[1],1024)];samples=[]
+ peers=[fixture(local_players[0],800),fixture(local_players[1],1024)];samples=[];supplement_tick=None;ead_wait_started=None
  for tick in range(1,TICKS+1):
   for p in peers:
    PROGRESS.update(tick=tick,peer=peers.index(p),phase='unit scheduler')
@@ -81,6 +96,13 @@ def main():
    p.ai_step(50000000 if REAL_SPRITES else 5000000)
    PROGRESS['phase']='projectiles'
    p.projectiles((0,0) if p is peers[0] else (8,6))
+  if SUPPLEMENT_EAD_PARENT and supplement_tick is None and all(p.r(0x708031c)==72 for p in peers):
+   assert ACTIVE_PLAYERS==[3],"Supplement scenario is EAD-only"
+   if ead_wait_started is None:ead_wait_started=tick
+   if tick>=ead_wait_started+200:
+    for p in peers:supplemental_parent_order(p)
+    supplement_tick=tick
+    print("CONTROLLED supplemental SUMMONER construction order",tick,flush=True)
   try:
    b.n.l.compare(*peers)
    if REAL_SPRITES:
@@ -96,10 +118,10 @@ def main():
   assert bytes(peers[0].u.mem_read(0x7080000,0x1000))==bytes(peers[1].u.mem_read(0x7080000,0x1000))
   assert bytes(peers[0].u.mem_read(0x504dd8,160))==bytes(peers[1].u.mem_read(0x504dd8,160))
   if tick%500==0:
-   row={'tick':tick,'indices':[peers[0].r(0x7080000+i*256+28) for i in range(1,9)],'units':peers[0].r(b.n.m.MANAGER+4),'kinds':dict(collections.Counter(hex(struct.unpack('<H',peers[0].u.mem_read(c+12,2))[0]) for slot,c in peers[0].children if peers[0].u.mem_read(c+0x13b8,1)==b'\1'))}
+   row={'tick':tick,'indices':[peers[0].r(0x7080000+i*256+28) for i in range(1,9)],'units':peers[0].r(b.n.m.MANAGER+4),'resources':{str(i):[peers[0].r(b.n.m.MANAGER+0xa8c0+i*4),peers[0].r(b.n.m.MANAGER+0xa8e8+i*4)] for i in ACTIVE_PLAYERS},'kinds':dict(collections.Counter(hex(struct.unpack('<H',peers[0].u.mem_read(c+12,2))[0]) for slot,c in peers[0].children if peers[0].u.mem_read(c+0x13b8,1)==b'\1'))}
    samples.append(row);print(row,flush=True)
  complete=all(peers[0].r(0x7080000+i*256+28)>=peers[0].r(0x7080000+i*256+24) for i in ACTIVE_PLAYERS)
- report={'paired_ticks':TICKS,'active_players':ACTIVE_PLAYERS,'local_players':local_players,'samples':samples,'plan_lists_exhausted':complete,'full_match':False,'seeded_plan_indices':False,'initial_resources':100000,'real_unit_sprites':REAL_SPRITES,'sprite_assets':peers[0].sprite_report,'missing_sprites':getattr(peers[0],'missing_sprites',[]),'unit_states':[{'slot':slot,'kind':hex(struct.unpack('<H',peers[0].u.mem_read(c+12,2))[0]),'owner':peers[0].u.mem_read(c+0x3c,1)[0],'mode':peers[0].u.mem_read(c+0x464,1)[0],'hp':peers[0].r(c+0x9c4),'state48':peers[0].r(c+0x48),'queue750':peers[0].r(c+0x750),'queue85c':peers[0].r(c+0x85c),'target414':peers[0].r(c+0x414)} for slot,c in peers[0].children],'limitations':['flat synthetic map',('real unit SPR metadata' if REAL_SPRITES else 'synthetic sprite metadata'),'initial resources are generous; not a full economy test','no completed late-tech claim unless all plans finish']}
+ report={'supplemental_parent_order_tick':supplement_tick,'unmodified_plan_inputs':supplement_tick is None,'paired_ticks':TICKS,'active_players':ACTIVE_PLAYERS,'local_players':local_players,'samples':samples,'plan_lists_exhausted':complete,'full_match':False,'seeded_plan_indices':False,'initial_resources':100000,'real_unit_sprites':REAL_SPRITES,'sprite_assets':peers[0].sprite_report,'missing_sprites':getattr(peers[0],'missing_sprites',[]),'unit_states':[{'slot':slot,'kind':hex(struct.unpack('<H',peers[0].u.mem_read(c+12,2))[0]),'owner':peers[0].u.mem_read(c+0x3c,1)[0],'mode':peers[0].u.mem_read(c+0x464,1)[0],'hp':peers[0].r(c+0x9c4),'state48':peers[0].r(c+0x48),'queue750':peers[0].r(c+0x750),'queue85c':peers[0].r(c+0x85c),'target414':peers[0].r(c+0x414)} for slot,c in peers[0].children],'limitations':['flat synthetic map',('real unit SPR metadata' if REAL_SPRITES else 'synthetic sprite metadata'),'initial resources are generous; not a full economy test','no completed late-tech claim unless all plans finish']}
  (b.n.m.root/('.tools/'+RUN_NAME+'-results.json')).write_text(json.dumps(report,indent=2),encoding='utf-8')
  print('PLAN LISTS EXHAUSTED (not full match coverage)' if complete else 'INCOMPLETE: paired state matched, tech plans did not finish')
  return 0 if complete else 2

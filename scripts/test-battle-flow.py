@@ -39,9 +39,14 @@ class BattlePeer(r.SpritePeer):
         self.sprite(0);self.sprite(kind)
         self.owner=owner;self.u.mem_write(n.m.PARENT+0x3c,bytes([owner]))
         slot,c=self.create(kind);self.place(c,x,y)
-        index=self.call(0x476b60,(kind,))
-        weapon=self.u.mem_read(0x4d2189+index*10,1)[0]+1
-        self.w(c+0x1388,weapon);self.u.mem_write(c+0x9ec,bytes([weapon]))
+        # Execute the map loader's weapon setup, including signed -1, the
+        # 0x35 sentinel, and 0x117/0x11f special cases. Do not infer weapons
+        # from the lookup table alone (transports share its sentinel).
+        self.u.reg_write(UC_X86_REG_ESP,n.m.STACK)
+        self.u.reg_write(UC_X86_REG_ESI,n.m.MANAGER+8+slot*4)
+        self.u.reg_write(UC_X86_REG_EBP,slot)
+        n.m.run(self.u,0x44cb07,0x44cc01,1000000)
+        assert self.u.reg_read(UC_X86_REG_ESP)==n.m.STACK
         return slot,c
     def fire(self,source,target):
         # Execute original CALL site, not a replacement projectile implementation.
