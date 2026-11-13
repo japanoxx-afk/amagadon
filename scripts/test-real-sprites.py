@@ -18,7 +18,14 @@ class SpritePeer(n.RealPeer):
         race,index=kind>>8,kind&255
         a=struct.unpack('<I',n.m.pe.get_data(0x4d9700+race*200+index*4-0x400000,4))[0]
         name=n.m.pe.get_data(a-0x400000,100).split(b'\0')[0].decode('cp949')
-        blob=n.archive('pattern\\'+('Earth','Elca','Ead','Neutral')[race]+'\\'+name+'.spr')
+        key='pattern\\'+('Earth','Elca','Ead','Neutral')[race]+'\\'+name+'.spr'
+        handle=0x72e0000+kind*24
+        slot,frames=self.load_sprite(key,handle)
+        definition=self.r(self.catalogs[race][0]+4+index*4);self.w(definition+0x394,handle)
+        self.loaded[kind]=(slot,frames)
+        return slot,frames
+    def load_sprite(self,key,handle):
+        blob=n.archive(key)
         pos=[0]
         def io(u,address,size,data):
             sp=u.reg_read(UC_X86_REG_ESP)
@@ -39,14 +46,12 @@ class SpritePeer(n.RealPeer):
             slot=self.call(0x4bdea0,(0,0x72f0000,0x72f0004))
         finally:
             for h in hooks:self.u.hook_del(h)
-        assert slot<256,(hex(kind),slot)
-        handle=0x72e0000+kind*24;self.w(handle,slot);self.w(handle+4,self.r(0x72f0004))
-        definition=self.r(self.catalogs[race][0]+4+index*4);self.w(definition+0x394,handle)
+        assert slot<256,(key,slot)
+        self.w(handle,slot);self.w(handle+4,self.r(0x72f0004))
         frames=self.r(0x7200018+slot*24+8)
         assert frames>0
         assert pos[0]+4==len(blob)
-        self.loaded[kind]=(slot,frames)
-        self.sprite_report.append({'kind':hex(kind),'frames':frames,'sha256':hashlib.sha256(blob).hexdigest()})
+        self.sprite_report.append({'asset':key,'frames':frames,'sha256':hashlib.sha256(blob).hexdigest()})
         return slot,frames
 
 def main():

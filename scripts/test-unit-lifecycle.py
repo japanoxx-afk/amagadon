@@ -23,7 +23,7 @@ class Peer:
         self.u=m.fresh(local,width,local*101);u=self.u
         u.mem_map(0,4096);u.mem_map(HEAP,0x1000000);u.mem_map(0x21000000,0x700000)
         for a,b in selection.items():u.mem_write(a,b)
-        self.owner=owner;self.heap=HEAP;self.allocations=[];self.children=[];self.collision_hits=0
+        self.owner=owner;self.heap=HEAP;self.heap_limit=HEAP+0x1000000;self.allocations=[];self.children=[];self.collision_hits=0
         self.w(0x2310228,0x3630018)
         for race in range(4):self.w(0x5049fc+race*4,CAT)
         for i in range(100):self.w(CAT+4+i*4,DEF)
@@ -37,7 +37,7 @@ class Peer:
         for off,val in ((20,160),(24,200),(0x100,160),(0x104,200),(0x1398,300),(0x139c,200)):self.w(m.PARENT+off,val)
         def allocate(uc,a,size,data):
             sp=uc.reg_read(UC_X86_REG_ESP);n=self.r(sp+4)
-            assert 0<n<0x100000 and self.heap+n<HEAP+0x1000000
+            assert 0<n<0x100000 and self.heap+n<self.heap_limit
             out=self.heap;self.heap+=(n+15)&~15;self.allocations.append((out,n))
             uc.mem_write(out,bytes([poison])*n)
             uc.reg_write(UC_X86_REG_EAX,out);uc.reg_write(UC_X86_REG_EIP,self.r(sp));uc.reg_write(UC_X86_REG_ESP,sp+4)

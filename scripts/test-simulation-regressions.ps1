@@ -13,7 +13,7 @@ try {
     if ((Get-FileHash src/SelectionRuntime.cs -Algorithm SHA256).Hash -ne $before) {
         throw 'Generated runtime changed. Rebuild and review before running the suite.'
     }
-    foreach ($script in @('scripts/test-simulation-isolation.py', 'scripts/test-selection-runtime.py', 'scripts/test-path-production.py', 'scripts/test-unit-lifecycle.py', 'scripts/test-native-scheduler.py', 'scripts/test-real-sprites.py', 'scripts/test-ai-plan-stages.py', 'scripts/test-combat-targets.py')) {
+    foreach ($script in @('scripts/test-simulation-isolation.py', 'scripts/test-selection-runtime.py', 'scripts/test-path-production.py', 'scripts/test-unit-lifecycle.py', 'scripts/test-native-scheduler.py', 'scripts/test-real-sprites.py', 'scripts/test-ai-plan-stages.py', 'scripts/test-combat-targets.py', 'scripts/test-battle-flow.py')) {
         & $Python $script $Launcher
         if ($LASTEXITCODE -ne 0) { throw "Failed: $script" }
     }

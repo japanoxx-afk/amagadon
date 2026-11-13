@@ -64,7 +64,7 @@ class RealPeer(l.Peer):
                 self.creation_events.append((self.tick,self.r(u.reg_read(UC_X86_REG_ESP)+4)))
         for address in (0x42cee0,0x454ee0,0x42c910,0x4458b0):
             self.u.hook_add(UC_HOOK_CODE,observe,begin=address,end=address)
-    def scheduler_step(self,tick,camera=(0,0),verify_order=True):
+    def scheduler_step(self,tick,camera=(0,0),verify_order=True,instruction_budget=5000000):
         self.order_log=[];self.tick=tick
         self.u.reg_write(UC_X86_REG_ESP,m.STACK)
         m.run(self.u,0x454482,0x454487,5000000)
@@ -74,7 +74,7 @@ class RealPeer(l.Peer):
         self.u.reg_write(UC_X86_REG_ESP,m.STACK)
         # Execute the real caller argument setup, CALL, callee and return.
         saved=[self.u.reg_read(r) for r in m.REGS]
-        m.run(self.u,0x48caef,0x48cb0e,5000000)
+        m.run(self.u,0x48caef,0x48cb0e,instruction_budget)
         assert [self.u.reg_read(r) for r in m.REGS]==saved
         assert self.u.reg_read(UC_X86_REG_ESP)==m.STACK
         if verify_order:assert self.order_log==sorted(set(self.order_log)),self.order_log
@@ -112,11 +112,11 @@ class RealPeer(l.Peer):
         self.w(m.MANAGER+8+17*4,0) # remove creation-only fixture parent
         self.w(0x57e2a0,0x70a0000)
         for i in range(3):self.w(0x70a0000+0x33a8+4*i,100)
-    def ai_step(self):
+    def ai_step(self,instruction_budget=5000000):
         # Actual eight-player scheduler, including native AI/perception helpers.
         self.ai_order=[]
         self.u.reg_write(UC_X86_REG_ESP,m.STACK)
-        m.run(self.u,0x48cc06,0x48cc63,5000000)
+        m.run(self.u,0x48cc06,0x48cc63,instruction_budget)
         assert self.ai_order==list(range(1,9))
         assert self.u.reg_read(UC_X86_REG_ESP)==m.STACK
     def state(self):
