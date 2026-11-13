@@ -36,7 +36,7 @@ with tempfile.TemporaryDirectory(prefix='amagadon-rally-') as folder:
     subprocess.run([str(compiler), '/nologo', '/platform:x86', '/out:' + str(exe), str(source)], check=True)
     subprocess.run([str(exe), str(launcher), str(folder)], check=True)
     edits = {int(p.stem, 16): p.read_bytes() for p in folder.glob('*.bin')}
-assert set(edits) == {0x20000000, 0x44cf0a, 0x44cf5b}, 'Missing compiled hook payload'
+assert set(edits) == {0x20000000, 0x44cf0a, 0x44cf5b, 0x408730, 0x430e49}, 'Missing compiled hook payload'
 
 def fresh():
     u = Uc(UC_ARCH_X86, UC_MODE_32)
@@ -45,7 +45,7 @@ def fresh():
         u.mem_write(base + section.VirtualAddress, section.get_data())
     u.mem_map(0x3000000, 0x300000)
     u.mem_map(0x4000000, 0x100000)
-    u.mem_map(0x20000000, 4096)
+    u.mem_map(0x20000000, 24576)
     u.reg_write(UC_X86_REG_ESP, STACK)
     for address, payload in edits.items(): u.mem_write(address, payload)
     return u
