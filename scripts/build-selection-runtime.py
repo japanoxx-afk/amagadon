@@ -24,7 +24,7 @@ def reserve(name):
  global cursor
  blocks[name]={'address':BASE+cursor};cursor+=0x600
  return blocks[name]['address']
-for name in ('add','sync','select','rectangle','rect_native','first_accept','second_accept','rescan','wire','before','right','order','batch','group','group_native','key','hud','filter','reset','prune','terrain_visibility','resource_text','observer_view','replay_hud_gate','observer_visibility','replay_voice','minimap_resources','harvest_volume','world_resources','minimap_resource_sight','minimap_resource_color','hotkey_map','multiplayer_music','sync_trace','trace_barrier','skirmish_init','construction_guard','trace_units','match_music','state_trace','position_x','position_y'):
+for name in ('add','sync','select','rectangle','rect_native','first_accept','second_accept','rescan','wire','before','right','order','batch','group','group_native','key','hud','filter','reset','prune','terrain_visibility','resource_text','observer_view','replay_hud_gate','observer_visibility','replay_voice','minimap_resources','harvest_volume','world_resources','minimap_resource_sight','minimap_resource_color','hotkey_map','multiplayer_music','sync_trace','trace_barrier','skirmish_init','construction_guard','trace_units','match_music','state_trace','position_x','position_y','construction_ui_target'):
  reserve(name)
 def at(name):return blocks[name]['address']
 def code(name,source):
@@ -52,6 +52,22 @@ spec=importlib.util.spec_from_file_location('position_trace',Path(__file__).with
 for name,site in [('position_x',0x43f550),('position_y',0x43f590)]:
  code(name,position_trace.assembly(BASE,site))
  hooks.append((site,at(name),bytes.fromhex('83ec10568bf1')))
+# Local preview must not overwrite the lockstep construction target. Restrict
+# isolation to the verified local-input caller; other callers remain native.
+code('construction_ui_target', """
+pushfd
+cmp dword ptr [0x513ed4],0
+je native_target
+cmp dword ptr [esp+20],0x4076a0
+jne native_target
+popfd
+jmp 0x427bb7
+native_target:
+popfd
+mov dword ptr [eax+ecx*4+0x2221c],edx
+jmp 0x427bb7
+""")
+hook(0x427bb0,'construction_ui_target','8994881c220200')
 code('sync',f'''
 push ebp
 mov ebp,esp
