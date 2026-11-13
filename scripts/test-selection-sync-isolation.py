@@ -95,7 +95,7 @@ for name,owned,first,later,expected in CASES:
  for ui_change in (True,False):
   owner=fresh(70,owned,2);transmitted=ui_select(owner,first)
   assert native(owner,2)==[] and sidecar(owner,2)==[],'UI-time selection leaked into synchronized state'
-  assert r(owner,M['pending'])==1,'rectangle must still be offered to the wire'
+  assert r(owner,M['pending'])==0,'multiplayer UI rectangle must not leak into a later wire invocation'
   results={}
   for local in (1,2):
    u=owner if local==2 else fresh(70,owned,1)
@@ -117,3 +117,42 @@ u.mem_write(DEFS+0x1000,struct.pack('<4i',90,90,290,130));u.reg_write(UC_X86_REG
 u.mem_write(STACK,struct.pack('<5I',RETURN,2,2,DEFS+0x1000,1));u.reg_write(UC_X86_REG_ESP,STACK);run(u,0x44dbd0,RETURN)
 assert sidecar(u,2)==list(range(20)) and r(u,M['pending'])==0;checks+=1
 print('PASS',checks,'selection isolation scenarios: commanding PC and peer act on identical units for the recorded P2 right-click after a later UI click (3 and 20 units), execution-time extended rectangle on both PCs, single-player immediate selection unchanged')
+
+# A native selection packet supersedes an earlier sidecar even if it shares a prefix.
+# Start from a synchronized execution-time selection of one unit, then select 3.
+for local in (1,2):
+ u=fresh(70,{5,6,7},local)
+ execute(u,2,marker_packet((190,90,205,110)))
+ assert sidecar(u,2)==[5]
+ acted=execute(u,2,select_packet([5,6,7]))
+ assert acted==([5,6,7],1),('native selection overwritten by old prefix',local,acted)
+ assert sidecar(u,2)==[]
+ assert execute(u,2,RIGHT)==([5,6,7],1)
+print('PASS explicit native selection replaces stale sidecar prefix on both PCs')
+
+# A later wire invocation must retain its own native selection bytes, not emit
+# a rectangle from an earlier multiplayer UI click (including a stale flag).
+u=fresh(70,set(range(20)),2)
+w(u,M['pending'],1)
+ui_select(u,(90,90,290,130))
+wire=bytes(range(28));u.mem_write(0x51be70,wire)
+u.reg_write(UC_X86_REG_ESP,STACK)
+run(u,0x4079b7,0x4079bc)
+assert bytes(u.mem_read(0x51be70,28))==wire
+assert r(u,M['pending'])==0
+# Replacing a 20-unit selection with exactly its first 16 or with empty selection
+# must also stop extended batching.
+for ids in (list(range(16)),[]):
+ for local in (1,2):
+  u=fresh(70,set(range(20)),local)
+  execute(u,2,marker_packet((90,90,290,130)))
+  assert len(sidecar(u,2))==20
+  # Native ignores an all-sentinel list (0x48bbaf path); compare with that
+  # original behavior, while ensuring the stale 20-unit sidecar cannot return.
+  expected=ids if ids else list(range(16))
+  actual=execute(u,2,select_packet(ids));assert actual==(expected,1),(local,ids,actual)
+  baseline=fresh(70,set(range(20)),local)
+  execute(baseline,2,select_packet(list(range(16))))
+  assert execute(baseline,2,select_packet(ids))==actual
+  assert sidecar(u,2)==[]
+print('PASS delayed wire preserves current packet; native 16/empty selections cancel old expanded batches')

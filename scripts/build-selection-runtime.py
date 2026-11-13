@@ -308,7 +308,11 @@ jb done
 cmp ebx,8
 ja done
 test esi,esi
-jnz transmit
+jz execution_result
+# Multiplayer local input transmits native slots, not this rectangle.
+mov dword ptr [{PENDING}],0
+jmp done
+execution_result:
 push ebx
 call {at('filter')}
 add esp,4
@@ -435,9 +439,9 @@ je select_all
 cmp byte ptr [edi+10],0
 je compare
 cmp word ptr [edi+30],4095
-jne compare
+jne native_selection
 cmp word ptr [edi+32],0xa31
-jne compare
+jne native_selection
 sub esp,16
 mov esi,esp
 lea edx,[edi+34]
@@ -479,6 +483,13 @@ push eax
 push ebx
 call {at('select')}
 add esp,8
+jmp done
+native_selection:
+# Native execution has already installed the received list. It supersedes the
+# previous sidecar even when the two selections share their first entries.
+cmp dword ptr [0x513ed4],1
+jne compare
+mov dword ptr [ebx*4+{COUNTS}],0
 jmp done
 compare:
 cmp dword ptr [ebx*4+{COUNTS}],0
