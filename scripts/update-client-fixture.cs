@@ -13,6 +13,20 @@ class Fixture {
  static void Require(bool value,string message){if(!value)throw new Exception(message);}
  static string Metadata(string version){return "{\"tag_name\":\""+version+"\",\"draft\":false,\"prerelease\":false,\"assets\":[{\"name\":\"AmagadonLauncher.zip\",\"browser_download_url\":\"https://github.com/japanoxx-afk/amagadon/releases/download/"+version+"/AmagadonLauncher.zip\"},{\"name\":\"AmagadonLauncher.zip.sha256\",\"browser_download_url\":\"https://github.com/japanoxx-afk/amagadon/releases/download/"+version+"/AmagadonLauncher.zip.sha256\"}]}";}
  static async Task Run(string root) {
+  // Use the loaded launcher's actual constants, not a hard-coded simulated version.
+  var assembly=typeof(Core).Assembly;
+  string current=(string)typeof(Core).GetField("Version").GetRawConstantValue();
+  string displayed=(string)typeof(Core).GetField("DisplayVersion").GetRawConstantValue();
+  Require(current==displayed,"Displayed and updater versions differ");
+  Require(assembly.GetName().Version.ToString()==displayed+".0","Assembly version differs");
+  Require(((System.Reflection.AssemblyInformationalVersionAttribute)Attribute.GetCustomAttribute(assembly,typeof(System.Reflection.AssemblyInformationalVersionAttribute))).InformationalVersion==displayed,"Informational version differs");
+  foreach(string path in new[]{"startup","manual"}) {
+   var same=new Handler{Json=Metadata("v"+displayed)};int confirmations=0;
+   using(var client=new HttpClient(same)) {
+    string result=await Updates.Prepare(client,current,Path.Combine(root,"same-"+path),r=>{confirmations++;return true;},s=>{},CancellationToken.None);
+    Require(result==null && confirmations==0 && same.Requests==1,"Same release prompted/downloaded: "+path);
+   }
+  }
   string seed=Path.Combine(root,"seed.zip");File.WriteAllBytes(seed,new byte[200000]);string digest=Core.Hash(seed);
   // Reproduce the exact 0.3.9 cast before verifying the typed replacement.
   var raw=new JavaScriptSerializer().Deserialize<System.Collections.Generic.Dictionary<string,object>>(Metadata("v99.0.0"));
