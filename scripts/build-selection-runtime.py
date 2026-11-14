@@ -1510,6 +1510,23 @@ hook(0x45448c,'trace_barrier','b860220200')
 guard_spec=importlib.util.spec_from_file_location('construction_guard',Path(__file__).with_name('build-construction-guard.py'));guard=importlib.util.module_from_spec(guard_spec);guard_spec.loader.exec_module(guard)
 code('construction_guard',guard.assembly(BASE))
 hook(0x438b51,'construction_guard',(b'\x8b\xce\xe8'+struct.pack('<i',0x41f090-0x438b58)).hex())
+# Pack AI code into the unused tail of the first 0x600-byte code slot.
+# Keep all established addresses and the data segment unchanged.
+for name,offset in [('ead_plan',0x100),('ead_replenish_queue',0x280),('ead_population',0x400),('ead_plan_variant',0x580),('ead_plan_index',0x5a0)]:
+ blocks[name]={'address':BASE+offset}
+ead_spec=importlib.util.spec_from_file_location('ead_ai',Path(__file__).with_name('build-ead-ai.py'));ead_ai=importlib.util.module_from_spec(ead_spec);ead_spec.loader.exec_module(ead_ai)
+code('ead_plan',ead_ai.plan())
+code('ead_replenish_queue',ead_ai.replenishment())
+code('ead_population',ead_ai.population())
+hook(0x454f08,'ead_population',(b'\xe8'+struct.pack('<i',0x455c90-0x454f0d)).hex())
+hook(0x455e69,'ead_replenish_queue',(b'\xe8'+struct.pack('<i',0x4552a0-0x455e6e)).hex())
+code('ead_plan_variant',f"call {at('ead_plan')}\njmp 0x456243")
+code('ead_plan_index',f"push eax\ncall {at('ead_plan')}\nmov edx,eax\npop eax\njmp 0x456210")
+hook(0x45623c,'ead_plan_variant','8b0485784e5000')
+hook(0x456209,'ead_plan_index','8b1485784e5000')
+ordered=sorted((v['address'],v['address']+len(v['code']),k) for k,v in blocks.items())
+for left,right in zip(ordered,ordered[1:]):assert left[1]<=right[0],('overlapping code',left,right)
+assert ordered[-1][1]<=BASE+0x10000
 payload=bytearray(0x10000);absolute=[];relative=[]
 md=Cs(CS_ARCH_X86,CS_MODE_32);md.detail=True
 for name,b in blocks.items():
