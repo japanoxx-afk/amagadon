@@ -52,6 +52,8 @@ def fresh(local,width,noise):
     u.mem_write(WORLD+0xe6,struct.pack('<HH',32,32))
     u.mem_write(GRID,b'\xfe\x0f'*(1024*1024))
     u.mem_write(0x4e7270,bytes([local]));dword(u,0x513ed4,1);dword(u,0x4f75ec,width)
+    # Exercise both axes: leaving height at the original 600 understated mixed-HD coverage.
+    dword(u,0x4f75f0,768 if width==1024 else 600)
     u.mem_write(0x52f510+local*64+16,struct.pack('<4H',noise,noise+1,noise+2,noise+3))
     u.mem_write(0x492280,b'\xc3') # debug printf only; no simulation leaf mocked
     dword(u,STACK,RETURN);u.reg_write(UC_X86_REG_ESP,STACK)
