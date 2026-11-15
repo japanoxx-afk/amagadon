@@ -1524,6 +1524,13 @@ code('ead_plan_variant',f"call {at('ead_plan')}\njmp 0x456243")
 code('ead_plan_index',f"push eax\ncall {at('ead_plan')}\nmov edx,eax\npop eax\njmp 0x456210")
 hook(0x45623c,'ead_plan_variant','8b0485784e5000')
 hook(0x456209,'ead_plan_index','8b1485784e5000')
+# Sender HUD layout travels in unused screen-X bit 15 (native mode is bits 10..11).
+# Multiplayer masks this bit before simulation. Keep the ten-byte wire record size.
+for name,offset in [('layout_send',0xfc80),('layout_receive',0xfd00),('layout_enter',0xfd80),('layout_leave',0xfe80)]:
+ blocks[name]={'address':BASE+offset}
+layout_spec=importlib.util.spec_from_file_location('command_layout',Path(__file__).with_name('build-command-layout.py'));layout=importlib.util.module_from_spec(layout_spec);layout_spec.loader.exec_module(layout)
+for name,assembly in layout.assemblies(BASE).items():code(name,assembly)
+for site,name,expected in [(0x483754,'layout_send','e887050000'),(0x483837,'layout_receive','668b450bbe01000000'),(0x48bc9d,'layout_enter','e8fec3f7ff'),(0x48bd9f,'layout_leave','83c5044383c640')]:hook(site,name,expected)
 ordered=sorted((v['address'],v['address']+len(v['code']),k) for k,v in blocks.items())
 for left,right in zip(ordered,ordered[1:]):assert left[1]<=right[0],('overlapping code',left,right)
 assert ordered[-1][1]<=BASE+0x10000
@@ -1542,7 +1549,7 @@ for name,b in blocks.items():
     elif not branch and BASE<=op.imm<BASE+SIZE:
      assert ins.imm_size==4,(name,ins.mnemonic,ins.op_str,ins.imm_size);absolute.append(ins.address-BASE+ins.imm_offset)
 # Keep native CALL sites as calls, all other replacements as jumps.
-call_sites={0x48bd48,0x48bd41,0x4a690f,0x454e58,0x45348e}.union(terrain_sites).union(resource_sites).union(observer_sites).union(visibility_sites).union(voice_sites).union(world_resource_sites)
+call_sites={0x483754,0x48bc9d,0x48bd48,0x48bd41,0x4a690f,0x454e58,0x45348e}.union(terrain_sites).union(resource_sites).union(observer_sites).union(visibility_sites).union(voice_sites).union(world_resource_sites)
 meta={'base':BASE,'size':SIZE,'data':DATA,'counts':COUNTS,'lists':LISTS,'group_counts':GROUP_COUNTS,'groups':GROUPS,'pending':PENDING,'stamp':STAMP,'blocks':{n:b['address'] for n,b in blocks.items()},'absolute':sorted(set(absolute)),'relative':sorted(set(relative)),'hooks':[{'site':s,'target':t,'before':v.hex(),'opcode':0xe8 if s in call_sites else 0xe9} for s,t,v in hooks]}
 Path('.tools/selection-runtime.bin').write_bytes(payload)
 Path('.tools/selection-runtime.json').write_text(json.dumps(meta,indent=2))
